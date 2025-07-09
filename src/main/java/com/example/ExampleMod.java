@@ -2,6 +2,7 @@ package com.example;
 
 import net.fabricmc.api.ModInitializer;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,5 +21,11 @@ public class ExampleMod implements ModInitializer {
 		// Proceed with mild caution.
 
 		LOGGER.info("Hello Fabric world!");
+
+		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+			LOGGER.info("Starting web server...");
+			APIServer.start(server);
+			LOGGER.info("Web server started on port 7070");
+		});
 	}
 }
