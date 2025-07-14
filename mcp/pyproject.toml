@@ -1,0 +1,11 @@
+[project]
+name = "minecraft-mcp"
+version = "1.0.0"
+description = "MCP Server for Minecraft Fabric Mod API"
+dependencies = [
+    "mcp>=1.0.0",
+    "httpx>=0.25.0"
+]
+
+[project.scripts]
+minecraft-mcp = "minecraft_mcp:main"
