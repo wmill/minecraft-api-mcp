@@ -13,12 +13,15 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+
 public class EntitiesEndpoint extends APIEndpoint {
-    public EntitiesEndpoint(Javalin app, MinecraftServer server) {
-        super(app, server);
+    public EntitiesEndpoint(Javalin app, MinecraftServer server, Logger logger) {
+        super(app, server, logger);
         init();
     }
 
@@ -60,6 +63,9 @@ public class EntitiesEndpoint extends APIEndpoint {
                 ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
                 return;
             }
+
+            LOGGER.info("Spawning an entity of type {} at position ({}, {}, {}) in world {}",
+                    req.type, req.x, req.y, req.z, worldKey.getValue());
         
             // Ensure this runs on the server thread and handle response properly
             server.execute(() -> {
@@ -74,12 +80,15 @@ public class EntitiesEndpoint extends APIEndpoint {
                     entity.setPosition(req.x + 0.5, req.y, req.z + 0.5);
                     
                     if (world.spawnEntity(entity)) {
+                        LOGGER.info("Spawned entity {} with UUID {} at position ({}, {}, {})",
+                                req.type, entity.getUuid(), entity.getX(), entity.getY(), entity.getZ());
                         ctx.json(Map.of(
                             "success", true,
                             "type", req.type,
                             "uuid", entity.getUuid().toString(),
                             "position", Map.of("x", entity.getX(), "y", entity.getY(), "z", entity.getZ())
                         ));
+
                     } else {
                         ctx.status(500).json(Map.of("error", "Failed to spawn entity in world"));
                     }

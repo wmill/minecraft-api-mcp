@@ -24,7 +24,7 @@ public class ExampleMod implements ModInitializer {
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			LOGGER.info("Starting web server...");
-			APIServer.start(server);
+			APIServer.start(server, LOGGER);
 			LOGGER.info("Web server started on port 7070");
 		});
 	}

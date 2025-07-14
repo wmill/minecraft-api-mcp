@@ -9,8 +9,9 @@ import net.minecraft.server.MinecraftServer;
 public class APIServer {
     public static Javalin app;
     public static MinecraftServer minecraftServer;
+    public static org.slf4j.Logger logger;
 
-    public static void start(MinecraftServer server) {
+    public static void start(MinecraftServer server, org.slf4j.Logger logger) {
         minecraftServer = server;
         Javalin app = Javalin.create().start(7070);
 
@@ -35,7 +36,7 @@ public class APIServer {
 
         });
 
-        APIEndpoint entitiesEndpoint = new EntitiesEndpoint(app, server);
+        APIEndpoint entitiesEndpoint = new EntitiesEndpoint(app, server, logger);
     }
 }
 

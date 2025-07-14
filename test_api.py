@@ -36,6 +36,10 @@ def spawn_entity_near_player(player, entity_type="minecraft:zombie"):
             json=spawn_pos,
             headers={"Content-Type": "application/json"}
         )
+        print("Status Code:", response.status_code)
+        print("Headers:", response.headers)
+        print("Text Body:", response.text)
+        print("JSON Body:", response.json())
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -70,6 +74,7 @@ def main():
         print(f"\n2. Spawning sheep near {first_player['name']}...")
         
         result = spawn_entity_near_player(first_player, "minecraft:sheep")
+
         
         if result:
             print(result)
