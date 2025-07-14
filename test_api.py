@@ -13,7 +13,7 @@ API_BASE = "http://localhost:7070"
 def get_players():
     """Get list of players from the server."""
     try:
-        response = requests.get(f"{API_BASE}/players")
+        response = requests.get(f"{API_BASE}/api/world/players")
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
