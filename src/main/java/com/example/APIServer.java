@@ -1,10 +1,10 @@
 package com.example;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.endpoints.APIEndpoint;
+import com.example.endpoints.EntitiesEndpoint;
 import io.javalin.Javalin;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.Vec3d;
+
 
 public class APIServer {
     public static Javalin app;
@@ -29,14 +29,20 @@ public class APIServer {
             //ObjectMapper mapper = new ObjectMapper();
             PlayerInfo[] playerInfos = server.getPlayerManager().getPlayerList().stream()
                     .map(player -> new PlayerInfo(player.getName().getString(), player.getUuidAsString(),
-                            new Vec3d(player.getX(), player.getY(), player.getZ())))
+                            new Position(player.getX(), player.getY(), player.getZ())))
                     .toArray(PlayerInfo[]::new);
             ctx.json(playerInfos);
 
         });
+
+        APIEndpoint entitiesEndpoint = new EntitiesEndpoint(app, server);
     }
 }
 
-record PlayerInfo(String name, String uuid, Vec3d position) {
+record Position(double x, double y, double z) {
+    // Simple position record for JSON serialization
+}
+
+record PlayerInfo(String name, String uuid, Position position) {
     // This record can be used to return player information in a structured way
 }
