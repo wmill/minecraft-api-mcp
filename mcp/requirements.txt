@@ -3,3 +3,4 @@ httpx>=0.25.0
 asyncio
 logging
 urllib3
+requires-python>=3.12

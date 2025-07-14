@@ -2,10 +2,18 @@
 name = "minecraft-mcp"
 version = "1.0.0"
 description = "MCP Server for Minecraft Fabric Mod API"
+requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.0.0",
     "httpx>=0.25.0"
 ]
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+package = true
 
 [project.scripts]
 minecraft-mcp = "minecraft_mcp:main"
