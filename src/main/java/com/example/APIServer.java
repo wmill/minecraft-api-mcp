@@ -37,6 +37,7 @@ public class APIServer {
         });
 
         APIEndpoint entitiesEndpoint = new EntitiesEndpoint(app, server, logger);
+        APIEndpoint blocksEndpoint = new com.example.endpoints.BlocksEndpoint(app, server, logger);
     }
 }
 
