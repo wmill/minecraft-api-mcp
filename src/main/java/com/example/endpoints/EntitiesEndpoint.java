@@ -4,12 +4,14 @@ import io.javalin.Javalin;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.SpawnReason;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 import java.util.Map;
@@ -36,17 +38,18 @@ public class EntitiesEndpoint extends APIEndpoint {
             EntitySpawnRequest req = ctx.bodyAsClass(EntitySpawnRequest.class);
         
             Identifier entityId = Identifier.tryParse(req.type);
+            if (entityId == null) {
+                ctx.status(400).json(Map.of("error", "Invalid entity type format: " + req.type));
+                return;
+            }
 
             RegistryKey<World> worldKey = req.world != null
                 ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
                 : World.OVERWORLD;
 
             ServerWorld world = server.getWorld(worldKey);
-
-            // Identifier worldId = req.world != null ? new Identifier(req.world) : World.OVERWORLD;
         
             EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
-            // ServerWorld world = server.getWorld(worldId);
         
             if (entityType == null) {
                 ctx.status(400).json(Map.of("error", "Unknown entity type: " + req.type));
@@ -58,23 +61,31 @@ public class EntitiesEndpoint extends APIEndpoint {
                 return;
             }
         
-            // Ensure this runs on the server thread
+            // Ensure this runs on the server thread and handle response properly
             server.execute(() -> {
-                Entity entity = entityType.create(world);
-                if (entity == null) {
-                    ctx.status(500).json(Map.of("error", "Failed to create entity: " + req.type));
-                    return;
+                try {
+                    BlockPos pos = new BlockPos((int) req.x, (int) req.y, (int) req.z);
+                    Entity entity = entityType.create(world, null, pos, SpawnReason.COMMAND, false, false);
+                    if (entity == null) {
+                        ctx.status(500).json(Map.of("error", "Failed to create entity: " + req.type));
+                        return;
+                    }
+            
+                    entity.setPosition(req.x + 0.5, req.y, req.z + 0.5);
+                    
+                    if (world.spawnEntity(entity)) {
+                        ctx.json(Map.of(
+                            "success", true,
+                            "type", req.type,
+                            "uuid", entity.getUuid().toString(),
+                            "position", Map.of("x", entity.getX(), "y", entity.getY(), "z", entity.getZ())
+                        ));
+                    } else {
+                        ctx.status(500).json(Map.of("error", "Failed to spawn entity in world"));
+                    }
+                } catch (Exception e) {
+                    ctx.status(500).json(Map.of("error", "Exception during entity spawn: " + e.getMessage()));
                 }
-        
-                entity.refreshPositionAndAngles(req.x + 0.5, req.y, req.z + 0.5, 0, 0);
-                world.spawnEntity(entity);
-        
-                ctx.json(Map.of(
-                    "success", true,
-                    "type", req.type,
-                    "uuid", entity.getUuid().toString(),
-                    "position", Map.of("x", entity.getX(), "y", entity.getY(), "z", entity.getZ())
-                ));
             });
         });
         
@@ -126,7 +137,7 @@ Record payload json
 record EntityInfo(String id, String display_name) {
 }
 
-public class EntitySpawnRequest {
+class EntitySpawnRequest {
     public String type;
     public String world; // optional; default to "minecraft:overworld"
     public double x;
