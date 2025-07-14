@@ -9,6 +9,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import urljoin
+import os
 
 import httpx
 from mcp.server import Server
@@ -20,14 +21,27 @@ from mcp.types import (
     ListToolsRequest,
     TextContent,
     Tool,
+    ContentBlock,
 )
 import sys
 
 from mcp.server.lowlevel import NotificationOptions
 
+if os.getenv('DEBUG'):
+    try:
+        import debugpy
+        debugpy.listen(("localhost", 5678))
+        print("Debugger listening on port 5678", file=sys.stderr)
+        print("Attach your debugger now or set breakpoints and continue", file=sys.stderr)
+        # Uncomment the next line if you want to wait for debugger to attach
+        # debugpy.wait_for_client()
+    except ImportError:
+        print("debugpy not installed. Install with: pip install debugpy", file=sys.stderr)
+
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
 
 # Add debug output to stderr so it shows in Claude Desktop logs
 print("Starting Minecraft MCP Server...", file=sys.stderr)
@@ -187,22 +201,28 @@ class MinecraftMCPServer:
             ]
         
         @self.server.call_tool()
-        async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
+        async def call_tool(name: str, arguments: Dict[str, Any]) -> List[ContentBlock]:
             """Handle tool calls."""
             print(f"call_tool: {name} with args: {arguments}", file=sys.stderr)
             try:
                 if name == "get_players":
-                    return await self.get_players()
+                    result = await self.get_players()
+                    return result.content
                 elif name == "get_entities":
-                    return await self.get_entities()
+                    result = await self.get_entities()
+                    return result.content
                 elif name == "spawn_entity":
-                    return await self.spawn_entity(**arguments)
+                    result = await self.spawn_entity(**arguments)
+                    return result.content
                 elif name == "get_blocks":
-                    return await self.get_blocks()
+                    result = await self.get_blocks()
+                    return result.content
                 elif name == "set_blocks":
-                    return await self.set_blocks(**arguments)
+                    result = await self.set_blocks(**arguments)
+                    return result.content
                 elif name == "get_blocks_chunk":
-                    return await self.get_blocks_chunk(**arguments)
+                    result = await self.get_blocks_chunk(**arguments)
+                    return result.content
                 else:
                     raise ValueError(f"Unknown tool: {name}")
             except Exception as e:
