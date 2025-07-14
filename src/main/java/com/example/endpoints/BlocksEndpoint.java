@@ -139,9 +139,87 @@ public class BlocksEndpoint extends APIEndpoint {
 
         // get a chunk of blocks, payload will be a JSON object with the chunk coordinates and size to grab
         // response will be a three-dimensional array of block values
-        app.get("/api/world/blocks/chunk", ctx -> {
-            // TODO - Implement logic to get a chunk of blocks
-
+        app.post("/api/world/blocks/chunk", ctx -> {
+            ChunkRequest req = ctx.bodyAsClass(ChunkRequest.class);
+            
+            // Validate world
+            RegistryKey<World> worldKey = req.world != null
+                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
+                : World.OVERWORLD;
+            
+            ServerWorld world = server.getWorld(worldKey);
+            if (world == null) {
+                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
+                return;
+            }
+            
+            // Validate chunk size limits (prevent huge requests)
+            int maxChunkSize = 64; // Maximum 64x64x64 chunk
+            if (req.sizeX > maxChunkSize || req.sizeY > maxChunkSize || req.sizeZ > maxChunkSize) {
+                ctx.status(400).json(Map.of("error", "Chunk size too large. Maximum size is " + maxChunkSize + " per dimension"));
+                return;
+            }
+            
+            LOGGER.info("Getting chunk from world {} at ({}, {}, {}) with size {}x{}x{}", 
+                worldKey.getValue(), req.startX, req.startY, req.startZ, req.sizeX, req.sizeY, req.sizeZ);
+            
+            // Create future for async response
+            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+            
+            // Execute on server thread
+            server.execute(() -> {
+                try {
+                    // Create 3D array to hold block data
+                    String[][][] blocks = new String[req.sizeX][req.sizeY][req.sizeZ];
+                    
+                    // Iterate through the requested chunk area
+                    for (int x = 0; x < req.sizeX; x++) {
+                        for (int y = 0; y < req.sizeY; y++) {
+                            for (int z = 0; z < req.sizeZ; z++) {
+                                // Calculate world position
+                                BlockPos pos = new BlockPos(req.startX + x, req.startY + y, req.startZ + z);
+                                
+                                // Get block state at position
+                                BlockState blockState = world.getBlockState(pos);
+                                Block block = blockState.getBlock();
+                                
+                                // Get block identifier
+                                Identifier blockId = Registries.BLOCK.getId(block);
+                                blocks[x][y][z] = blockId.toString();
+                            }
+                        }
+                    }
+                    
+                    LOGGER.info("Successfully retrieved chunk data: {}x{}x{} blocks", 
+                        req.sizeX, req.sizeY, req.sizeZ);
+                    
+                    future.complete(Map.of(
+                        "success", true,
+                        "world", worldKey.getValue().toString(),
+                        "start_position", Map.of("x", req.startX, "y", req.startY, "z", req.startZ),
+                        "size", Map.of("x", req.sizeX, "y", req.sizeY, "z", req.sizeZ),
+                        "blocks", blocks
+                    ));
+                    
+                } catch (Exception e) {
+                    LOGGER.error("Error getting chunk data", e);
+                    future.complete(Map.of("error", "Exception during chunk retrieval: " + e.getMessage()));
+                }
+            });
+            
+            // Wait for result and respond
+            try {
+                Map<String, Object> result = future.get(10, TimeUnit.SECONDS);
+                if (result.containsKey("error")) {
+                    ctx.status(500).json(result);
+                } else {
+                    ctx.json(result);
+                }
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for chunk operation"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
         });
     }
 }
@@ -155,4 +233,14 @@ class BlockSetRequest {
     public int startY;
     public int startZ;
     public String[][][] blocks; // 3D array of block IDs, null means no change
+}
+
+class ChunkRequest {
+    public String world; // optional, defaults to overworld
+    public int startX;
+    public int startY;
+    public int startZ;
+    public int sizeX;
+    public int sizeY;
+    public int sizeZ;
 }
