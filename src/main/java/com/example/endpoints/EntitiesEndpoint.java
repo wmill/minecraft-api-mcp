@@ -67,13 +67,16 @@ public class EntitiesEndpoint extends APIEndpoint {
             LOGGER.info("Spawning an entity of type {} at position ({}, {}, {}) in world {}",
                     req.type, req.x, req.y, req.z, worldKey.getValue());
         
-            // Ensure this runs on the server thread and handle response properly
+            // Create a future to handle the async response
+            java.util.concurrent.CompletableFuture<Map<String, Object>> future = new java.util.concurrent.CompletableFuture<>();
+            
+            // Ensure this runs on the server thread
             server.execute(() -> {
                 try {
                     BlockPos pos = new BlockPos((int) req.x, (int) req.y, (int) req.z);
                     Entity entity = entityType.create(world, null, pos, SpawnReason.COMMAND, false, false);
                     if (entity == null) {
-                        ctx.status(500).json(Map.of("error", "Failed to create entity: " + req.type));
+                        future.complete(Map.of("error", "Failed to create entity: " + req.type));
                         return;
                     }
             
@@ -82,20 +85,33 @@ public class EntitiesEndpoint extends APIEndpoint {
                     if (world.spawnEntity(entity)) {
                         LOGGER.info("Spawned entity {} with UUID {} at position ({}, {}, {})",
                                 req.type, entity.getUuid(), entity.getX(), entity.getY(), entity.getZ());
-                        ctx.json(Map.of(
+                        future.complete(Map.of(
                             "success", true,
                             "type", req.type,
                             "uuid", entity.getUuid().toString(),
                             "position", Map.of("x", entity.getX(), "y", entity.getY(), "z", entity.getZ())
                         ));
-
                     } else {
-                        ctx.status(500).json(Map.of("error", "Failed to spawn entity in world"));
+                        future.complete(Map.of("error", "Failed to spawn entity in world"));
                     }
                 } catch (Exception e) {
-                    ctx.status(500).json(Map.of("error", "Exception during entity spawn: " + e.getMessage()));
+                    future.complete(Map.of("error", "Exception during entity spawn: " + e.getMessage()));
                 }
             });
+            
+            // Wait for the result and respond
+            try {
+                Map<String, Object> result = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+                if (result.containsKey("error")) {
+                    ctx.status(500).json(result);
+                } else {
+                    ctx.json(result);
+                }
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for entity spawn"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
         });
         
     }
