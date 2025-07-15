@@ -2,6 +2,15 @@
 """
 MCP Server for Minecraft Fabric Mod API
 Provides tools to interact with the Minecraft server through HTTP endpoints.
+
+Coordinate System:
+World coordinates are based on a grid where three lines or axes intersect at the origin point.
+
+- The x-axis indicates the player's distance east (positive) or west (negative) of the origin point—i.e., the longitude
+- The z-axis indicates the player's distance south (positive) or north (negative) of the origin point—i.e., the latitude  
+- The y-axis indicates how high or low (from 0 to 255 (pre 1.18) or -64 to 320 (from 1.18), with 63 being sea level) the player is—i.e., the elevation
+
+The unit length of the three axes equals the side of one block. And, in terms of real-world measurement, one block equals 1 cubic meter.
 """
 
 import asyncio
@@ -91,15 +100,15 @@ class MinecraftMCPServer:
                             },
                             "x": {
                                 "type": "number",
-                                "description": "X coordinate"
+                                "description": "X coordinate (east positive, west negative)"
                             },
                             "y": {
                                 "type": "number", 
-                                "description": "Y coordinate"
+                                "description": "Y coordinate (elevation: -64 to 320, sea level at 63)"
                             },
                             "z": {
                                 "type": "number",
-                                "description": "Z coordinate"
+                                "description": "Z coordinate (south positive, north negative)"
                             },
                             "world": {
                                 "type": "string",
@@ -127,15 +136,15 @@ class MinecraftMCPServer:
                         "properties": {
                             "start_x": {
                                 "type": "integer",
-                                "description": "Starting X coordinate"
+                                "description": "Starting X coordinate (east positive, west negative)"
                             },
                             "start_y": {
                                 "type": "integer",
-                                "description": "Starting Y coordinate"
+                                "description": "Starting Y coordinate (elevation: -64 to 320, sea level at 63)"
                             },
                             "start_z": {
                                 "type": "integer",
-                                "description": "Starting Z coordinate"
+                                "description": "Starting Z coordinate (south positive, north negative)"
                             },
                             "blocks": {
                                 "type": "array",
@@ -167,15 +176,15 @@ class MinecraftMCPServer:
                         "properties": {
                             "start_x": {
                                 "type": "integer",
-                                "description": "Starting X coordinate"
+                                "description": "Starting X coordinate (east positive, west negative)"
                             },
                             "start_y": {
                                 "type": "integer",
-                                "description": "Starting Y coordinate"
+                                "description": "Starting Y coordinate (elevation: -64 to 320, sea level at 63)"
                             },
                             "start_z": {
                                 "type": "integer",
-                                "description": "Starting Z coordinate"
+                                "description": "Starting Z coordinate (south positive, north negative)"
                             },
                             "size_x": {
                                 "type": "integer",
