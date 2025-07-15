@@ -24,7 +24,7 @@ public class MessageEndpoint extends APIEndpoint {
             
             server.execute(() -> {
                 try {
-                    Text messageText = Text.literal(req.message);
+                    Text messageText = Text.literal(req.message());
                     int playerCount = server.getPlayerManager().getPlayerList().size();
                     
                     if (playerCount == 0) {
@@ -34,7 +34,7 @@ public class MessageEndpoint extends APIEndpoint {
                     
                     // Send to all players
                     for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                        player.sendMessage(messageText, req.actionBar);
+                        player.sendMessage(messageText, req.actionBar());
                     }
                     
                     future.complete(null);
@@ -67,11 +67,11 @@ public class MessageEndpoint extends APIEndpoint {
                     ServerPlayerEntity player = null;
                     
                     // Find player by UUID or name
-                    if (req.uuid != null) {
-                        UUID playerUuid = UUID.fromString(req.uuid);
+                    if (req.uuid() != null) {
+                        UUID playerUuid = UUID.fromString(req.uuid());
                         player = server.getPlayerManager().getPlayer(playerUuid);
-                    } else if (req.name != null) {
-                        player = server.getPlayerManager().getPlayer(req.name);
+                    } else if (req.name() != null) {
+                        player = server.getPlayerManager().getPlayer(req.name());
                     }
                     
                     if (player == null) {
@@ -79,8 +79,8 @@ public class MessageEndpoint extends APIEndpoint {
                         return;
                     }
                     
-                    Text messageText = Text.literal(req.message);
-                    player.sendMessage(messageText, req.actionBar);
+                    Text messageText = Text.literal(req.message());
+                    player.sendMessage(messageText, req.actionBar());
                     
                     future.complete(null);
                 } catch (Exception e) {

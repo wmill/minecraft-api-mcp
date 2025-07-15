@@ -18,11 +18,6 @@ public class APIServer {
         Javalin app = Javalin.create().start(7070);
 
         app.get("/", ctx -> ctx.result("Hello World"));
-        app.post("/spawn", ctx -> {
-            String mob = ctx.body();
-            // call into your Fabric code here
-            ctx.result("Spawning " + mob);
-        });
 
         APIEndpoint entitiesEndpoint = new EntitiesEndpoint(app, server, logger);
         APIEndpoint blocksEndpoint = new com.example.endpoints.BlocksEndpoint(app, server, logger);

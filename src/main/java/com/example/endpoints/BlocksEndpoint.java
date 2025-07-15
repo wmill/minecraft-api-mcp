@@ -221,6 +221,120 @@ public class BlocksEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });
+
+        // Fill a box/cuboid with a specific block type between two coordinates
+        app.post("/api/world/blocks/fill", ctx -> {
+            FillBoxRequest req = ctx.bodyAsClass(FillBoxRequest.class);
+            
+            // Validate world
+            RegistryKey<World> worldKey = req.world != null
+                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
+                : World.OVERWORLD;
+            
+            ServerWorld world = server.getWorld(worldKey);
+            if (world == null) {
+                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
+                return;
+            }
+            
+            // Calculate box bounds (ensure min/max are correct)
+            int minX = Math.min(req.x1, req.x2);
+            int maxX = Math.max(req.x1, req.x2);
+            int minY = Math.min(req.y1, req.y2);
+            int maxY = Math.max(req.y1, req.y2);
+            int minZ = Math.min(req.z1, req.z2);
+            int maxZ = Math.max(req.z1, req.z2);
+            
+            // Calculate box size for validation
+            int sizeX = maxX - minX + 1;
+            int sizeY = maxY - minY + 1;
+            int sizeZ = maxZ - minZ + 1;
+            int totalBlocks = sizeX * sizeY * sizeZ;
+            
+            // Validate box size (prevent huge operations)
+            int maxBoxSize = 100000; // Maximum 100k blocks
+            if (totalBlocks > maxBoxSize) {
+                ctx.status(400).json(Map.of("error", "Box too large. Maximum " + maxBoxSize + " blocks allowed"));
+                return;
+            }
+            
+            LOGGER.info("Filling box in world {} from ({}, {}, {}) to ({}, {}, {}) with {} blocks of type {}", 
+                worldKey.getValue(), minX, minY, minZ, maxX, maxY, maxZ, totalBlocks, req.blockType);
+            
+            // Create future for async response
+            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+            
+            // Execute on server thread
+            server.execute(() -> {
+                try {
+                    // Parse block identifier
+                    Identifier blockIdentifier = Identifier.tryParse(req.blockType);
+                    if (blockIdentifier == null) {
+                        future.complete(Map.of("error", "Invalid block identifier: " + req.blockType));
+                        return;
+                    }
+                    
+                    // Get block from registry
+                    Block block = Registries.BLOCK.get(blockIdentifier);
+                    if (block == null) {
+                        future.complete(Map.of("error", "Unknown block: " + req.blockType));
+                        return;
+                    }
+                    
+                    BlockState blockState = block.getDefaultState();
+                    int blocksSet = 0;
+                    int blocksFailed = 0;
+                    
+                    // Fill the box
+                    for (int x = minX; x <= maxX; x++) {
+                        for (int y = minY; y <= maxY; y++) {
+                            for (int z = minZ; z <= maxZ; z++) {
+                                BlockPos pos = new BlockPos(x, y, z);
+                                
+                                if (world.setBlockState(pos, blockState)) {
+                                    blocksSet++;
+                                } else {
+                                    blocksFailed++;
+                                }
+                            }
+                        }
+                    }
+                    
+                    LOGGER.info("Box fill completed: {} blocks set, {} blocks failed", 
+                        blocksSet, blocksFailed);
+                    
+                    future.complete(Map.of(
+                        "success", true,
+                        "blocks_set", blocksSet,
+                        "blocks_failed", blocksFailed,
+                        "total_blocks", totalBlocks,
+                        "world", worldKey.getValue().toString(),
+                        "box_bounds", Map.of(
+                            "min", Map.of("x", minX, "y", minY, "z", minZ),
+                            "max", Map.of("x", maxX, "y", maxY, "z", maxZ)
+                        )
+                    ));
+                    
+                } catch (Exception e) {
+                    LOGGER.error("Error filling box", e);
+                    future.complete(Map.of("error", "Exception during box fill: " + e.getMessage()));
+                }
+            });
+            
+            // Wait for result and respond
+            try {
+                Map<String, Object> result = future.get(30, TimeUnit.SECONDS);
+                if (result.containsKey("error")) {
+                    ctx.status(500).json(result);
+                } else {
+                    ctx.json(result);
+                }
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for box fill operation"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
     }
 }
 
@@ -243,4 +357,11 @@ class ChunkRequest {
     public int sizeX;
     public int sizeY;
     public int sizeZ;
+}
+
+class FillBoxRequest {
+    public String world; // optional, defaults to overworld
+    public int x1, y1, z1; // first corner coordinate
+    public int x2, y2, z2; // second corner coordinate
+    public String blockType; // block identifier (e.g., "minecraft:stone")
 }
