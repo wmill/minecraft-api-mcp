@@ -206,6 +206,95 @@ class MinecraftMCPServer:
                         },
                         "required": ["start_x", "start_y", "start_z", "size_x", "size_y", "size_z"]
                     }
+                ),
+                Tool(
+                    name="fill_box",
+                    description="Fill a cuboid/box with a specific block type between two coordinates",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "x1": {
+                                "type": "integer",
+                                "description": "First corner X coordinate (east positive, west negative)"
+                            },
+                            "y1": {
+                                "type": "integer",
+                                "description": "First corner Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z1": {
+                                "type": "integer",
+                                "description": "First corner Z coordinate (south positive, north negative)"
+                            },
+                            "x2": {
+                                "type": "integer",
+                                "description": "Second corner X coordinate (east positive, west negative)"
+                            },
+                            "y2": {
+                                "type": "integer",
+                                "description": "Second corner Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z2": {
+                                "type": "integer",
+                                "description": "Second corner Z coordinate (south positive, north negative)"
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Block type identifier (e.g., 'minecraft:stone', 'minecraft:oak_wood')"
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["x1", "y1", "z1", "x2", "y2", "z2", "block_type"]
+                    }
+                ),
+                Tool(
+                    name="broadcast_message",
+                    description="Send a message to all players on the server",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                                "description": "Message text to send to all players"
+                            },
+                            "action_bar": {
+                                "type": "boolean",
+                                "description": "If true, shows message in action bar above hotbar. If false, shows in chat",
+                                "default": False
+                            }
+                        },
+                        "required": ["message"]
+                    }
+                ),
+                Tool(
+                    name="send_message_to_player",
+                    description="Send a message to a specific player",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                                "description": "Message text to send to the player"
+                            },
+                            "player_uuid": {
+                                "type": "string",
+                                "description": "Player's UUID (takes priority over name if both provided)"
+                            },
+                            "player_name": {
+                                "type": "string",
+                                "description": "Player's name (used if UUID not provided)"
+                            },
+                            "action_bar": {
+                                "type": "boolean",
+                                "description": "If true, shows message in action bar above hotbar. If false, shows in chat",
+                                "default": False
+                            }
+                        },
+                        "required": ["message"]
+                    }
                 )
             ]
         
@@ -231,6 +320,15 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "get_blocks_chunk":
                     result = await self.get_blocks_chunk(**arguments)
+                    return result.content
+                elif name == "fill_box":
+                    result = await self.fill_box(**arguments)
+                    return result.content
+                elif name == "broadcast_message":
+                    result = await self.broadcast_message(**arguments)
+                    return result.content
+                elif name == "send_message_to_player":
+                    result = await self.send_message_to_player(**arguments)
                     return result.content
                 else:
                     raise ValueError(f"Unknown tool: {name}")
@@ -441,6 +539,131 @@ class MinecraftMCPServer:
                     )
         except Exception as e:
             print(f"Error getting block chunk: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def fill_box(self, x1: int, y1: int, z1: int, x2: int, y2: int, z2: int, block_type: str, world: str = None) -> CallToolResult:
+        """Fill a box/cuboid with a specific block type between two coordinates."""
+        try:
+            payload = {
+                "x1": x1,
+                "y1": y1,
+                "z1": z1,
+                "x2": x2,
+                "y2": y2,
+                "z2": z2,
+                "blockType": block_type
+            }
+            if world:
+                payload["world"] = world
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/world/blocks/fill",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    bounds = result["box_bounds"]
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Successfully filled box with {result['blocks_set']} blocks of {block_type}\n"
+                                 f"Box bounds: ({bounds['min']['x']}, {bounds['min']['y']}, {bounds['min']['z']}) to "
+                                 f"({bounds['max']['x']}, {bounds['max']['y']}, {bounds['max']['z']})\n"
+                                 f"World: {result['world']}\n"
+                                 f"Total blocks: {result['total_blocks']}, Failed: {result['blocks_failed']}"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to fill box: {result}")]
+                    )
+        except Exception as e:
+            print(f"Error filling box: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def broadcast_message(self, message: str, action_bar: bool = False) -> CallToolResult:
+        """Send a message to all players on the server."""
+        try:
+            payload = {
+                "message": message,
+                "actionBar": action_bar
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/message/broadcast",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    location = "action bar" if action_bar else "chat"
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Message sent to {result['playerCount']} players in {location}\n"
+                                 f"Message: \"{message}\""
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to broadcast message: {result}")]
+                    )
+        except Exception as e:
+            print(f"Error broadcasting message: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def send_message_to_player(self, message: str, player_uuid: str = None, player_name: str = None, action_bar: bool = False) -> CallToolResult:
+        """Send a message to a specific player."""
+        try:
+            if not player_uuid and not player_name:
+                return CallToolResult(
+                    content=[TextContent(type="text", text="❌ Must provide either player_uuid or player_name")]
+                )
+            
+            payload = {
+                "message": message,
+                "actionBar": action_bar
+            }
+            if player_uuid:
+                payload["uuid"] = player_uuid
+            if player_name:
+                payload["name"] = player_name
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/message/player",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    location = "action bar" if action_bar else "chat"
+                    target = f"UUID {player_uuid}" if player_uuid else f"player {player_name}"
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Message sent to {target} in {location}\n"
+                                 f"Message: \"{message}\""
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to send message: {result}")]
+                    )
+        except Exception as e:
+            print(f"Error sending message to player: {e}", file=sys.stderr)
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )
