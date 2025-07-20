@@ -14,7 +14,7 @@ The unit length of the three axes equals the side of one block. And, in terms of
 """
 
 import asyncio
-import json
+
 import logging
 from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import urljoin
@@ -148,7 +148,7 @@ class MinecraftMCPServer:
                             },
                             "blocks": {
                                 "type": "array",
-                                "description": "3D array of block IDs (use null for no change)",
+                                "description": "3D array of block IDs (use null for no change). 'minecraft:air' can be used to clear a block.",
                                 "items": {
                                     "type": "array",
                                     "items": {
@@ -209,7 +209,7 @@ class MinecraftMCPServer:
                 ),
                 Tool(
                     name="fill_box",
-                    description="Fill a cuboid/box with a specific block type between two coordinates",
+                    description="Fill a cuboid/box with a specific block type between two coordinates.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -239,7 +239,7 @@ class MinecraftMCPServer:
                             },
                             "block_type": {
                                 "type": "string",
-                                "description": "Block type identifier (e.g., 'minecraft:stone', 'minecraft:oak_wood')"
+                                "description": "Block type identifier (e.g., 'minecraft:stone', 'minecraft:oak_wood'). 'minecraft:air' can be used to clear an area."
                             },
                             "world": {
                                 "type": "string",
