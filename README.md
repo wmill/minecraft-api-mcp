@@ -1,9 +1,7 @@
-# Fabric Example Mod
+# Minecraft API and MCP
 
-## Setup
+Adds a rest api to minecraft and implements an MCP server so that you can play around with it in Claude Desktop or other LLMs.
 
-For setup instructions please see the [fabric documentation page](https://docs.fabricmc.net/develop/getting-started/setting-up-a-development-environment) that relates to the IDE that you are using.
+Work in progress. Not nearly ready for anything. 
 
-## License
-
-This template is available under the CC0 license. Feel free to learn from it and incorporate it in your own projects.
+Probably won't be named "ModId" once I get farther along.
