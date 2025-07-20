@@ -1,9 +1,0 @@
-README.md
-minecraft_mcp.py
-pyproject.toml
-minecraft_mcp.egg-info/PKG-INFO
-minecraft_mcp.egg-info/SOURCES.txt
-minecraft_mcp.egg-info/dependency_links.txt
-minecraft_mcp.egg-info/entry_points.txt
-minecraft_mcp.egg-info/requires.txt
-minecraft_mcp.egg-info/top_level.txt

@@ -1,2 +1,0 @@
-[console_scripts]
-minecraft-mcp = minecraft_mcp:main

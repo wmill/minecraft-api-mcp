@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: minecraft-mcp
-Version: 1.0.0
-Summary: MCP Server for Minecraft Fabric Mod API
-Requires-Python: >=3.12
-Requires-Dist: mcp>=1.11.0
-Requires-Dist: httpx>=0.25.0
