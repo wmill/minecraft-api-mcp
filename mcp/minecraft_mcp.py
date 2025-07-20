@@ -295,6 +295,43 @@ class MinecraftMCPServer:
                         },
                         "required": ["message"]
                     }
+                ),
+                Tool(
+                    name="get_heightmap",
+                    description="Get topographical heightmap for a rectangular area - useful for building placement and terrain analysis",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "x1": {
+                                "type": "integer",
+                                "description": "First corner X coordinate (east positive, west negative)"
+                            },
+                            "z1": {
+                                "type": "integer",
+                                "description": "First corner Z coordinate (south positive, north negative)"
+                            },
+                            "x2": {
+                                "type": "integer",
+                                "description": "Second corner X coordinate (east positive, west negative)"
+                            },
+                            "z2": {
+                                "type": "integer",
+                                "description": "Second corner Z coordinate (south positive, north negative)"
+                            },
+                            "heightmap_type": {
+                                "type": "string",
+                                "description": "Type of heightmap to generate",
+                                "enum": ["WORLD_SURFACE", "MOTION_BLOCKING", "MOTION_BLOCKING_NO_LEAVES", "OCEAN_FLOOR"],
+                                "default": "WORLD_SURFACE"
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["x1", "z1", "x2", "z2"]
+                    }
                 )
             ]
         
@@ -329,6 +366,9 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "send_message_to_player":
                     result = await self.send_message_to_player(**arguments)
+                    return result.content
+                elif name == "get_heightmap":
+                    result = await self.get_heightmap(**arguments)
                     return result.content
                 else:
                     raise ValueError(f"Unknown tool: {name}")
@@ -664,6 +704,105 @@ class MinecraftMCPServer:
                     )
         except Exception as e:
             print(f"Error sending message to player: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def get_heightmap(self, x1: int, z1: int, x2: int, z2: int, heightmap_type: str = "WORLD_SURFACE", world: str = None) -> CallToolResult:
+        """Get heightmap/topography for a rectangular area."""
+        try:
+            payload = {
+                "x1": x1,
+                "z1": z1,
+                "x2": x2,
+                "z2": z2,
+                "heightmapType": heightmap_type
+            }
+            if world:
+                payload["world"] = world
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/world/blocks/heightmap",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    bounds = result["area_bounds"]
+                    size = result["size"]
+                    height_range = result["height_range"]
+                    heights = result["heights"]
+                    
+                    # Create a formatted height visualization
+                    height_text = f"**Heightmap Analysis ({size['x']}x{size['z']} area):**\n"
+                    height_text += f"Area: ({bounds['min']['x']}, {bounds['min']['z']}) to ({bounds['max']['x']}, {bounds['max']['z']})\n"
+                    height_text += f"World: {result['world']}\n"
+                    height_text += f"Heightmap Type: {result['heightmap_type']}\n"
+                    height_text += f"Height Range: {height_range['min']} to {height_range['max']} blocks\n"
+                    height_text += f"Elevation Difference: {height_range['max'] - height_range['min']} blocks\n\n"
+                    
+                    # Add terrain analysis
+                    total_points = size['x'] * size['z']
+                    flat_points = 0
+                    steep_points = 0
+                    
+                    # Analyze terrain characteristics
+                    if size['x'] > 1 and size['z'] > 1:
+                        for x in range(size['x'] - 1):
+                            for z in range(size['z'] - 1):
+                                current_height = heights[x][z]
+                                right_diff = abs(heights[x + 1][z] - current_height) if x + 1 < size['x'] else 0
+                                down_diff = abs(heights[x][z + 1] - current_height) if z + 1 < size['z'] else 0
+                                max_diff = max(right_diff, down_diff)
+                                
+                                if max_diff <= 1:
+                                    flat_points += 1
+                                elif max_diff >= 3:
+                                    steep_points += 1
+                        
+                        analyzed_points = (size['x'] - 1) * (size['z'] - 1)
+                        if analyzed_points > 0:
+                            flat_percent = (flat_points / analyzed_points) * 100
+                            steep_percent = (steep_points / analyzed_points) * 100
+                            height_text += f"**Terrain Analysis:**\n"
+                            height_text += f"- Flat areas (≤1 block difference): {flat_percent:.1f}%\n"
+                            height_text += f"- Steep areas (≥3 block difference): {steep_percent:.1f}%\n"
+                            height_text += f"- Moderate slopes: {100 - flat_percent - steep_percent:.1f}%\n\n"
+                    
+                    # Add a small sample of the heightmap for visualization (if small enough)
+                    if size['x'] <= 20 and size['z'] <= 20:
+                        height_text += "**Height Grid:**\n```\n"
+                        for z in range(size['z']):
+                            row = []
+                            for x in range(size['x']):
+                                row.append(f"{heights[x][z]:3d}")
+                            height_text += " ".join(row) + "\n"
+                        height_text += "```\n"
+                    else:
+                        height_text += f"Area too large to display height grid ({size['x']}x{size['z']} points)\n"
+                    
+                    # Add building recommendations
+                    elevation_diff = height_range['max'] - height_range['min']
+                    if elevation_diff <= 2:
+                        height_text += "\n**Building Recommendation:** ✅ Excellent for construction - very flat terrain"
+                    elif elevation_diff <= 5:
+                        height_text += "\n**Building Recommendation:** ✅ Good for construction - minor leveling needed"
+                    elif elevation_diff <= 10:
+                        height_text += "\n**Building Recommendation:** ⚠️ Moderate terrain - consider terracing or foundation work"
+                    else:
+                        height_text += "\n**Building Recommendation:** ❌ Challenging terrain - significant earthwork required"
+                    
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=height_text)]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to get heightmap: {result}")]
+                    )
+        except Exception as e:
+            print(f"Error getting heightmap: {e}", file=sys.stderr)
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )

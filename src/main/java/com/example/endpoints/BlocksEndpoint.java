@@ -11,6 +11,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraft.world.Heightmap;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -335,6 +336,118 @@ public class BlocksEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });
+
+        // Get heightmap/topography for a rectangular area
+        app.post("/api/world/blocks/heightmap", ctx -> {
+            HeightmapRequest req = ctx.bodyAsClass(HeightmapRequest.class);
+            
+            // Validate world
+            RegistryKey<World> worldKey = req.world != null
+                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
+                : World.OVERWORLD;
+            
+            ServerWorld world = server.getWorld(worldKey);
+            if (world == null) {
+                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
+                return;
+            }
+            
+            // Calculate area bounds (ensure min/max are correct)
+            int minX = Math.min(req.x1, req.x2);
+            int maxX = Math.max(req.x1, req.x2);
+            int minZ = Math.min(req.z1, req.z2);
+            int maxZ = Math.max(req.z1, req.z2);
+            
+            // Calculate area size for validation
+            int sizeX = maxX - minX + 1;
+            int sizeZ = maxZ - minZ + 1;
+            int totalPoints = sizeX * sizeZ;
+            
+            // Validate area size (prevent huge operations)
+            int maxAreaSize = 10000; // Maximum 10k height points (100x100 area)
+            if (totalPoints > maxAreaSize) {
+                ctx.status(400).json(Map.of("error", "Area too large. Maximum " + maxAreaSize + " height points allowed"));
+                return;
+            }
+            
+            // Parse heightmap type
+            Heightmap.Type heightmapType;
+            try {
+                heightmapType = req.heightmapType != null 
+                    ? Heightmap.Type.valueOf(req.heightmapType.toUpperCase())
+                    : Heightmap.Type.WORLD_SURFACE;
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).json(Map.of("error", "Invalid heightmap type: " + req.heightmapType + 
+                    ". Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR"));
+                return;
+            }
+            
+            LOGGER.info("Getting heightmap for world {} from ({}, {}) to ({}, {}) using {}", 
+                worldKey.getValue(), minX, minZ, maxX, maxZ, heightmapType);
+            
+            // Create future for async response
+            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+            
+            // Execute on server thread
+            server.execute(() -> {
+                try {
+                    // Create 2D array to hold height data
+                    int[][] heights = new int[sizeX][sizeZ];
+                    int minHeight = Integer.MAX_VALUE;
+                    int maxHeight = Integer.MIN_VALUE;
+                    
+                    // Iterate through the area and get height at each point
+                    for (int x = 0; x < sizeX; x++) {
+                        for (int z = 0; z < sizeZ; z++) {
+                            int worldX = minX + x;
+                            int worldZ = minZ + z;
+                            
+                            // Get height using Minecraft's heightmap
+                            int height = world.getTopY(heightmapType, worldX, worldZ);
+                            heights[x][z] = height;
+                            
+                            // Track min/max for statistics
+                            minHeight = Math.min(minHeight, height);
+                            maxHeight = Math.max(maxHeight, height);
+                        }
+                    }
+                    
+                    LOGGER.info("Successfully generated heightmap: {}x{} points, height range {}-{}", 
+                        sizeX, sizeZ, minHeight, maxHeight);
+                    
+                    future.complete(Map.of(
+                        "success", true,
+                        "world", worldKey.getValue().toString(),
+                        "area_bounds", Map.of(
+                            "min", Map.of("x", minX, "z", minZ),
+                            "max", Map.of("x", maxX, "z", maxZ)
+                        ),
+                        "size", Map.of("x", sizeX, "z", sizeZ),
+                        "heightmap_type", heightmapType.toString(),
+                        "height_range", Map.of("min", minHeight, "max", maxHeight),
+                        "heights", heights
+                    ));
+                    
+                } catch (Exception e) {
+                    LOGGER.error("Error generating heightmap", e);
+                    future.complete(Map.of("error", "Exception during heightmap generation: " + e.getMessage()));
+                }
+            });
+            
+            // Wait for result and respond
+            try {
+                Map<String, Object> result = future.get(30, TimeUnit.SECONDS);
+                if (result.containsKey("error")) {
+                    ctx.status(500).json(result);
+                } else {
+                    ctx.json(result);
+                }
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for heightmap operation"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
     }
 }
 
@@ -364,4 +477,12 @@ class FillBoxRequest {
     public int x1, y1, z1; // first corner coordinate
     public int x2, y2, z2; // second corner coordinate
     public String blockType; // block identifier (e.g., "minecraft:stone")
+}
+
+class HeightmapRequest {
+    public String world; // optional, defaults to overworld
+    public int x1, z1; // first corner coordinate (only X and Z needed for heightmap)
+    public int x2, z2; // second corner coordinate (only X and Z needed for heightmap)
+    public String heightmapType; // optional, defaults to WORLD_SURFACE
+    // Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR
 }
