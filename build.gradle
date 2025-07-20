@@ -40,10 +40,10 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
 	// Javalin is a web framework for Java and Kotlin.
-	implementation 'io.javalin:javalin:6.1.3'
+	implementation 'io.javalin:javalin:6.7.0'
 
 	// add in jackson-databind
-	implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.0'
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
 	
 }
 
