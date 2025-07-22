@@ -94,3 +94,111 @@ publishing {
 		// retrieving dependencies.
 	}
 }
+
+// Docker tasks using Gradle exec
+def dockerImageName = "${project.group}/${project.archives_base_name}"
+def dockerImageTag = "${dockerImageName}:${project.version}"
+def dockerImageLatest = "${dockerImageName}:latest"
+
+task dockerBuild(type: Exec) {
+	group = 'docker'
+	description = 'Build Docker image'
+	dependsOn jar
+	
+	commandLine 'docker', 'build', 
+		'--build-arg', "JAR_FILE=${jar.archiveFileName.get()}",
+		'--build-arg', "VERSION=${project.version}",
+		'-t', dockerImageTag,
+		'-t', dockerImageLatest,
+		'.'
+	
+	doFirst {
+		println "Building Docker image: ${dockerImageTag}"
+	}
+	
+	doLast {
+		println "Docker image built successfully:"
+		println "  ${dockerImageTag}"
+		println "  ${dockerImageLatest}"
+	}
+}
+
+task dockerRun(type: Exec) {
+	group = 'docker'
+	description = 'Build and run Docker container'
+	dependsOn dockerBuild
+	
+	commandLine 'docker', 'run', '-d',
+		'-p', '25565:25565',
+		'-p', '7070:7070',
+		'--name', 'minecraft-fabric-server',
+		dockerImageLatest
+	
+	doFirst {
+		// Stop and remove existing container if it exists
+		exec {
+			commandLine 'docker', 'stop', 'minecraft-fabric-server'
+			ignoreExitValue = true
+		}
+		exec {
+			commandLine 'docker', 'rm', 'minecraft-fabric-server'
+			ignoreExitValue = true
+		}
+	}
+	
+	doLast {
+		println "Docker container started: minecraft-fabric-server"
+		println "Minecraft server: localhost:25565"
+		println "API server: http://localhost:7070"
+	}
+}
+
+task dockerStop(type: Exec) {
+	group = 'docker'
+	description = 'Stop and remove Docker container'
+	
+	commandLine 'docker', 'stop', 'minecraft-fabric-server'
+	
+	doLast {
+		exec {
+			commandLine 'docker', 'rm', 'minecraft-fabric-server'
+			ignoreExitValue = true
+		}
+		println "Docker container stopped and removed"
+	}
+}
+
+task dockerLogs(type: Exec) {
+	group = 'docker'
+	description = 'View Docker container logs'
+	
+	commandLine 'docker', 'logs', '-f', 'minecraft-fabric-server'
+}
+
+task dockerPush(type: Exec) {
+	group = 'docker'
+	description = 'Push Docker image to registry'
+	dependsOn dockerBuild
+	
+	commandLine 'docker', 'push', dockerImageTag
+	
+	doLast {
+		exec {
+			commandLine 'docker', 'push', dockerImageLatest
+		}
+		println "Docker images pushed to registry"
+	}
+}
+
+task dockerCompose(type: Exec) {
+	group = 'docker'
+	description = 'Start services using docker-compose'
+	
+	commandLine 'docker-compose', 'up', '-d'
+	
+	doLast {
+		println "Docker Compose services started"
+		println "Use 'docker-compose logs -f' to view logs"
+		println "Use 'docker-compose down' to stop services"
+	}
+}

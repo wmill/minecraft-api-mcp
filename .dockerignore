@@ -1,0 +1,50 @@
+# Gradle files
+.gradle/
+gradle/
+gradlew*
+build/
+!build/libs/*.jar
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+logs/
+*.log
+
+# Minecraft files that shouldn't be in container
+world/
+server.properties*
+eula.txt*
+whitelist.json
+ops.json
+banned-*.json
+
+# Temporary files
+*.tmp
+*.temp
+
+# Documentation
+README.md
+LICENSE
+*.md
+
+# MCP
+mcp/

@@ -1,0 +1,39 @@
+# Minecraft server properties
+# Copy this file to server.properties and modify as needed
+
+# Server network settings
+server-port=25565
+server-ip=
+online-mode=true
+max-players=20
+
+# World settings
+level-name=world
+level-seed=
+gamemode=survival
+difficulty=normal
+hardcore=false
+
+# Performance settings
+view-distance=10
+simulation-distance=10
+max-tick-time=60000
+
+# Server behavior
+spawn-protection=16
+allow-flight=false
+allow-nether=true
+enable-command-block=false
+op-permission-level=4
+
+# RCON (optional)
+enable-rcon=false
+rcon.port=25575
+rcon.password=
+
+# Server description
+motd=A Minecraft Server with Fabric API
+white-list=false
+
+# Logging
+log-ips=true

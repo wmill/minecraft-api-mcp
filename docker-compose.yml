@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  minecraft:
+    build: .
+    container_name: minecraft-fabric-server
+    ports:
+      - "25565:25565"  # Minecraft server port
+      - "7070:7070"    # API server port
+    volumes:
+      # Persistent world data
+      - minecraft_world:/minecraft/world
+      # Persistent logs
+      - minecraft_logs:/minecraft/logs
+      # Server configuration (optional - mount your own server.properties)
+      # - ./server.properties:/minecraft/server.properties:ro
+    environment:
+      # JVM memory settings
+      - JAVA_OPTS=-Xmx2G -Xms1G -XX:+UseG1GC -XX:+UseStringDeduplication
+      # Optional: Set server properties via environment
+      # - SERVER_PORT=25565
+      # - MAX_PLAYERS=20
+      # - DIFFICULTY=normal
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 1G
+
+volumes:
+  minecraft_world:
+    driver: local
+  minecraft_logs:
+    driver: local
+
+# Optional: Add networks for future expansion
+networks:
+  default:
+    name: minecraft-network
