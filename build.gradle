@@ -41,9 +41,11 @@ dependencies {
 
 	// Javalin is a web framework for Java and Kotlin.
 	implementation 'io.javalin:javalin:6.7.0'
+	include 'io.javalin:javalin:6.7.0'
 
 	// add in jackson-databind
 	implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+	include 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
 	
 }
 
