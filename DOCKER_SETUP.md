@@ -10,15 +10,20 @@ This guide explains how to build and deploy your Minecraft Fabric mod using Dock
 
 ## Setup Steps
 
-### 1. Download Fabric Server Launcher
+### 1. Download Fabric Server Launcher and API
 
-Download the Fabric server launcher for Minecraft 1.21:
+Download both the Fabric server launcher and Fabric API for Minecraft 1.21.7:
 ```bash
-# Use the provided download script
+# Use the provided download script (downloads both files)
 ./download-fabric-server.sh
 
-# Or download manually
-wget https://meta.fabricmc.net/v2/versions/loader/1.21/0.16.9/1.0.1/server/jar -O fabric-server-launch.jar
+# Or download manually:
+# Fabric Server Launcher
+wget https://meta.fabricmc.net/v2/versions/loader/1.21.7/0.16.14/1.0.3/server/jar -O fabric-server-launch.jar
+
+# Fabric API (create mods directory first)
+mkdir -p mods
+wget "https://cdn.modrinth.com/data/P7dR8mSH/versions/VjIVvVhW/fabric-api-0.128.1%2B1.21.7.jar" -O mods/fabric-api-0.128.1+1.21.7.jar
 ```
 
 ### 2. Accept Minecraft EULA

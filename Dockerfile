@@ -16,8 +16,9 @@ RUN mkdir -p /minecraft/mods /minecraft/logs /minecraft/world
 # curl -OJ https://meta.fabricmc.net/v2/versions/loader/1.21.8/0.16.14/1.0.3/server/jar
 COPY fabric-server-launch.jar /minecraft/fabric-server-launch.jar
 
-# Copy your mod jar file
+# Copy your mod jar file and Fabric API
 COPY build/libs/*.jar /minecraft/mods/
+COPY mods/*.jar /minecraft/mods/
 
 # Copy server configuration files
 COPY server.properties eula.txt /minecraft/

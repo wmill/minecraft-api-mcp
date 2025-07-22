@@ -46,3 +46,6 @@ LICENSE
 
 # MCP
 mcp/
+
+# Don't ignore the mods directory - we need Fabric API from here
+!mods/
