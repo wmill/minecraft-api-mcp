@@ -3,7 +3,7 @@
 # Download Fabric Server Launcher for Minecraft 1.21
 # This script downloads the Fabric server launcher required for the Docker build
 
-FABRIC_URL="https://meta.fabricmc.net/v2/versions/loader/1.21.8/0.16.14/1.0.3/server/jar"
+FABRIC_URL="https://meta.fabricmc.net/v2/versions/loader/1.21.7/0.16.14/1.0.3/server/jar"
 OUTPUT_FILE="fabric-server-launch.jar"
 
 echo "Downloading Fabric server launcher..."

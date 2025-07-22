@@ -10,16 +10,17 @@ RUN groupadd -r minecraft && useradd -r -g minecraft -m -d /minecraft minecraft
 # Create necessary directories
 RUN mkdir -p /minecraft/mods /minecraft/logs /minecraft/world
 
-# Copy the Fabric server launcher (you'll need to download this)
-# Download from: https://fabricmc.net/use/server/
-COPY fabric-server-mc.*.jar /minecraft/fabric-server-launch.jar
+# Copy the Fabric server launcher (download it first!)
+# Download from: https://meta.fabricmc.net/v2/versions/loader/1.21/0.16.9/1.0.1/server/jar
+# Or use: wget https://meta.fabricmc.net/v2/versions/loader/1.21/0.16.9/1.0.1/server/jar -O fabric-server-launch.jar
+# curl -OJ https://meta.fabricmc.net/v2/versions/loader/1.21.8/0.16.14/1.0.3/server/jar
+COPY fabric-server-launch.jar /minecraft/fabric-server-launch.jar
 
 # Copy your mod jar file
 COPY build/libs/*.jar /minecraft/mods/
 
-# Copy server configuration if it exists
-COPY server.properties /minecraft/server.properties* 
-COPY eula.txt /minecraft/eula.txt*
+# Copy server configuration files
+COPY server.properties eula.txt /minecraft/
 
 # Set proper ownership
 RUN chown -R minecraft:minecraft /minecraft
