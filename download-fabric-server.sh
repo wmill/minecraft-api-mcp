@@ -4,7 +4,8 @@
 # This script downloads the required files for the Docker build
 
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/1.21.7/0.16.14/1.0.3/server/jar"
-FABRIC_API_URL="https://cdn.modrinth.com/data/P7dR8mSH/versions/VjIVvVhW/fabric-api-0.128.1%2B1.21.7.jar"
+# Use GitHub releases for more reliable downloads
+FABRIC_API_URL="https://github.com/FabricMC/fabric/releases/download/0.128.1%2B1.21.7/fabric-api-0.128.1%2B1.21.7.jar"
 
 FABRIC_SERVER_FILE="fabric-server-launch.jar"
 FABRIC_API_FILE="fabric-api-0.128.1+1.21.7.jar"
@@ -15,16 +16,60 @@ mkdir -p mods
 download_file() {
     local url="$1"
     local output="$2"
+    local retries=3
     
-    if command -v curl &> /dev/null; then
-        curl -L -o "$output" "$url"
-    elif command -v wget &> /dev/null; then
-        wget -O "$output" "$url"
-    else
-        echo "Error: Neither curl nor wget is available. Please install one of them."
-        return 1
-    fi
-    return $?
+    for i in $(seq 1 $retries); do
+        echo "  Attempt $i/$retries..."
+        
+        if command -v curl &> /dev/null; then
+            curl -L -f --retry 2 --retry-delay 2 -o "$output" "$url"
+        elif command -v wget &> /dev/null; then
+            wget --tries=2 --timeout=30 -O "$output" "$url"
+        else
+            echo "Error: Neither curl nor wget is available. Please install one of them."
+            return 1
+        fi
+        
+        # Check if download was successful and file is not empty
+        if [ $? -eq 0 ] && [ -f "$output" ] && [ -s "$output" ]; then
+            # Additional validation for JAR files
+            if [[ "$output" == *.jar ]]; then
+                if command -v unzip &> /dev/null; then
+                    if unzip -t "$output" &> /dev/null; then
+                        echo "  ✅ File downloaded and validated successfully"
+                        return 0
+                    else
+                        echo "  ❌ Downloaded JAR file is corrupted, retrying..."
+                        rm -f "$output"
+                    fi
+                else
+                    # If unzip is not available, just check file size
+                    local size=$(stat -c%s "$output" 2>/dev/null || stat -f%z "$output" 2>/dev/null || echo "0")
+                    if [ "$size" -gt 1000 ]; then
+                        echo "  ✅ File downloaded successfully (size: $size bytes)"
+                        return 0
+                    else
+                        echo "  ❌ Downloaded file too small, retrying..."
+                        rm -f "$output"
+                    fi
+                fi
+            else
+                echo "  ✅ File downloaded successfully"
+                return 0
+            fi
+        else
+            echo "  ❌ Download failed, retrying..."
+            rm -f "$output"
+        fi
+        
+        if [ $i -lt $retries ]; then
+            echo "  Waiting 2 seconds before retry..."
+            sleep 2
+        fi
+    done
+    
+    echo "  ❌ Failed to download after $retries attempts"
+    return 1
 }
 
 echo "Downloading Fabric server launcher..."
