@@ -31,8 +31,6 @@ logs/
 
 # Minecraft files that shouldn't be in container
 world/
-server.properties*
-eula.txt*
 whitelist.json
 ops.json
 banned-*.json

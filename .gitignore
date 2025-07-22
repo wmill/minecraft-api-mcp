@@ -42,3 +42,7 @@ replay_*.log
 __pycache__
 mcp-env
 *.egg-info/
+
+# minecraft config
+eula.txt
+server.properties
