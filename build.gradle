@@ -1,6 +1,7 @@
 plugins {
 	id 'fabric-loom' version "${loom_version}"
 	id 'maven-publish'
+	id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 version = project.mod_version
@@ -41,11 +42,11 @@ dependencies {
 
 	// Javalin is a web framework for Java and Kotlin.
 	implementation 'io.javalin:javalin:6.7.0'
-	include 'io.javalin:javalin:6.7.0'
+	shadow 'io.javalin:javalin:6.7.0'
 
 	// add in jackson-databind
 	implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
-	include 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+	shadow 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
 	
 }
 
@@ -79,6 +80,15 @@ jar {
 	}
 }
 
+shadowJar {
+	configurations = [project.configurations.shadow]
+	archiveClassifier = 'fat'
+	
+	from("LICENSE") {
+		rename { "${it}_${inputs.properties.archivesName}"}
+	}
+}
+
 // configure the maven publication
 publishing {
 	publications {
@@ -105,10 +115,10 @@ def dockerImageLatest = "${dockerImageName}:latest"
 task dockerBuild(type: Exec) {
 	group = 'docker'
 	description = 'Build Docker image'
-	dependsOn jar
+	dependsOn shadowJar
 	
 	commandLine 'docker', 'build', 
-		'--build-arg', "JAR_FILE=${jar.archiveFileName.get()}",
+		'--build-arg', "JAR_FILE=${shadowJar.archiveFileName.get()}",
 		'--build-arg', "VERSION=${project.version}",
 		'-t', dockerImageTag,
 		'-t', dockerImageLatest,
