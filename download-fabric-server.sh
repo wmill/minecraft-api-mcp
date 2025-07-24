@@ -7,7 +7,7 @@ FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/1.21.7/0.16.14/1
 # Use GitHub releases for more reliable downloads
 FABRIC_API_URL="https://github.com/FabricMC/fabric/releases/download/0.128.1%2B1.21.7/fabric-api-0.128.1%2B1.21.7.jar"
 
-FABRIC_SERVER_FILE="fabric-server-launch.jar"
+FABRIC_SERVER_FILE="mods/fabric-server-launch.jar"
 FABRIC_API_FILE="fabric-api-0.128.1+1.21.7.jar"
 
 # Create mods directory if it doesn't exist
