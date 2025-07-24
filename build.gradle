@@ -114,9 +114,9 @@ publishing {
 }
 
 // Docker tasks using Gradle exec
-def dockerImageName = "${project.group}/${project.archives_base_name}"
-def dockerImageTag = "${dockerImageName}:${project.version}"
-def dockerImageLatest = "${dockerImageName}:latest"
+def dockerImageName = "minecraft-fabric-server"
+// def dockerImageTag = "${dockerImageName}:${project.version}"
+// def dockerImageLatest = "${dockerImageName}:latest"
 
 task dockerBuild(type: Exec) {
 	group = 'docker'
@@ -126,18 +126,17 @@ task dockerBuild(type: Exec) {
 	commandLine 'docker', 'build', 
 		'--build-arg', "JAR_FILE=${remapJar.archiveFileName.get()}",
 		'--build-arg', "VERSION=${project.version}",
-		'-t', dockerImageTag,
-		'-t', dockerImageLatest,
+		'-t', dockerImageName,
 		'.'
 	
 	doFirst {
-		println "Building Docker image: ${dockerImageTag}"
+		println "Building Docker image: ${dockerImageName}"
 	}
 	
 	doLast {
 		println "Docker image built successfully:"
-		println "  ${dockerImageTag}"
-		println "  ${dockerImageLatest}"
+		println "  ${dockerImageName}"
+		// println "  ${dockerImageLatest}"
 	}
 }
 
@@ -150,7 +149,7 @@ task dockerRun(type: Exec) {
 		'-p', '25565:25565',
 		'-p', '7070:7070',
 		'--name', 'minecraft-fabric-server',
-		dockerImageLatest
+		dockerImageName
 	
 	doFirst {
 		// Stop and remove existing container if it exists
@@ -198,11 +197,11 @@ task dockerPush(type: Exec) {
 	description = 'Push Docker image to registry'
 	dependsOn dockerBuild
 	
-	commandLine 'docker', 'push', dockerImageTag
+	commandLine 'docker', 'push', dockerImageName
 	
 	doLast {
 		exec {
-			commandLine 'docker', 'push', dockerImageLatest
+			commandLine 'docker', 'push', dockerImageName
 		}
 		println "Docker images pushed to registry"
 	}
