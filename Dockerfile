@@ -1,6 +1,8 @@
 # Use Eclipse Temurin JRE 21 (OpenJDK)
 FROM eclipse-temurin:21-jre
 
+RUN apt-get update && apt-get install -y tmux
+
 # Set working directory
 WORKDIR /minecraft
 
@@ -40,4 +42,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:7070/ || exit 1
 
 # Start the Minecraft server
-CMD java $JAVA_OPTS -jar fabric-server-launch.jar nogui
+#CMD java $JAVA_OPTS -jar fabric-server-launch.jar nogui
+CMD ["tmux", "new-session", "-s", "minecraft", "java", "-Xmx2G", "-Xms1G", "-jar", "fabric-server-launch.jar", "nogui"]

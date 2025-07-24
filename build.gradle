@@ -89,6 +89,12 @@ shadowJar {
 	}
 }
 
+remapJar {
+	inputFile = shadowJar.archiveFile
+	dependsOn shadowJar
+	archiveClassifier = 'fat-remapped'
+}
+
 // configure the maven publication
 publishing {
 	publications {
@@ -115,10 +121,10 @@ def dockerImageLatest = "${dockerImageName}:latest"
 task dockerBuild(type: Exec) {
 	group = 'docker'
 	description = 'Build Docker image'
-	dependsOn shadowJar
+	dependsOn remapJar
 	
 	commandLine 'docker', 'build', 
-		'--build-arg', "JAR_FILE=${shadowJar.archiveFileName.get()}",
+		'--build-arg', "JAR_FILE=${remapJar.archiveFileName.get()}",
 		'--build-arg', "VERSION=${project.version}",
 		'-t', dockerImageTag,
 		'-t', dockerImageLatest,
