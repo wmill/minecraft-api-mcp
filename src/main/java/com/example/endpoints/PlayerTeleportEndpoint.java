@@ -10,6 +10,7 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.world.World;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 public class PlayerTeleportEndpoint extends APIEndpoint {
     
@@ -26,7 +27,7 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
         try {
             TeleportRequest request = ctx.bodyAsClass(TeleportRequest.class);
             
-            server.execute(() -> {
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 try {
                     // Find the player by name
                     ServerPlayerEntity player = server.getPlayerManager().getPlayer(request.playerName());
@@ -67,6 +68,13 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
                     LOGGER.error("Error teleporting player: ", e);
                     ctx.status(500).json(new ErrorResponse("Failed to teleport player: " + e.getMessage()));
                 }
+            }, server::execute);
+            
+            // Wait for completion with timeout handling
+            future.exceptionally(throwable -> {
+                LOGGER.error("Teleport operation failed: ", throwable);
+                ctx.status(500).json(new ErrorResponse("Teleport operation failed: " + throwable.getMessage()));
+                return null;
             });
             
         } catch (Exception e) {
