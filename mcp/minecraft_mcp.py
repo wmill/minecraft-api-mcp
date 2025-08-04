@@ -346,6 +346,53 @@ class MinecraftMCPServer:
                         },
                         "required": ["x1", "z1", "x2", "z2"]
                     }
+                ),
+                Tool(
+                    name="place_nbt_structure",
+                    description="Place an NBT structure file at specified coordinates in the world",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "nbt_file_path": {
+                                "type": "string",
+                                "description": "Path to the NBT structure file to place"
+                            },
+                            "x": {
+                                "type": "integer",
+                                "description": "X coordinate to place structure (east positive, west negative)"
+                            },
+                            "y": {
+                                "type": "integer",
+                                "description": "Y coordinate to place structure (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z": {
+                                "type": "integer",
+                                "description": "Z coordinate to place structure (south positive, north negative)"
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            },
+                            "rotation": {
+                                "type": "string",
+                                "description": "Structure rotation (optional, defaults to NONE)",
+                                "enum": ["NONE", "CLOCKWISE_90", "CLOCKWISE_180", "COUNTERCLOCKWISE_90"],
+                                "default": "NONE"
+                            },
+                            "include_entities": {
+                                "type": "boolean",
+                                "description": "Whether to include entities from the NBT structure (default: true)",
+                                "default": true
+                            },
+                            "replace_blocks": {
+                                "type": "boolean",
+                                "description": "Whether to replace existing blocks (default: true)",
+                                "default": true
+                            }
+                        },
+                        "required": ["nbt_file_path", "x", "y", "z"]
+                    }
                 )
             ]
         
@@ -383,6 +430,9 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "get_heightmap":
                     result = await self.get_heightmap(**arguments)
+                    return result.content
+                elif name == "place_nbt_structure":
+                    result = await self.place_nbt_structure(**arguments)
                     return result.content
                 else:
                     raise ValueError(f"Unknown tool: {name}")
@@ -817,6 +867,66 @@ class MinecraftMCPServer:
                     )
         except Exception as e:
             print(f"Error getting heightmap: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def place_nbt_structure(self, nbt_file_path: str, x: int, y: int, z: int, world: str = None, 
+                                rotation: str = "NONE", include_entities: bool = True, replace_blocks: bool = True) -> CallToolResult:
+        """Place an NBT structure file at specified coordinates."""
+        try:
+            # Check if file exists
+            if not os.path.exists(nbt_file_path):
+                return CallToolResult(
+                    content=[TextContent(type="text", text=f"❌ NBT file not found: {nbt_file_path}")]
+                )
+            
+            # Prepare multipart form data
+            with open(nbt_file_path, 'rb') as f:
+                files = {'nbt_file': (os.path.basename(nbt_file_path), f.read(), 'application/octet-stream')}
+            
+            data = {
+                'x': str(x),
+                'y': str(y), 
+                'z': str(z),
+                'rotation': rotation,
+                'include_entities': str(include_entities).lower(),
+                'replace_blocks': str(replace_blocks).lower()
+            }
+            if world:
+                data['world'] = world
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/world/structure/place",
+                    files=files,
+                    data=data,
+                    timeout=60.0  # Longer timeout for structure placement
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    pos = result["position"]
+                    size = result["structure_size"]
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Successfully placed NBT structure '{result['filename']}'\n"
+                                 f"Position: ({pos['x']}, {pos['y']}, {pos['z']})\n"
+                                 f"Size: {size['x']}x{size['y']}x{size['z']} blocks\n"
+                                 f"World: {result['world']}\n"
+                                 f"Rotation: {result['rotation']}\n"
+                                 f"Entities included: {result['include_entities']}\n"
+                                 f"Blocks replaced: {result['replace_blocks']}"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to place structure: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error placing NBT structure: {e}", file=sys.stderr)
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )

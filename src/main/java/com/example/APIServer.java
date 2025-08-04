@@ -3,6 +3,7 @@ package com.example;
 import com.example.endpoints.APIEndpoint;
 import com.example.endpoints.EntitiesEndpoint;
 import com.example.endpoints.MessageEndpoint;
+import com.example.endpoints.NBTStructureEndpoint;
 import com.example.endpoints.PlayersEndpoint;
 import com.example.endpoints.PlayerTeleportEndpoint;
 import io.javalin.Javalin;
@@ -25,5 +26,6 @@ public class APIServer {
         APIEndpoint playersEndpoint = new PlayersEndpoint(app, server, logger);
         APIEndpoint messageEndpoint = new MessageEndpoint(app, server, logger);
         APIEndpoint teleportEndpoint = new PlayerTeleportEndpoint(app, server, logger);
+        APIEndpoint structureEndpoint = new NBTStructureEndpoint(app, server, logger);
     }
 }
