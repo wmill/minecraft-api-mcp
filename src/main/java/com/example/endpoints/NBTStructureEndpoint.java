@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.structure.StructureTemplateManager;
+import java.io.DataInputStream;
 
 public class NBTStructureEndpoint extends APIEndpoint {
 
@@ -100,13 +101,22 @@ public class NBTStructureEndpoint extends APIEndpoint {
                     // Read NBT data from uploaded file
                     byte[] nbtData = nbtFile.content().readAllBytes();
                     ByteArrayInputStream inputStream = new ByteArrayInputStream(nbtData);
-                    NbtCompound nbtCompound = NbtIo.readCompressed(inputStream, NbtSizeTracker.ofUnlimitedBytes());
+
+                    NbtCompound nbtCompound;
+
+                    // Check if the file is compressed based on its extension
+                    String filename = nbtFile.filename().toLowerCase();
+                    if (filename.endsWith(".gz")) {
+                        // Read compressed NBT file (e.g., .nbt.gz)
+                        nbtCompound = NbtIo.readCompressed(inputStream, NbtSizeTracker.ofUnlimitedBytes());
+                    } else {
+                        // Read uncompressed NBT file (e.g., .nbt)
+                        nbtCompound = NbtIo.readCompound(new DataInputStream(inputStream), NbtSizeTracker.ofUnlimitedBytes());
+                    }
 
                     // Create structure template from NBT data
-                    StructureTemplate template = new StructureTemplate();
-
                     StructureTemplateManager structureManager = server.getStructureTemplateManager();
-                    template = structureManager.createTemplate(nbtCompound);
+                    StructureTemplate template = structureManager.createTemplate(nbtCompound);
 
                     // Create placement data with settings
                     StructurePlacementData placementData = new StructurePlacementData()
