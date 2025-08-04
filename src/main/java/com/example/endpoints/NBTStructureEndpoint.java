@@ -4,6 +4,7 @@ import io.javalin.Javalin;
 import io.javalin.http.UploadedFile;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
@@ -12,27 +13,30 @@ import net.minecraft.structure.StructurePlacementData;
 import net.minecraft.structure.StructureTemplate;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.BlockRotation;
+import net.minecraft.util.BlockRotation;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import net.minecraft.structure.StructureTemplateManager;
 
 public class NBTStructureEndpoint extends APIEndpoint {
-    
+
     public NBTStructureEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
         super(app, server, logger);
         registerEndpoints();
     }
-    
+
     protected void registerEndpoints() {
         app.post("/api/world/structure/place", this::placeStructure);
     }
-    
+
     private void placeStructure(io.javalin.http.Context ctx) {
         try {
             // Get uploaded NBT file
@@ -41,26 +45,41 @@ public class NBTStructureEndpoint extends APIEndpoint {
                 ctx.status(400).json(Map.of("error", "No NBT file uploaded. Use 'nbt_file' field"));
                 return;
             }
-            
+
             // Get placement parameters from form data
-            String worldName = ctx.formParam("world", "minecraft:overworld");
-            int x = Integer.parseInt(ctx.formParam("x", "0"));
-            int y = Integer.parseInt(ctx.formParam("y", "64"));
-            int z = Integer.parseInt(ctx.formParam("z", "0"));
-            String rotationStr = ctx.formParam("rotation", "NONE");
-            boolean includeEntities = Boolean.parseBoolean(ctx.formParam("include_entities", "true"));
-            boolean replaceBlocks = Boolean.parseBoolean(ctx.formParam("replace_blocks", "true"));
-            
+            String worldName = Objects.requireNonNullElse(ctx.formParam("world"), "minecraft:overworld");
+            String xStr = ctx.formParam("x");
+            String yStr = ctx.formParam("y");
+            String zStr = ctx.formParam("z");
+            String rotationStr = Objects.requireNonNullElse(ctx.formParam("rotation"), "NONE");
+            String includeEntitiesStr = Objects.requireNonNullElse(ctx.formParam("include_entities"), "true");
+            String replaceBlocksStr = Objects.requireNonNullElse(ctx.formParam("replace_blocks"), "true");
+
+            // Parse coordinates
+            int x, y, z;
+            try {
+                x = xStr != null ? Integer.parseInt(xStr) : 0;
+                y = yStr != null ? Integer.parseInt(yStr) : 64;
+                z = zStr != null ? Integer.parseInt(zStr) : 0;
+            } catch (NumberFormatException e) {
+                ctx.status(400).json(Map.of("error", "Invalid coordinate values. x, y, z must be integers"));
+                return;
+            }
+
             // Parse rotation
             BlockRotation rotation;
             try {
                 rotation = BlockRotation.valueOf(rotationStr.toUpperCase());
             } catch (IllegalArgumentException e) {
-                ctx.status(400).json(Map.of("error", "Invalid rotation: " + rotationStr + 
+                ctx.status(400).json(Map.of("error", "Invalid rotation: " + rotationStr +
                     ". Valid values: NONE, CLOCKWISE_90, CLOCKWISE_180, COUNTERCLOCKWISE_90"));
                 return;
             }
-            
+
+            // Parse boolean parameters
+            boolean includeEntities = Boolean.parseBoolean(includeEntitiesStr);
+            boolean replaceBlocks = Boolean.parseBoolean(replaceBlocksStr);
+
             // Validate world
             RegistryKey<World> worldKey = RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(worldName));
             ServerWorld world = server.getWorld(worldKey);
@@ -68,43 +87,44 @@ public class NBTStructureEndpoint extends APIEndpoint {
                 ctx.status(400).json(Map.of("error", "Unknown world: " + worldName));
                 return;
             }
-            
-            LOGGER.info("Placing NBT structure '{}' at ({}, {}, {}) in world {} with rotation {} and entities={}", 
+
+            LOGGER.info("Placing NBT structure '{}' at ({}, {}, {}) in world {} with rotation {} and entities={}",
                 nbtFile.filename(), x, y, z, worldName, rotation, includeEntities);
-            
+
             // Create future for async response
             CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
-            
+
             // Execute on server thread
             server.execute(() -> {
                 try {
                     // Read NBT data from uploaded file
-                    byte[] nbtData = nbtFile.content();
+                    byte[] nbtData = nbtFile.content().readAllBytes();
                     ByteArrayInputStream inputStream = new ByteArrayInputStream(nbtData);
-                    NbtCompound nbtCompound = NbtIo.readCompressed(inputStream);
-                    
+                    NbtCompound nbtCompound = NbtIo.readCompressed(inputStream, NbtSizeTracker.ofUnlimitedBytes());
+
                     // Create structure template from NBT data
                     StructureTemplate template = new StructureTemplate();
-                    template.readNbt(world.getRegistryManager(), nbtCompound);
-                    
+
+                    StructureTemplateManager structureManager = server.getStructureTemplateManager();
+                    template = structureManager.createTemplate(nbtCompound);
+
                     // Create placement data with settings
                     StructurePlacementData placementData = new StructurePlacementData()
                         .setRotation(rotation)
-                        .setIncludeEntities(includeEntities)
-                        .setReplaceBlocks(replaceBlocks)
+                        .setIgnoreEntities(!includeEntities)
                         .setRandom(Random.create());
-                    
+
                     // Place the structure at the specified position
                     BlockPos pos = new BlockPos(x, y, z);
                     boolean success = template.place(world, pos, pos, placementData, Random.create(), 2);
-                    
+
                     if (success) {
                         // Get structure size for response
                         net.minecraft.util.math.Vec3i size = template.getSize();
-                        
-                        LOGGER.info("Successfully placed NBT structure '{}' ({}x{}x{}) at ({}, {}, {})", 
+
+                        LOGGER.info("Successfully placed NBT structure '{}' ({}x{}x{}) at ({}, {}, {})",
                             nbtFile.filename(), size.getX(), size.getY(), size.getZ(), x, y, z);
-                        
+
                         future.complete(Map.of(
                             "success", true,
                             "message", "Structure placed successfully",
@@ -117,15 +137,15 @@ public class NBTStructureEndpoint extends APIEndpoint {
                             "replace_blocks", replaceBlocks
                         ));
                     } else {
-                        LOGGER.warn("Failed to place NBT structure '{}' at ({}, {}, {})", 
+                        LOGGER.warn("Failed to place NBT structure '{}' at ({}, {}, {})",
                             nbtFile.filename(), x, y, z);
-                        
+
                         future.complete(Map.of(
                             "success", false,
                             "error", "Structure placement failed. Check coordinates and world state."
                         ));
                     }
-                    
+
                 } catch (IOException e) {
                     LOGGER.error("Error reading NBT file: ", e);
                     future.complete(Map.of("error", "Invalid NBT file format: " + e.getMessage()));
@@ -134,7 +154,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
                     future.complete(Map.of("error", "Exception during structure placement: " + e.getMessage()));
                 }
             });
-            
+
             // Wait for result and respond
             try {
                 Map<String, Object> result = future.get(30, TimeUnit.SECONDS);
@@ -148,9 +168,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
             } catch (Exception e) {
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
-            
-        } catch (NumberFormatException e) {
-            ctx.status(400).json(Map.of("error", "Invalid coordinate values. x, y, z must be integers"));
+
         } catch (Exception e) {
             LOGGER.error("Error processing structure placement request: ", e);
             ctx.status(400).json(Map.of("error", "Invalid request: " + e.getMessage()));
