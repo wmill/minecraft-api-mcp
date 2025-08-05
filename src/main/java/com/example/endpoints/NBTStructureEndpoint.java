@@ -17,15 +17,12 @@ import net.minecraft.util.BlockRotation;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.structure.StructureTemplateManager;
-import java.io.DataInputStream;
 
 public class NBTStructureEndpoint extends APIEndpoint {
 
@@ -36,6 +33,13 @@ public class NBTStructureEndpoint extends APIEndpoint {
 
     protected void registerEndpoints() {
         app.post("/api/world/structure/place", this::placeStructure);
+    }
+
+    public boolean isGzipped(byte[] data) {
+        // Check for GZIP magic number (0x1F 0x8B)
+        boolean isGzipped = data.length >= 2 && (data[0] == (byte) 0x1F) && (data[1] == (byte) 0x8B);
+        LOGGER.info("InputStream isGzipped: {}", isGzipped);
+        return isGzipped;
     }
 
     private void placeStructure(io.javalin.http.Context ctx) {
@@ -108,9 +112,8 @@ public class NBTStructureEndpoint extends APIEndpoint {
 
             NbtCompound nbtCompound;
 
-            // Check if the file is compressed based on its extension
-            String filename = nbtFile.filename().toLowerCase();
-            if (filename.endsWith(".gz")) {
+            // Check if gzipped and follow appropriate reading method
+            if (isGzipped(nbtData)) {
                 // Read compressed NBT file (e.g., .nbt.gz)
                 nbtCompound = NbtIo.readCompressed(inputStream, NbtSizeTracker.ofUnlimitedBytes());
             } else {
