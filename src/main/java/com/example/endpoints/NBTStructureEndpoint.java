@@ -95,37 +95,48 @@ public class NBTStructureEndpoint extends APIEndpoint {
             // Create future for async response
             CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
 
+            byte[] nbtData;
+
+            try {
+                nbtData = nbtFile.content().readAllBytes();
+            } catch (IOException e) {
+                LOGGER.error("Error reading NBT file: ", e);
+                ctx.status(500).json(Map.of("error", "Failed to read NBT file: " + e.getMessage()));
+                return;
+            }
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(nbtData);
+
+            NbtCompound nbtCompound;
+
+            // Check if the file is compressed based on its extension
+            String filename = nbtFile.filename().toLowerCase();
+            if (filename.endsWith(".gz")) {
+                // Read compressed NBT file (e.g., .nbt.gz)
+                nbtCompound = NbtIo.readCompressed(inputStream, NbtSizeTracker.ofUnlimitedBytes());
+            } else {
+                // Read uncompressed NBT file (e.g., .nbt)
+                nbtCompound = NbtIo.readCompound(new DataInputStream(inputStream), NbtSizeTracker.ofUnlimitedBytes());
+            }
+
+            // Create structure template from NBT data
+            StructureTemplateManager structureManager = server.getStructureTemplateManager();
+            StructureTemplate template = structureManager.createTemplate(nbtCompound);
+
+            // Create placement data with settings
+            StructurePlacementData placementData = new StructurePlacementData()
+                .setRotation(rotation)
+//                .setIgnoreEntities(!includeEntities)
+                .setIgnoreEntities(true)
+                .setRandom(Random.create());
+
+            // Place the structure at the specified position
+            BlockPos pos = new BlockPos(x, y, z);
+
             // Execute on server thread
             server.execute(() -> {
                 try {
                     // Read NBT data from uploaded file
-                    byte[] nbtData = nbtFile.content().readAllBytes();
-                    ByteArrayInputStream inputStream = new ByteArrayInputStream(nbtData);
 
-                    NbtCompound nbtCompound;
-
-                    // Check if the file is compressed based on its extension
-                    String filename = nbtFile.filename().toLowerCase();
-                    if (filename.endsWith(".gz")) {
-                        // Read compressed NBT file (e.g., .nbt.gz)
-                        nbtCompound = NbtIo.readCompressed(inputStream, NbtSizeTracker.ofUnlimitedBytes());
-                    } else {
-                        // Read uncompressed NBT file (e.g., .nbt)
-                        nbtCompound = NbtIo.readCompound(new DataInputStream(inputStream), NbtSizeTracker.ofUnlimitedBytes());
-                    }
-
-                    // Create structure template from NBT data
-                    StructureTemplateManager structureManager = server.getStructureTemplateManager();
-                    StructureTemplate template = structureManager.createTemplate(nbtCompound);
-
-                    // Create placement data with settings
-                    StructurePlacementData placementData = new StructurePlacementData()
-                        .setRotation(rotation)
-                        .setIgnoreEntities(!includeEntities)
-                        .setRandom(Random.create());
-
-                    // Place the structure at the specified position
-                    BlockPos pos = new BlockPos(x, y, z);
                     boolean success = template.place(world, pos, pos, placementData, Random.create(), 2);
 
                     if (success) {
@@ -156,9 +167,6 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         ));
                     }
 
-                } catch (IOException e) {
-                    LOGGER.error("Error reading NBT file: ", e);
-                    future.complete(Map.of("error", "Invalid NBT file format: " + e.getMessage()));
                 } catch (Exception e) {
                     LOGGER.error("Error placing structure: ", e);
                     future.complete(Map.of("error", "Exception during structure placement: " + e.getMessage()));
