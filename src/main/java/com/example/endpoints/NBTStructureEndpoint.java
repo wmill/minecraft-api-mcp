@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.structure.StructureTemplateManager;
+import org.jetbrains.annotations.NotNull;
 
 public class NBTStructureEndpoint extends APIEndpoint {
 
@@ -35,7 +36,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
         app.post("/api/world/structure/place", this::placeStructure);
     }
 
-    public boolean isGzipped(byte[] data) {
+    public boolean isGzipped(byte @NotNull [] data) {
         // Check for GZIP magic number (0x1F 0x8B)
         boolean isGzipped = data.length >= 2 && (data[0] == (byte) 0x1F) && (data[1] == (byte) 0x8B);
         LOGGER.info("InputStream isGzipped: {}", isGzipped);
@@ -128,8 +129,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
             // Create placement data with settings
             StructurePlacementData placementData = new StructurePlacementData()
                 .setRotation(rotation)
-//                .setIgnoreEntities(!includeEntities)
-                .setIgnoreEntities(true)
+                .setIgnoreEntities(!includeEntities)
                 .setRandom(Random.create());
 
             // Place the structure at the specified position
