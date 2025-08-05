@@ -17,3 +17,6 @@ package = true
 
 [project.scripts]
 minecraft-mcp = "minecraft_mcp:main"
+
+[project.entry-points."mcp.servers"]
+minecraft-api = "minecraft_mcp:main"

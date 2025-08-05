@@ -60,6 +60,8 @@ processResources {
 
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 21
+	options.debug = true
+	options.compilerArgs << "-g"
 }
 
 java {
