@@ -383,12 +383,12 @@ class MinecraftMCPServer:
                             "include_entities": {
                                 "type": "boolean",
                                 "description": "Whether to include entities from the NBT structure (default: true)",
-                                "default": true
+                                "default": True
                             },
                             "replace_blocks": {
                                 "type": "boolean",
                                 "description": "Whether to replace existing blocks (default: true)",
-                                "default": true
+                                "default": True
                             }
                         },
                         "required": ["nbt_file_path", "x", "y", "z"]
