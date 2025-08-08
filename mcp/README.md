@@ -232,3 +232,8 @@ The MCP server includes comprehensive error handling for:
 - Player not found errors
 
 All errors are logged and returned as text content to the MCP client.
+
+
+
+While debugging try
+`DEBUG=1 npx @modelcontextprotocol/inspector uv run minecraft_mcp.py`
