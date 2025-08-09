@@ -353,9 +353,13 @@ class MinecraftMCPServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "nbt_file_path": {
+                            "nbt_file_data": {
                                 "type": "string",
-                                "description": "Path to the NBT structure file to place"
+                                "description": "Base64-encoded NBT structure file data"
+                            },
+                            "filename": {
+                                "type": "string",
+                                "description": "Original filename of the NBT structure (for reference)"
                             },
                             "x": {
                                 "type": "integer",
@@ -391,7 +395,7 @@ class MinecraftMCPServer:
                                 "default": True
                             }
                         },
-                        "required": ["nbt_file_path", "x", "y", "z"]
+                        "required": ["nbt_file_data", "filename", "x", "y", "z"]
                     }
                 )
             ]
@@ -871,19 +875,21 @@ class MinecraftMCPServer:
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )
     
-    async def place_nbt_structure(self, nbt_file_path: str, x: int, y: int, z: int, world: str = None, 
+    async def place_nbt_structure(self, nbt_file_data: str, filename: str, x: int, y: int, z: int, world: str = None, 
                                 rotation: str = "NONE", include_entities: bool = True, replace_blocks: bool = True) -> CallToolResult:
         """Place an NBT structure file at specified coordinates."""
+        import base64
         try:
-            # Check if file exists
-            if not os.path.exists(nbt_file_path):
+            # Decode base64 file data
+            try:
+                nbt_data = base64.b64decode(nbt_file_data)
+            except Exception as e:
                 return CallToolResult(
-                    content=[TextContent(type="text", text=f"❌ NBT file not found: {nbt_file_path}")]
+                    content=[TextContent(type="text", text=f"❌ Invalid base64 data: {str(e)}")]
                 )
             
             # Prepare multipart form data
-            with open(nbt_file_path, 'rb') as f:
-                files = {'nbt_file': (os.path.basename(nbt_file_path), f.read(), 'application/octet-stream')}
+            files = {'nbt_file': (filename, nbt_data, 'application/octet-stream')}
             
             data = {
                 'x': str(x),
@@ -912,7 +918,7 @@ class MinecraftMCPServer:
                     return CallToolResult(
                         content=[TextContent(
                             type="text",
-                            text=f"✅ Successfully placed NBT structure '{result['filename']}'\n"
+                            text=f"✅ Successfully placed NBT structure '{filename}'\n"
                                  f"Position: ({pos['x']}, {pos['y']}, {pos['z']})\n"
                                  f"Size: {size['x']}x{size['y']}x{size['z']} blocks\n"
                                  f"World: {result['world']}\n"
