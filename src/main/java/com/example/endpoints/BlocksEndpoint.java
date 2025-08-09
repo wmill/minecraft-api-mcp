@@ -12,8 +12,10 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.Heightmap;
+import net.minecraft.state.property.Property;
 
 import java.util.Map;
+import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -68,39 +70,30 @@ public class BlocksEndpoint extends APIEndpoint {
                     for (int x = 0; x < req.blocks.length; x++) {
                         for (int y = 0; y < req.blocks[x].length; y++) {
                             for (int z = 0; z < req.blocks[x][y].length; z++) {
-                                String blockId = req.blocks[x][y][z];
+                                BlockData blockData = req.blocks[x][y][z];
                                 
                                 // Skip null blocks (no change)
-                                if (blockId == null) {
+                                if (blockData == null) {
                                     blocksSkipped++;
                                     continue;
                                 }
                                 
-                                // Parse block identifier
-                                Identifier blockIdentifier = Identifier.tryParse(blockId);
-                                if (blockIdentifier == null) {
-                                    LOGGER.warn("Invalid block identifier: {}", blockId);
-                                    blocksSkipped++;
-                                    continue;
-                                }
-                                
-                                // Get block from registry
-                                Block block = Registries.BLOCK.get(blockIdentifier);
-                                if (block == null) {
-                                    LOGGER.warn("Unknown block: {}", blockId);
+                                // Convert BlockData to BlockState
+                                BlockState blockState = blockData.toBlockState();
+                                if (blockState == null) {
+                                    LOGGER.warn("Invalid block data: {}", blockData.blockName);
                                     blocksSkipped++;
                                     continue;
                                 }
                                 
                                 // Calculate world position
                                 BlockPos pos = new BlockPos(req.startX + x, req.startY + y, req.startZ + z);
-                                BlockState blockState = block.getDefaultState();
                                 
                                 // Set block in world
                                 if (world.setBlockState(pos, blockState)) {
                                     blocksSet++;
                                 } else {
-                                    LOGGER.warn("Failed to set block {} at {}", blockId, pos);
+                                    LOGGER.warn("Failed to set block {} at {}", blockData.blockName, pos);
                                     blocksSkipped++;
                                 }
                             }
@@ -171,7 +164,7 @@ public class BlocksEndpoint extends APIEndpoint {
             server.execute(() -> {
                 try {
                     // Create 3D array to hold block data
-                    String[][][] blocks = new String[req.sizeX][req.sizeY][req.sizeZ];
+                    BlockData[][][] blocks = new BlockData[req.sizeX][req.sizeY][req.sizeZ];
                     
                     // Iterate through the requested chunk area
                     for (int x = 0; x < req.sizeX; x++) {
@@ -182,11 +175,9 @@ public class BlocksEndpoint extends APIEndpoint {
                                 
                                 // Get block state at position
                                 BlockState blockState = world.getBlockState(pos);
-                                Block block = blockState.getBlock();
                                 
-                                // Get block identifier
-                                Identifier blockId = Registries.BLOCK.getId(block);
-                                blocks[x][y][z] = blockId.toString();
+                                // Convert to BlockData format
+                                blocks[x][y][z] = BlockData.fromBlockState(blockState);
                             }
                         }
                     }
@@ -454,12 +445,73 @@ public class BlocksEndpoint extends APIEndpoint {
 record BlockInfo(String id, String display_name) {
 }
 
+class BlockData {
+    public String blockName;
+    public Map<String, String> blockStates; // optional, uses default states if not provided
+    
+    // Helper method to create BlockState from this data
+    public BlockState toBlockState() {
+        Identifier blockId = Identifier.tryParse(blockName);
+        if (blockId == null) return null;
+        
+        Block block = Registries.BLOCK.get(blockId);
+        if (block == null) return null;
+        
+        BlockState state = block.getDefaultState();
+        
+        // Apply block states if provided
+        if (blockStates != null) {
+            for (Map.Entry<String, String> entry : blockStates.entrySet()) {
+                String propertyName = entry.getKey();
+                String value = entry.getValue();
+                
+                // Find the property in the block's state definition
+                for (Property<?> property : state.getProperties()) {
+                    if (property.getName().equals(propertyName)) {
+                        try {
+                            var parsedValue = property.parse(value);
+                            if (parsedValue.isPresent()) {
+                                state = setBlockStateProperty(state, property, parsedValue.get());
+                            }
+                        } catch (Exception e) {
+                            // Invalid property value, skip this property
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        
+        return state;
+    }
+    
+    // Helper method to create BlockData from BlockState
+    public static BlockData fromBlockState(BlockState blockState) {
+        BlockData data = new BlockData();
+        data.blockName = Registries.BLOCK.getId(blockState.getBlock()).toString();
+        data.blockStates = new HashMap<>();
+        
+        // Extract all block state properties
+        for (Property<?> property : blockState.getProperties()) {
+            data.blockStates.put(property.getName(), blockState.get(property).toString());
+        }
+        
+        return data;
+    }
+    
+    // Helper method to handle generic type casting for block state properties
+    @SuppressWarnings("unchecked")
+    private static <T extends Comparable<T>> BlockState setBlockStateProperty(BlockState state, Property<T> property, Comparable<?> value) {
+        return state.with(property, (T) value);
+    }
+}
+
 class BlockSetRequest {
     public String world; // optional, defaults to overworld
     public int startX;
     public int startY;
     public int startZ;
-    public String[][][] blocks; // 3D array of block IDs, null means no change
+    public BlockData[][][] blocks; // 3D array of block data objects, null means no change
 }
 
 class ChunkRequest {

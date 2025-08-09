@@ -144,7 +144,7 @@ class MinecraftMCPServer:
                 ),
                 Tool(
                     name="set_blocks",
-                    description="Set blocks in the world using a 3D array",
+                    description="Set blocks in the world using a 3D array of block objects with optional block states",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -162,13 +162,30 @@ class MinecraftMCPServer:
                             },
                             "blocks": {
                                 "type": "array",
-                                "description": "3D array of block IDs (use null for no change). 'minecraft:air' can be used to clear a block.",
+                                "description": "3D array of block objects (use null for no change). Each block object has blockName and optional blockStates.",
                                 "items": {
                                     "type": "array",
                                     "items": {
                                         "type": "array",
                                         "items": {
-                                            "type": ["string", "null"]
+                                            "oneOf": [
+                                                {"type": "null"},
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "blockName": {
+                                                            "type": "string",
+                                                            "description": "Block identifier (e.g., 'minecraft:oak_door')"
+                                                        },
+                                                        "blockStates": {
+                                                            "type": "object",
+                                                            "description": "Optional block state properties (e.g., {'facing': 'north', 'open': 'false'})",
+                                                            "additionalProperties": {"type": "string"}
+                                                        }
+                                                    },
+                                                    "required": ["blockName"]
+                                                }
+                                            ]
                                         }
                                     }
                                 }
@@ -559,7 +576,7 @@ class MinecraftMCPServer:
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )
     
-    async def set_blocks(self, start_x: int, start_y: int, start_z: int, blocks: List[List[List[Optional[str]]]], world: str = None) -> CallToolResult:
+    async def set_blocks(self, start_x: int, start_y: int, start_z: int, blocks: List[List[List[Optional[Dict[str, Any]]]]], world: str = None) -> CallToolResult:
         """Set blocks in the world."""
         try:
             payload = {
@@ -626,7 +643,11 @@ class MinecraftMCPServer:
                     for x in range(len(blocks)):
                         for y in range(len(blocks[x])):
                             for z in range(len(blocks[x][y])):
-                                block_id = blocks[x][y][z]
+                                block_data = blocks[x][y][z]
+                                if isinstance(block_data, dict):
+                                    block_id = block_data.get("blockName", "unknown")
+                                else:
+                                    block_id = str(block_data)  # fallback for any remaining string format
                                 block_counts[block_id] = block_counts.get(block_id, 0) + 1
                     
                     result_text = f"**Chunk Data ({size_x}x{size_y}x{size_z} blocks):**\n"
