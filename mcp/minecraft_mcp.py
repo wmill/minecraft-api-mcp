@@ -903,10 +903,18 @@ class MinecraftMCPServer:
         try:
             # Decode base64 file data
             try:
+                missing_padding = len(nbt_file_data) % 4
+                if missing_padding:
+                    nbt_file_data += '=' * (4 - missing_padding)
                 nbt_data = base64.b64decode(nbt_file_data)
-            except Exception as e:
+            except (base64.binascii.Error, ValueError) as e:
                 return CallToolResult(
                     content=[TextContent(type="text", text=f"❌ Invalid base64 data: {str(e)}")]
+                )
+                
+            except Exception as e:
+                return CallToolResult(
+                    content=[TextContent(type="text", text=f"❌ Error decoding base64 data: {str(e)}")]
                 )
             
             # Prepare multipart form data
