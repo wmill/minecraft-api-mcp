@@ -1,11 +1,6 @@
 package com.example;
 
-import com.example.endpoints.APIEndpoint;
-import com.example.endpoints.EntitiesEndpoint;
-import com.example.endpoints.MessageEndpoint;
-import com.example.endpoints.NBTStructureEndpoint;
-import com.example.endpoints.PlayersEndpoint;
-import com.example.endpoints.PlayerTeleportEndpoint;
+import com.example.endpoints.*;
 import io.javalin.Javalin;
 import net.minecraft.server.MinecraftServer;
 
@@ -17,15 +12,15 @@ public class APIServer {
 
     public static void start(MinecraftServer server, org.slf4j.Logger logger) {
         minecraftServer = server;
-        Javalin app = Javalin.create().start(7070);
+        app = Javalin.create().start(7070);
 
         app.get("/", ctx -> ctx.result("Hello World"));
 
-        APIEndpoint entitiesEndpoint = new EntitiesEndpoint(app, server, logger);
-        APIEndpoint blocksEndpoint = new com.example.endpoints.BlocksEndpoint(app, server, logger);
-        APIEndpoint playersEndpoint = new PlayersEndpoint(app, server, logger);
-        APIEndpoint messageEndpoint = new MessageEndpoint(app, server, logger);
-        APIEndpoint teleportEndpoint = new PlayerTeleportEndpoint(app, server, logger);
-        APIEndpoint structureEndpoint = new NBTStructureEndpoint(app, server, logger);
+        new EntitiesEndpoint(app, server, logger);
+        new BlocksEndpoint(app, server, logger);
+        new PlayersEndpoint(app, server, logger);
+        new MessageEndpoint(app, server, logger);
+        new PlayerTeleportEndpoint(app, server, logger);
+        new NBTStructureEndpoint(app, server, logger);
     }
 }
