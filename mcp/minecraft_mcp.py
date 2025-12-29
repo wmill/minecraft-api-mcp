@@ -473,6 +473,65 @@ class MinecraftMCPServer:
                         },
                         "required": ["start_x", "start_y", "start_z", "facing", "block_type"]
                     }
+                ),
+                Tool(
+                    name="place_stairs",
+                    description="Build a wide staircase between two points with automatically calculated stair block facing",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "start_x": {
+                                "type": "integer",
+                                "description": "Starting X coordinate (east positive, west negative)"
+                            },
+                            "start_y": {
+                                "type": "integer",
+                                "description": "Starting Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "start_z": {
+                                "type": "integer",
+                                "description": "Starting Z coordinate (south positive, north negative)"
+                            },
+                            "end_x": {
+                                "type": "integer",
+                                "description": "Ending X coordinate (east positive, west negative)"
+                            },
+                            "end_y": {
+                                "type": "integer",
+                                "description": "Ending Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "end_z": {
+                                "type": "integer",
+                                "description": "Ending Z coordinate (south positive, north negative)"
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Base block type for solid sections (e.g., 'minecraft:oak_planks')",
+                                "default": "minecraft:stone"
+                            },
+                            "stair_type": {
+                                "type": "string",
+                                "description": "Stair block type (e.g., 'minecraft:oak_stairs')",
+                                "default": "minecraft:stone_stairs"
+                            },
+                            "staircase_direction": {
+                                "type": "string",
+                                "description": "Orientation of the staircase structure (determines width calculation)",
+                                "enum": ["north", "south", "east", "west"]
+                            },
+                            "fill_support": {
+                                "type": "boolean",
+                                "description": "Whether to fill underneath the staircase for support",
+                                "default": false
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["start_x", "start_y", "start_z", "end_x", "end_y", "end_z", "block_type", "stair_type", "staircase_direction"]
+                    }
                 )
             ]
         
@@ -516,6 +575,9 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "place_door_line":
                     result = await self.place_door_line(**arguments)
+                    return result.content
+                elif name == "place_stairs":
+                    result = await self.place_stairs(**arguments)
                     return result.content
                 else:
                     raise ValueError(f"Unknown tool: {name}")
@@ -1070,6 +1132,56 @@ class MinecraftMCPServer:
                     )
         except Exception as e:
             print(f"Error placing door line: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def place_stairs(self, start_x: int, start_y: int, start_z: int, end_x: int, end_y: int, end_z: int,
+                          block_type: str, stair_type: str, staircase_direction: str, 
+                          fill_support: bool = False, world: str = None) -> CallToolResult:
+        """Build a wide staircase between two points."""
+        try:
+            payload = {
+                "startX": start_x,
+                "startY": start_y,
+                "startZ": start_z,
+                "endX": end_x,
+                "endY": end_y,
+                "endZ": end_z,
+                "blockType": block_type,
+                "stairType": stair_type,
+                "staircaseDirection": staircase_direction,
+                "fillSupport": fill_support
+            }
+            if world:
+                payload["world"] = world
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/world/prefabs/stairs",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Successfully built staircase with {result['blocks_placed']} blocks\n"
+                                 f"From: ({start_x}, {start_y}, {start_z}) to ({end_x}, {end_y}, {end_z})\n"
+                                 f"Staircase Direction: {result['staircaseDirection']}\n"
+                                 f"Block Type: {block_type}, Stair Type: {stair_type}\n"
+                                 f"Fill Support: {result['fill_support']}\n"
+                                 f"World: {result['world']}"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to build staircase: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error building staircase: {e}", file=sys.stderr)
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )

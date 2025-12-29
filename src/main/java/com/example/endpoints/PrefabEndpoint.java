@@ -193,20 +193,20 @@ public class PrefabEndpoint extends APIEndpoint{
                 return;
             }
 
-            Direction facing = switch(req.facing.toLowerCase()) {
+            Direction staircaseDirection = switch(req.staircaseDirection.toLowerCase()) {
                 case "north" -> Direction.NORTH;
                 case "south" -> Direction.SOUTH;
                 case "east" -> Direction.EAST;
                 case "west" -> Direction.WEST;
                 default -> null;
             };
-            if (facing == null || !facing.getAxis().isHorizontal()) {
-                ctx.status(400).json(Map.of("error", "Facing must be one of north, south, east, west"));
+            if (staircaseDirection == null || !staircaseDirection.getAxis().isHorizontal()) {
+                ctx.status(400).json(Map.of("error", "staircaseDirection must be one of north, south, east, west"));
                 return;
             }
 
-            LOGGER.info("Placing stair prefab in world {} from ({}, {}, {}) to ({}, {}, {}) facing {}", 
-                worldKey.getValue(), req.startX, req.startY, req.startZ, req.endX, req.endY, req.endZ, facing);
+            LOGGER.info("Placing stair prefab in world {} from ({}, {}, {}) to ({}, {}, {}) staircaseDirection {}", 
+                worldKey.getValue(), req.startX, req.startY, req.startZ, req.endX, req.endY, req.endZ, staircaseDirection);
 
             // Create future for async response
             CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
@@ -214,13 +214,13 @@ public class PrefabEndpoint extends APIEndpoint{
             // Execute on server thread
             server.execute(() -> {
                 try {
-                    int blocksPlaced = buildStaircase(world, req, baseBlock, stairBlock, facing);
+                    int blocksPlaced = buildStaircase(world, req, baseBlock, stairBlock, staircaseDirection);
                     
                     future.complete(Map.of(
                         "success", true,
                         "world", worldKey.getValue().toString(),
                         "blocks_placed", blocksPlaced,
-                        "facing", facing.asString(),
+                        "staircaseDirection", staircaseDirection.asString(),
                         "fill_support", req.fillSupport
                     ));
                 } catch (Exception e) {
@@ -245,7 +245,7 @@ public class PrefabEndpoint extends APIEndpoint{
         });
     }
 
-    private int buildStaircase(ServerWorld world, StairRequest req, Block baseBlock, Block stairBlock, Direction facing) {
+    private int buildStaircase(ServerWorld world, StairRequest req, Block baseBlock, Block stairBlock, Direction staircaseDirection) {
         int blocksPlaced = 0;
         
         // Calculate 3D line from start to end
@@ -253,19 +253,26 @@ public class PrefabEndpoint extends APIEndpoint{
         int dy = Math.abs(req.endY - req.startY);
         int dz = Math.abs(req.endZ - req.startZ);
         
-        int stepX = req.startX < req.endX ? 1 : -1;
-        int stepY = req.startY < req.endY ? 1 : -1;
-        int stepZ = req.startZ < req.endZ ? 1 : -1;
         
-        // Calculate width from bounding box perpendicular to facing direction
+        // Auto-calculate stair block facing direction from travel vector
+        Direction stairBlockFacing;
+        if (Math.abs(req.endX - req.startX) > Math.abs(req.endZ - req.startZ)) {
+            // Primary movement along X axis
+            stairBlockFacing = req.endX > req.startX ? Direction.EAST : Direction.WEST;
+        } else {
+            // Primary movement along Z axis
+            stairBlockFacing = req.endZ > req.startZ ? Direction.SOUTH : Direction.NORTH;
+        }
+        
+        // Calculate width from bounding box perpendicular to staircase direction
         int width;
         Direction lateralDirection;
-        if (facing == Direction.NORTH || facing == Direction.SOUTH) {
-            // Facing north/south, width is along X axis
+        if (staircaseDirection == Direction.NORTH || staircaseDirection == Direction.SOUTH) {
+            // Staircase oriented north/south, width is along X axis
             width = dx + 1;
             lateralDirection = Direction.EAST;
         } else {
-            // Facing east/west, width is along Z axis
+            // Staircase oriented east/west, width is along Z axis
             width = dz + 1;
             lateralDirection = Direction.SOUTH;
         }
@@ -293,9 +300,9 @@ public class PrefabEndpoint extends APIEndpoint{
                 boolean useStair = (i < maxSteps) && (req.startY != req.endY);
                 
                 if (useStair) {
-                    // Place stair block with correct facing
+                    // Place stair block with calculated facing direction
                     BlockState stairState = stairBlock.getDefaultState()
-                        .with(Properties.HORIZONTAL_FACING, facing)
+                        .with(Properties.HORIZONTAL_FACING, stairBlockFacing)
                         .with(Properties.BLOCK_HALF, BlockHalf.BOTTOM)
                         .with(Properties.STAIR_SHAPE, StairShape.STRAIGHT);
                     world.setBlockState(currentPos, stairState);
@@ -353,6 +360,6 @@ class StairRequest {
     public int endZ;
     public String blockType; // block identifier (e.g., "minecraft:oak_block")
     public String stairType; // block identifier (e.g., "minecraft:oak_stairs")
-    public String facing; // direction staircase ascends or decends (e.g. "north")
+    public String staircaseDirection; // orientation of the staircase structure (e.g. "north")
     public boolean fillSupport = false; // fill underneath the staircase
 }
