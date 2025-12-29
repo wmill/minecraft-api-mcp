@@ -26,6 +26,7 @@ public class PrefabEndpoint extends APIEndpoint{
     }
     private void init() {
         registerDoor();
+        registerStairs();
     }
     private void registerDoor() {
         app.post("/api/world/prefabs/door", ctx -> {
@@ -155,6 +156,48 @@ public class PrefabEndpoint extends APIEndpoint{
             }
         });
     }
+
+    private void registerStairs() {
+        app.post("/api/world/prefabs/door", ctx -> {
+            StairRequest req = ctx.bodyAsClass(StairRequest.class);
+
+                        // Validate world
+            RegistryKey<World> worldKey = req.world != null
+                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
+                : World.OVERWORLD;
+            
+            ServerWorld world = server.getWorld(worldKey);
+            if (world == null) {
+                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
+                return;
+            }
+
+            Identifier blockId = Identifier.tryParse(req.blockType);
+            if (blockId == null) {
+                ctx.status(400).json(Map.of("error", "Invalid block identifier"));
+                return;
+            }
+            Identifier stairId = Identifier.tryParse(req.stairType);
+
+            // TODO more setup may be needed
+
+            // TODO put a sanity check here to make sure that the length of the staircase will be >= the height
+
+            // Create future for async response
+            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+
+            // Execute on server thread
+            server.execute(() -> {
+                // TODO this function will use a stepper to draw lines of stairs or solid blocks to create a 
+                // staircase that fits the bounding coordinates passed in.
+                // Probably use something like Bresenham's algorithm or a stepper
+                // assume there is a floor underneath the bounds
+                // create two empty blocks above the stair / block placed to ensure the player can walk them
+                // if fillSupport is false just place one block (either blockType or stairType) per y location, floating stairs are fine
+                // if fillSupport is true fill in blocks to the bottom of the bounding box
+            });
+        });
+    }
 }
 
 class DoorRequest {
@@ -168,4 +211,18 @@ class DoorRequest {
     public String hinge = "left"; // "left" or "right"
     public Boolean open = false; // whether the door starts open
     public Boolean doubleDoors = false; // pair up the doors by reversing hinges
+}
+
+class StairRequest {
+    public String world; // optional, defaults to overworld
+    public int startX;
+    public int startY;
+    public int startZ;
+    public int endX;
+    public int endY;
+    public int endZ;
+    public String blockType; // block identifier (e.g., "minecraft:oak_block")
+    public String stairType; // block identifier (e.g., "minecraft:oak_stairs")
+    public String facing; // direction staircase ascends or decends (e.g. "north")
+    public boolean fillSupport = false; // fill underneath the staircase
 }
