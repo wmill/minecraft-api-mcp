@@ -6,8 +6,11 @@ import java.util.concurrent.TimeUnit;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.DoorBlock;
+import net.minecraft.block.StairsBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.enums.DoorHinge;
+import net.minecraft.block.enums.BlockHalf;
+import net.minecraft.block.enums.StairShape;
 import net.minecraft.state.property.Properties;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
@@ -158,7 +161,7 @@ public class PrefabEndpoint extends APIEndpoint{
     }
 
     private void registerStairs() {
-        app.post("/api/world/prefabs/door", ctx -> {
+        app.post("/api/world/prefabs/stairs", ctx -> {
             StairRequest req = ctx.bodyAsClass(StairRequest.class);
 
                         // Validate world
@@ -178,25 +181,152 @@ public class PrefabEndpoint extends APIEndpoint{
                 return;
             }
             Identifier stairId = Identifier.tryParse(req.stairType);
+            if (stairId == null) {
+                ctx.status(400).json(Map.of("error", "Invalid stair block identifier"));
+                return;
+            }
 
-            // TODO more setup may be needed
+            Block baseBlock = Registries.BLOCK.get(blockId);
+            Block stairBlock = Registries.BLOCK.get(stairId);
+            if (!(stairBlock instanceof StairsBlock)) {
+                ctx.status(400).json(Map.of("error", "Block is not a stair: " + req.stairType));
+                return;
+            }
 
-            // TODO put a sanity check here to make sure that the length of the staircase will be >= the height
+            Direction facing = switch(req.facing.toLowerCase()) {
+                case "north" -> Direction.NORTH;
+                case "south" -> Direction.SOUTH;
+                case "east" -> Direction.EAST;
+                case "west" -> Direction.WEST;
+                default -> null;
+            };
+            if (facing == null || !facing.getAxis().isHorizontal()) {
+                ctx.status(400).json(Map.of("error", "Facing must be one of north, south, east, west"));
+                return;
+            }
+
+            LOGGER.info("Placing stair prefab in world {} from ({}, {}, {}) to ({}, {}, {}) facing {}", 
+                worldKey.getValue(), req.startX, req.startY, req.startZ, req.endX, req.endY, req.endZ, facing);
 
             // Create future for async response
             CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
 
             // Execute on server thread
             server.execute(() -> {
-                // TODO this function will use a stepper to draw lines of stairs or solid blocks to create a 
-                // staircase that fits the bounding coordinates passed in.
-                // Probably use something like Bresenham's algorithm or a stepper
-                // assume there is a floor underneath the bounds
-                // create two empty blocks above the stair / block placed to ensure the player can walk them
-                // if fillSupport is false just place one block (either blockType or stairType) per y location, floating stairs are fine
-                // if fillSupport is true fill in blocks to the bottom of the bounding box
+                try {
+                    int blocksPlaced = buildStaircase(world, req, baseBlock, stairBlock, facing);
+                    
+                    future.complete(Map.of(
+                        "success", true,
+                        "world", worldKey.getValue().toString(),
+                        "blocks_placed", blocksPlaced,
+                        "facing", facing.asString(),
+                        "fill_support", req.fillSupport
+                    ));
+                } catch (Exception e) {
+                    LOGGER.error("Error placing stair prefab", e);
+                    future.complete(Map.of("error", "Exception during stair placement: " + e.getMessage()));
+                }
             });
+
+            // Wait for result and respond
+            try {
+                Map<String, Object> result = future.get(10, TimeUnit.SECONDS);
+                if (result.containsKey("error")) {
+                    ctx.status(500).json(result);
+                } else {
+                    ctx.json(result);
+                }
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for stair placement"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
         });
+    }
+
+    private int buildStaircase(ServerWorld world, StairRequest req, Block baseBlock, Block stairBlock, Direction facing) {
+        int blocksPlaced = 0;
+        
+        // Calculate 3D line from start to end
+        int dx = Math.abs(req.endX - req.startX);
+        int dy = Math.abs(req.endY - req.startY);
+        int dz = Math.abs(req.endZ - req.startZ);
+        
+        int stepX = req.startX < req.endX ? 1 : -1;
+        int stepY = req.startY < req.endY ? 1 : -1;
+        int stepZ = req.startZ < req.endZ ? 1 : -1;
+        
+        // Calculate width from bounding box perpendicular to facing direction
+        int width;
+        Direction lateralDirection;
+        if (facing == Direction.NORTH || facing == Direction.SOUTH) {
+            // Facing north/south, width is along X axis
+            width = dx + 1;
+            lateralDirection = Direction.EAST;
+        } else {
+            // Facing east/west, width is along Z axis
+            width = dz + 1;
+            lateralDirection = Direction.SOUTH;
+        }
+        
+        // Use 3D Bresenham-like algorithm
+        int x = req.startX, y = req.startY, z = req.startZ;
+        int maxSteps = Math.max(Math.max(dx, dy), dz);
+        
+        for (int i = 0; i <= maxSteps; i++) {
+            BlockPos centerPos = new BlockPos(x, y, z);
+            
+            // Place a line of blocks across the width
+            for (int w = 0; w < width; w++) {
+                // Calculate offset from start position along the lateral axis
+                int offsetX = lateralDirection == Direction.EAST ? (req.startX + w - x) : 0;
+                int offsetZ = lateralDirection == Direction.SOUTH ? (req.startZ + w - z) : 0;
+                BlockPos currentPos = centerPos.add(offsetX, 0, offsetZ);
+                
+                // Clear space above for walking (2 blocks)
+                world.setBlockState(currentPos.up(), Blocks.AIR.getDefaultState());
+                world.setBlockState(currentPos.up(2), Blocks.AIR.getDefaultState());
+                
+                // Determine if we should place a stair or solid block
+                // Use stairs when we're ascending/descending, solid blocks for flat sections
+                boolean useStair = (i < maxSteps) && (req.startY != req.endY);
+                
+                if (useStair) {
+                    // Place stair block with correct facing
+                    BlockState stairState = stairBlock.getDefaultState()
+                        .with(Properties.HORIZONTAL_FACING, facing)
+                        .with(Properties.BLOCK_HALF, BlockHalf.BOTTOM)
+                        .with(Properties.STAIR_SHAPE, StairShape.STRAIGHT);
+                    world.setBlockState(currentPos, stairState);
+                } else {
+                    // Place solid block
+                    world.setBlockState(currentPos, baseBlock.getDefaultState());
+                }
+                blocksPlaced++;
+                
+                // Fill support if requested
+                if (req.fillSupport) {
+                    BlockPos fillPos = currentPos.down();
+                    int minY = Math.min(req.startY, req.endY) - 1;
+                    while (fillPos.getY() >= minY && world.getBlockState(fillPos).isAir()) {
+                        world.setBlockState(fillPos, baseBlock.getDefaultState());
+                        blocksPlaced++;
+                        fillPos = fillPos.down();
+                    }
+                }
+            }
+            
+            // Advance to next position using 3D line interpolation
+            if (i < maxSteps) {
+                double progress = (double)(i + 1) / maxSteps;
+                x = req.startX + (int)Math.round((req.endX - req.startX) * progress);
+                y = req.startY + (int)Math.round((req.endY - req.startY) * progress);
+                z = req.startZ + (int)Math.round((req.endZ - req.startZ) * progress);
+            }
+        }
+        
+        return blocksPlaced;
     }
 }
 
