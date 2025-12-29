@@ -47,3 +47,7 @@ mcp-env
 # minecraft config
 eula.txt
 server.properties
+
+# sample nbt files
+*.nbt
+*.nbt.gz

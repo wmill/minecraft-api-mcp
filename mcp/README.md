@@ -237,3 +237,5 @@ All errors are logged and returned as text content to the MCP client.
 
 While debugging try
 `DEBUG=1 npx @modelcontextprotocol/inspector uv run minecraft_mcp.py`
+
+The mcp_config.json I use is copied in the repo, you'll need to update the paths before installing.

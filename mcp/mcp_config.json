@@ -1,9 +1,14 @@
 {
-  "mcpServers": {
-    "minecraft-api": {
-      "command": "/Users/waltermiller/.asdf/shims/python3",
-      "args": ["/Users/waltermiller/code/minecraft/fabric-sdk-mod-attempt/mcp/minecraft_mcp.py"],
-      "cwd": "/Users/waltermiller/code/minecraft/fabric-sdk-mod-attempt/mcp"
+    "mcpServers": {
+        "minecraft-api": {
+            "command": "/Users/waltermiller/.local/bin/uv",
+            "args": [
+                "run",
+                "--project",
+                "/Users/waltermiller/code/minecraft/fabric-sdk-mod-attempt/mcp",
+                "/Users/waltermiller/code/minecraft/fabric-sdk-mod-attempt/mcp/minecraft_mcp.py"
+            ],
+            "cwd": "/Users/waltermiller/code/minecraft/fabric-sdk-mod-attempt/mcp"
+        }
     }
-  }
 }
