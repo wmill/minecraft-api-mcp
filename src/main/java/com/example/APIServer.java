@@ -22,5 +22,6 @@ public class APIServer {
         new MessageEndpoint(app, server, logger);
         new PlayerTeleportEndpoint(app, server, logger);
         new NBTStructureEndpoint(app, server, logger);
+        new PrefabEndpoint(app, server, logger);
     }
 }

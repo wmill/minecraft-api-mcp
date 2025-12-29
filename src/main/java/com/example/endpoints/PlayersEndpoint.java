@@ -2,7 +2,7 @@ package com.example.endpoints;
 
 import io.javalin.Javalin;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
+
 
 public class PlayersEndpoint extends APIEndpoint {
     public PlayersEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
