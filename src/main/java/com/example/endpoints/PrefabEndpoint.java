@@ -94,6 +94,14 @@ public class PrefabEndpoint extends APIEndpoint{
                             req.startZ + lateral.getOffsetZ() * i
                         );
                         BlockPos upperPos = basePos.up();
+                        DoorHinge currentHinge = hinge;
+                        if (req.doubleDoors && i % 2 == 1) {
+                            if (hinge == DoorHinge.RIGHT) {
+                                currentHinge = DoorHinge.LEFT;
+                            } else {
+                                currentHinge = DoorHinge.RIGHT;
+                            }
+                        }
 
                         // Force overwrite
                         world.setBlockState(basePos, Blocks.AIR.getDefaultState());
@@ -101,14 +109,14 @@ public class PrefabEndpoint extends APIEndpoint{
 
                         BlockState lowerState = block.getDefaultState()
                             .with(Properties.HORIZONTAL_FACING, facing)
-                            .with(Properties.DOOR_HINGE, hinge)
+                            .with(Properties.DOOR_HINGE, currentHinge)
                             .with(Properties.DOUBLE_BLOCK_HALF, net.minecraft.block.enums.DoubleBlockHalf.LOWER)
                             .with(Properties.OPEN, open)
                             .with(Properties.POWERED, false);
 
                         BlockState upperState = block.getDefaultState()
                             .with(Properties.HORIZONTAL_FACING, facing)
-                            .with(Properties.DOOR_HINGE, hinge)
+                            .with(Properties.DOOR_HINGE, currentHinge)
                             .with(Properties.DOUBLE_BLOCK_HALF, net.minecraft.block.enums.DoubleBlockHalf.UPPER)
                             .with(Properties.OPEN, open)
                             .with(Properties.POWERED, false);
@@ -159,4 +167,5 @@ class DoorRequest {
     public String blockType; // block identifier (e.g., "minecraft:oak_door")
     public String hinge = "left"; // "left" or "right"
     public Boolean open = false; // whether the door starts open
+    public Boolean doubleDoors = false; // pair up the doors by reversing hinges
 }

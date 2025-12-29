@@ -455,6 +455,11 @@ class MinecraftMCPServer:
                                 "enum": ["left", "right"],
                                 "default": "left"
                             },
+                            "double_doors": {
+                                "type": "boolean",
+                                "decription": "Whether to alternate door hinges so they pair up to double doors",
+                                "default": False
+                            },
                             "open": {
                                 "type": "boolean",
                                 "description": "Whether doors start in open position",
@@ -1024,7 +1029,7 @@ class MinecraftMCPServer:
             )
     
     async def place_door_line(self, start_x: int, start_y: int, start_z: int, facing: str, block_type: str, 
-                             width: int = 1, hinge: str = "left", open: bool = False, world: str = None) -> CallToolResult:
+                             width: int = 1, hinge: str = "left", double_doors: bool = False, open: bool = False, world: str = None) -> CallToolResult:
         """Place a line of doors at specified coordinates."""
         try:
             payload = {
@@ -1035,7 +1040,8 @@ class MinecraftMCPServer:
                 "facing": facing,
                 "blockType": block_type,
                 "hinge": hinge,
-                "open": open
+                "open": open,
+                "doubleDoors": double_doors
             }
             if world:
                 payload["world"] = world
