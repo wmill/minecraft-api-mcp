@@ -414,6 +414,60 @@ class MinecraftMCPServer:
                         },
                         "required": ["nbt_file_data", "filename", "x", "y", "z"]
                     }
+                ),
+                Tool(
+                    name="place_door_line",
+                    description="Place a line of doors with specified width, facing direction, and properties",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "start_x": {
+                                "type": "integer",
+                                "description": "Starting X coordinate (east positive, west negative)"
+                            },
+                            "start_y": {
+                                "type": "integer",
+                                "description": "Starting Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "start_z": {
+                                "type": "integer",
+                                "description": "Starting Z coordinate (south positive, north negative)"
+                            },
+                            "width": {
+                                "type": "integer",
+                                "description": "Number of doors to place in a row (default: 1)",
+                                "default": 1,
+                                "minimum": 1
+                            },
+                            "facing": {
+                                "type": "string",
+                                "description": "Direction the doors should face",
+                                "enum": ["north", "south", "east", "west"]
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Door block type (e.g., 'minecraft:oak_door', 'minecraft:iron_door')",
+                                "default": "minecraft:oak_door"
+                            },
+                            "hinge": {
+                                "type": "string",
+                                "description": "Door hinge position",
+                                "enum": ["left", "right"],
+                                "default": "left"
+                            },
+                            "open": {
+                                "type": "boolean",
+                                "description": "Whether doors start in open position",
+                                "default": False
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["start_x", "start_y", "start_z", "facing", "block_type"]
+                    }
                 )
             ]
         
@@ -454,6 +508,9 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "place_nbt_structure":
                     result = await self.place_nbt_structure(**arguments)
+                    return result.content
+                elif name == "place_door_line":
+                    result = await self.place_door_line(**arguments)
                     return result.content
                 else:
                     raise ValueError(f"Unknown tool: {name}")
@@ -962,6 +1019,51 @@ class MinecraftMCPServer:
                     )
         except Exception as e:
             print(f"Error placing NBT structure: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def place_door_line(self, start_x: int, start_y: int, start_z: int, facing: str, block_type: str, 
+                             width: int = 1, hinge: str = "left", open: bool = False, world: str = None) -> CallToolResult:
+        """Place a line of doors at specified coordinates."""
+        try:
+            payload = {
+                "startX": start_x,
+                "startY": start_y,
+                "startZ": start_z,
+                "width": width,
+                "facing": facing,
+                "blockType": block_type,
+                "hinge": hinge,
+                "open": open
+            }
+            if world:
+                payload["world"] = world
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/world/prefabs/door",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Successfully placed {result['doors_placed']} {block_type} doors\n"
+                                 f"Position: ({start_x}, {start_y}, {start_z})\n"
+                                 f"Facing: {result['facing']}, Hinge: {result['hinge']}, Open: {result['open']}\n"
+                                 f"World: {result['world']}"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to place doors: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error placing door line: {e}", file=sys.stderr)
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )

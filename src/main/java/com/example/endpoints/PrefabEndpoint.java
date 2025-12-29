@@ -102,14 +102,14 @@ public class PrefabEndpoint extends APIEndpoint{
                         BlockState lowerState = block.getDefaultState()
                             .with(Properties.HORIZONTAL_FACING, facing)
                             .with(Properties.DOOR_HINGE, hinge)
-                            .with(Properties.BLOCK_HALF, net.minecraft.block.enums.BlockHalf.BOTTOM)
+                            .with(Properties.DOUBLE_BLOCK_HALF, net.minecraft.block.enums.DoubleBlockHalf.LOWER)
                             .with(Properties.OPEN, open)
                             .with(Properties.POWERED, false);
 
                         BlockState upperState = block.getDefaultState()
                             .with(Properties.HORIZONTAL_FACING, facing)
                             .with(Properties.DOOR_HINGE, hinge)
-                            .with(Properties.BLOCK_HALF, net.minecraft.block.enums.BlockHalf.TOP)
+                            .with(Properties.DOUBLE_BLOCK_HALF, net.minecraft.block.enums.DoubleBlockHalf.UPPER)
                             .with(Properties.OPEN, open)
                             .with(Properties.POWERED, false);
 
