@@ -522,7 +522,7 @@ class MinecraftMCPServer:
                             "fill_support": {
                                 "type": "boolean",
                                 "description": "Whether to fill underneath the staircase for support",
-                                "default": false
+                                "default": False
                             },
                             "world": {
                                 "type": "string",

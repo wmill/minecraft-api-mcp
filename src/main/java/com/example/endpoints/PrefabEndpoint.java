@@ -256,12 +256,16 @@ public class PrefabEndpoint extends APIEndpoint{
         
         // Auto-calculate stair block facing direction from travel vector
         Direction stairBlockFacing;
+        boolean isAscending = req.endY > req.startY;
+        
         if (Math.abs(req.endX - req.startX) > Math.abs(req.endZ - req.startZ)) {
             // Primary movement along X axis
-            stairBlockFacing = req.endX > req.startX ? Direction.EAST : Direction.WEST;
+            Direction horizontalDirection = req.endX > req.startX ? Direction.EAST : Direction.WEST;
+            stairBlockFacing = isAscending ? horizontalDirection : horizontalDirection.getOpposite();
         } else {
             // Primary movement along Z axis
-            stairBlockFacing = req.endZ > req.startZ ? Direction.SOUTH : Direction.NORTH;
+            Direction horizontalDirection = req.endZ > req.startZ ? Direction.SOUTH : Direction.NORTH;
+            stairBlockFacing = isAscending ? horizontalDirection : horizontalDirection.getOpposite();
         }
         
         // Calculate width from bounding box perpendicular to staircase direction
@@ -291,9 +295,11 @@ public class PrefabEndpoint extends APIEndpoint{
                 int offsetZ = lateralDirection == Direction.SOUTH ? (req.startZ + w - z) : 0;
                 BlockPos currentPos = centerPos.add(offsetX, 0, offsetZ);
                 
-                // Clear space above for walking (2 blocks)
+                // Clear space above for walking (4 blocks)
                 world.setBlockState(currentPos.up(), Blocks.AIR.getDefaultState());
                 world.setBlockState(currentPos.up(2), Blocks.AIR.getDefaultState());
+                world.setBlockState(currentPos.up(3), Blocks.AIR.getDefaultState());
+                world.setBlockState(currentPos.up(4), Blocks.AIR.getDefaultState());
                 
                 // Determine if we should place a stair or solid block
                 // Use stairs when we're ascending/descending, solid blocks for flat sections
