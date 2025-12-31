@@ -25,6 +25,9 @@ Pitch (vertical rotation):
 - Pitch = 0° → looking straight ahead (horizontal)
 - Pitch = 90° → looking straight down
 - Pitch = -90° → looking straight up
+
+Warning! Pay attention to the fact that Minecraft coordinates have 0 yaw as south. In most engines it is east or north so don't let that trip you up.
+Similarly positive Z is south. 
 """
 
 import asyncio

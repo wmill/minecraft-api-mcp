@@ -20,3 +20,7 @@ minecraft-api = "minecraft_mcp:main"
 
 [project.entry-points."mcp.servers"]
 minecraft-api = "minecraft_mcp:main"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
