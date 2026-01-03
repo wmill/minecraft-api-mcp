@@ -535,6 +535,15 @@ class MinecraftMCPServer:
                         },
                         "required": ["start_x", "start_y", "start_z", "end_x", "end_y", "end_z", "block_type", "stair_type", "staircase_direction"]
                     }
+                ),
+                Tool(
+                    name="test_server_connection",
+                    description="Test if the Minecraft server API is running and responding to requests",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }
                 )
             ]
         
@@ -581,6 +590,9 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "place_stairs":
                     result = await self.place_stairs(**arguments)
+                    return result.content
+                elif name == "test_server_connection":
+                    result = await self.test_server_connection()
                     return result.content
                 else:
                     raise ValueError(f"Unknown tool: {name}")
@@ -1187,6 +1199,58 @@ class MinecraftMCPServer:
             print(f"Error building staircase: {e}", file=sys.stderr)
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def test_server_connection(self) -> CallToolResult:
+        """Test if the Minecraft server API is running and responding."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self.api_base}/")
+                response.raise_for_status()
+                
+                # Check if we get the expected "Hello World" response
+                response_text = response.text.strip()
+                if response_text == "Hello World":
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text", 
+                            text="✅ Minecraft server is ONLINE and responding correctly"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text", 
+                            text=f"⚠️ Minecraft server responded but with unexpected content: '{response_text}'"
+                        )]
+                    )
+        except httpx.ConnectError:
+            return CallToolResult(
+                content=[TextContent(
+                    type="text", 
+                    text="❌ Cannot connect to Minecraft server - server is OFFLINE or not running"
+                )]
+            )
+        except httpx.TimeoutException:
+            return CallToolResult(
+                content=[TextContent(
+                    type="text", 
+                    text="❌ Minecraft server connection TIMEOUT - server may be overloaded"
+                )]
+            )
+        except httpx.HTTPStatusError as e:
+            return CallToolResult(
+                content=[TextContent(
+                    type="text", 
+                    text=f"❌ Minecraft server returned HTTP error {e.response.status_code}: {e.response.text}"
+                )]
+            )
+        except Exception as e:
+            return CallToolResult(
+                content=[TextContent(
+                    type="text", 
+                    text=f"❌ Error testing server connection: {str(e)}"
+                )]
             )
     
     async def run(self):
