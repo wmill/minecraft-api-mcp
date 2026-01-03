@@ -616,9 +616,11 @@ class MinecraftMCPServer:
                 for player in players:
                     pos = player["position"]
                     rot = player["rotation"]
+                    facing = yaw_to_cardinal(float(rot['yaw']))
                     result += f"- **{player['name']}** (UUID: {player['uuid']})\n"
                     result += f"  Position: ({pos['x']:.1f}, {pos['y']:.1f}, {pos['z']:.1f})\n"
                     result += f"  Rotation: Yaw {rot['yaw']:.1f}°, Pitch {rot['pitch']:.1f}°\n"
+                    result += f"  Facing: {facing}\n"
                 
                 return CallToolResult(
                     content=[TextContent(type="text", text=result)]
@@ -1270,6 +1272,19 @@ class MinecraftMCPServer:
                     )
                 )
             )
+
+def yaw_to_cardinal(yaw: float) -> str:
+    # Normalize to [-180, 180)
+    yaw = ((yaw + 180) % 360) - 180
+
+    if -45 <= yaw < 45:
+        return "SOUTH"
+    elif 45 <= yaw < 135:
+        return "WEST"
+    elif yaw >= 135 or yaw < -135:
+        return "NORTH"
+    else:  # -135 <= yaw < -45
+        return "EAST"
 
 async def main():
     """Main entry point."""
