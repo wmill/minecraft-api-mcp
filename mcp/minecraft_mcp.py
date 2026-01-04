@@ -53,6 +53,8 @@ import sys
 
 from mcp.server.lowlevel import NotificationOptions
 
+BASE_URL = "http://localhost:7070"
+
 if os.getenv('DEBUG'):
     try:
         import debugpy
@@ -73,10 +75,10 @@ logger = logging.getLogger(__name__)
 print("Starting Minecraft MCP Server...", file=sys.stderr)
 
 class MinecraftMCPServer:
-    def __init__(self, api_base: str = "http://localhost:7070"):
+    def __init__(self, api_base: str):
         self.api_base = api_base
         self.server = Server("minecraft-api")
-        print(f"Initialized server with API base: {api_base}", file=sys.stderr)
+        print(f"Initialized server with API base: {safe_url(api_base)}", file=sys.stderr)
         self.setup_handlers()
     
     def setup_handlers(self):
@@ -1286,11 +1288,14 @@ def yaw_to_cardinal(yaw: float) -> str:
     else:  # -135 <= yaw < -45
         return "EAST"
 
+def safe_url(url: str) -> str:
+    return str(httpx.URL(url).copy_with(password="****"))
+
 async def main():
     """Main entry point."""
     print("Main function started", file=sys.stderr)
     try:
-        server = MinecraftMCPServer()
+        server = MinecraftMCPServer(BASE_URL)
         await server.run()
     except Exception as e:
         print(f"Fatal error: {e}", file=sys.stderr)
