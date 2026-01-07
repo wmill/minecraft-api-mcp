@@ -1,12 +1,22 @@
 version: '3.8'
 
 services:
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx.Dockerfile
+    container_name: minecraft-nginx-gateway
+    ports:
+      - "80:80"        # HTTP gateway port
+    depends_on:
+      - minecraft
+    restart: unless-stopped
+
   minecraft:
     build: .
     container_name: minecraft-fabric-server
     ports:
       - "25565:25565"  # Minecraft server port
-      - "7070:7070"    # API server port
     volumes:
       # Persistent world data
       - minecraft_world:/minecraft/world

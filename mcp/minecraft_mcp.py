@@ -53,7 +53,7 @@ import sys
 
 from mcp.server.lowlevel import NotificationOptions
 
-BASE_URL = "http://localhost:7070"
+BASE_URL = "http://localhost:80"
 
 if os.getenv('DEBUG'):
     try:
