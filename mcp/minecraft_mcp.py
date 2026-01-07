@@ -53,7 +53,10 @@ import sys
 
 from mcp.server.lowlevel import NotificationOptions
 
-BASE_URL = "http://localhost:80"
+# Local
+BASE_URL = "http://localhost:7070"
+# Docker
+BASE_URL = "http://admin:SamplePassword@localhost:80"
 
 if os.getenv('DEBUG'):
     try:
