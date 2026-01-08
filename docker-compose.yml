@@ -1,14 +1,17 @@
-version: '3.8'
+#version: '3.8'
 
 services:
   nginx:
     build:
       context: .
       dockerfile: nginx.Dockerfile
-      # platform: linux/amd64
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    image: ghcr.io/wmill/minecraft-api-nginx:latest  # Add this
     container_name: minecraft-nginx-gateway
     ports:
-      - "80:80"        # HTTP gateway port
+      - "80:80"
     depends_on:
       - minecraft
     restart: unless-stopped
@@ -17,17 +20,16 @@ services:
     build:
       context: .
       dockerfile: minecraft.Dockerfile
-      # platform: linux/amd64
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    image: ghcr.io/wmill/minecraft-api:latest  # Add this
     container_name: minecraft-fabric-server
     ports:
-      - "25565:25565"  # Minecraft server port
+      - "25565:25565"
     volumes:
-      # Persistent world data
       - minecraft_world:/minecraft/world
-      # Persistent logs
       - minecraft_logs:/minecraft/logs
-      # Server configuration (optional - mount your own server.properties)
-      # - ./server.properties:/minecraft/server.properties:ro
     environment:
       # JVM memory settings
       - JAVA_OPTS=-Xmx2G -Xms1G -XX:+UseG1GC -XX:+UseStringDeduplication
@@ -38,7 +40,6 @@ services:
     restart: unless-stopped
     stdin_open: true
     tty: true
-    # Resource limits (optional)
     deploy:
       resources:
         limits:
