@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: nginx.Dockerfile
+      # platform: linux/amd64
     container_name: minecraft-nginx-gateway
     ports:
       - "80:80"        # HTTP gateway port
@@ -13,7 +14,10 @@ services:
     restart: unless-stopped
 
   minecraft:
-    build: .
+    build:
+      context: .
+      dockerfile: minecraft.Dockerfile
+      # platform: linux/amd64
     container_name: minecraft-fabric-server
     ports:
       - "25565:25565"  # Minecraft server port
@@ -47,8 +51,3 @@ volumes:
     driver: local
   minecraft_logs:
     driver: local
-
-# Optional: Add networks for future expansion
-networks:
-  default:
-    name: minecraft-network
