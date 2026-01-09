@@ -7,6 +7,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.StairsBlock;
+import net.minecraft.block.PaneBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.enums.DoorHinge;
 import net.minecraft.block.enums.BlockHalf;
@@ -30,6 +31,7 @@ public class PrefabEndpoint extends APIEndpoint{
     private void init() {
         registerDoor();
         registerStairs();
+        registerWindowPane();
     }
     private void registerDoor() {
         app.post("/api/world/prefabs/door", ctx -> {
@@ -258,16 +260,24 @@ public class PrefabEndpoint extends APIEndpoint{
         Direction stairBlockFacing;
         boolean isAscending = req.endY > req.startY;
         
-        if (Math.abs(req.endX - req.startX) > Math.abs(req.endZ - req.startZ)) {
-            // Primary movement along X axis
-            Direction horizontalDirection = req.endX > req.startX ? Direction.EAST : Direction.WEST;
-            stairBlockFacing = isAscending ? horizontalDirection : horizontalDirection.getOpposite();
-        } else {
-            // Primary movement along Z axis
-            Direction horizontalDirection = req.endZ > req.startZ ? Direction.SOUTH : Direction.NORTH;
-            stairBlockFacing = isAscending ? horizontalDirection : horizontalDirection.getOpposite();
-        }
+
+        // wtf was claude doing
+        // if (Math.abs(req.endX - req.startX) > Math.abs(req.endZ - req.startZ)) {
+        //     // Primary movement along X axis
+        //     Direction horizontalDirection = req.endX > req.startX ? Direction.EAST : Direction.WEST;
+        //     stairBlockFacing = isAscending ? horizontalDirection : horizontalDirection.getOpposite();
+        // } else {
+        //     // Primary movement along Z axis
+        //     Direction horizontalDirection = req.endZ > req.startZ ? Direction.SOUTH : Direction.NORTH;
+        //     stairBlockFacing = isAscending ? horizontalDirection : horizontalDirection.getOpposite();
+        // }
         
+        if (isAscending) {
+            stairBlockFacing = staircaseDirection;
+        } else {
+            stairBlockFacing = staircaseDirection.getOpposite();
+        }
+
         // Calculate width from bounding box perpendicular to staircase direction
         int width;
         Direction lateralDirection;
@@ -303,7 +313,7 @@ public class PrefabEndpoint extends APIEndpoint{
                 
                 // Determine if we should place a stair or solid block
                 // Use stairs when we're ascending/descending, solid blocks for flat sections
-                boolean useStair = (i < maxSteps) && (req.startY != req.endY);
+                boolean useStair = (i <= maxSteps) && (req.startY != req.endY);
                 
                 if (useStair) {
                     // Place stair block with calculated facing direction
@@ -341,6 +351,154 @@ public class PrefabEndpoint extends APIEndpoint{
         
         return blocksPlaced;
     }
+
+    private void registerWindowPane() {
+        app.post("/api/world/prefabs/window-pane", ctx -> {
+            WindowPaneRequest req = ctx.bodyAsClass(WindowPaneRequest.class);
+
+            // Validate world
+            RegistryKey<World> worldKey = req.world != null
+                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
+                : World.OVERWORLD;
+            
+            ServerWorld world = server.getWorld(worldKey);
+            if (world == null) {
+                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
+                return;
+            }
+
+            if (req.height <= 0) {
+                ctx.status(400).json(Map.of("error", "Height must be positive"));
+                return;
+            }
+
+            Identifier blockId = Identifier.tryParse(req.blockType);
+            if (blockId == null) {
+                ctx.status(400).json(Map.of("error", "Invalid block identifier"));
+                return;
+            }
+
+            Block block = Registries.BLOCK.get(blockId);
+            if (!(block instanceof PaneBlock)) {
+                ctx.status(400).json(Map.of("error", "Block is not a pane block: " + req.blockType));
+                return;
+            }
+
+            // Determine wall orientation
+            boolean isEastWest = req.startZ == req.endZ;
+            boolean isNorthSouth = req.startX == req.endX;
+            
+            if (!isEastWest && !isNorthSouth) {
+                ctx.status(400).json(Map.of("error", "Window pane wall must be aligned north-south or east-west"));
+                return;
+            }
+
+            LOGGER.info("Placing window pane wall in world {} from ({}, {}, {}) to ({}, {}, {}) height {}", 
+                worldKey.getValue(), req.startX, req.startY, req.startZ, req.endX, req.startY + req.height - 1, req.endZ);
+
+            // Create future for async response
+            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+
+            // Execute on server thread
+            server.execute(() -> {
+                try {
+                    int panesPlaced = buildWindowPaneWall(world, req, block);
+                    
+                    future.complete(Map.of(
+                        "success", true,
+                        "world", worldKey.getValue().toString(),
+                        "panes_placed", panesPlaced,
+                        "orientation", isEastWest ? "east-west" : "north-south",
+                        "waterlogged", req.waterlogged
+                    ));
+                } catch (Exception e) {
+                    LOGGER.error("Error placing window pane wall", e);
+                    future.complete(Map.of("error", "Exception during window pane placement: " + e.getMessage()));
+                }
+            });
+
+            // Wait for result and respond
+            try {
+                Map<String, Object> result = future.get(10, TimeUnit.SECONDS);
+                if (result.containsKey("error")) {
+                    ctx.status(500).json(result);
+                } else {
+                    ctx.json(result);
+                }
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for window pane placement"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+    }
+
+    private int buildWindowPaneWall(ServerWorld world, WindowPaneRequest req, Block paneBlock) {
+        int panesPlaced = 0;
+        
+        // Calculate wall dimensions
+        int wallWidth = Math.abs(req.endX - req.startX) + Math.abs(req.endZ - req.startZ) + 1;
+        boolean isEastWest = req.startZ == req.endZ;
+        
+        // Place panes in a rectangular area
+        for (int y = 0; y < req.height; y++) {
+            for (int i = 0; i < wallWidth; i++) {
+                BlockPos pos;
+                if (isEastWest) {
+                    // East-West wall: varies along X axis
+                    int x = Math.min(req.startX, req.endX) + i;
+                    pos = new BlockPos(x, req.startY + y, req.startZ);
+                } else {
+                    // North-South wall: varies along Z axis
+                    int z = Math.min(req.startZ, req.endZ) + i;
+                    pos = new BlockPos(req.startX, req.startY + y, z);
+                }
+                
+                // Calculate connection states
+                boolean north = shouldConnectNorth(world, pos, paneBlock);
+                boolean south = shouldConnectSouth(world, pos, paneBlock);
+                boolean east = shouldConnectEast(world, pos, paneBlock);
+                boolean west = shouldConnectWest(world, pos, paneBlock);
+                
+                // Create pane state with connections
+                BlockState paneState = paneBlock.getDefaultState()
+                    .with(Properties.NORTH, north)
+                    .with(Properties.SOUTH, south)
+                    .with(Properties.EAST, east)
+                    .with(Properties.WEST, west)
+                    .with(Properties.WATERLOGGED, req.waterlogged);
+                
+                world.setBlockState(pos, paneState);
+                panesPlaced++;
+            }
+        }
+        
+        return panesPlaced;
+    }
+    
+    private boolean shouldConnectNorth(ServerWorld world, BlockPos pos, Block paneBlock) {
+        BlockPos northPos = pos.north();
+        BlockState northState = world.getBlockState(northPos);
+        return northState.getBlock() == paneBlock || northState.isSolidBlock(world, northPos);
+    }
+    
+    private boolean shouldConnectSouth(ServerWorld world, BlockPos pos, Block paneBlock) {
+        BlockPos southPos = pos.south();
+        BlockState southState = world.getBlockState(southPos);
+        return southState.getBlock() == paneBlock || southState.isSolidBlock(world, southPos);
+    }
+    
+    private boolean shouldConnectEast(ServerWorld world, BlockPos pos, Block paneBlock) {
+        BlockPos eastPos = pos.east();
+        BlockState eastState = world.getBlockState(eastPos);
+        return eastState.getBlock() == paneBlock || eastState.isSolidBlock(world, eastPos);
+    }
+    
+    private boolean shouldConnectWest(ServerWorld world, BlockPos pos, Block paneBlock) {
+        BlockPos westPos = pos.west();
+        BlockState westState = world.getBlockState(westPos);
+        return westState.getBlock() == paneBlock || westState.isSolidBlock(world, westPos);
+    }
 }
 
 class DoorRequest {
@@ -368,4 +526,16 @@ class StairRequest {
     public String stairType; // block identifier (e.g., "minecraft:oak_stairs")
     public String staircaseDirection; // orientation of the staircase structure (e.g. "north")
     public boolean fillSupport = false; // fill underneath the staircase
+}
+
+class WindowPaneRequest {
+    public String world; // optional, defaults to overworld
+    public int startX;
+    public int startY;
+    public int startZ;
+    public int endX;   // defines the wall endpoint
+    public int endZ;   // defines the wall endpoint
+    public int height; // Y dimension (how tall the wall is)
+    public String blockType; // e.g., "minecraft:glass_pane", "minecraft:iron_bars"
+    public boolean waterlogged = false;
 }

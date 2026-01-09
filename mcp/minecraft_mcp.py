@@ -542,6 +542,56 @@ class MinecraftMCPServer:
                     }
                 ),
                 Tool(
+                    name="place_window_pane_wall",
+                    description="Create a vertical wall of window panes between two points with automatic connection states",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "start_x": {
+                                "type": "integer",
+                                "description": "Starting X coordinate (east positive, west negative)"
+                            },
+                            "start_y": {
+                                "type": "integer",
+                                "description": "Starting Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "start_z": {
+                                "type": "integer",
+                                "description": "Starting Z coordinate (south positive, north negative)"
+                            },
+                            "end_x": {
+                                "type": "integer",
+                                "description": "Ending X coordinate (east positive, west negative)"
+                            },
+                            "end_z": {
+                                "type": "integer",
+                                "description": "Ending Z coordinate (south positive, north negative)"
+                            },
+                            "height": {
+                                "type": "integer",
+                                "description": "Height of the window pane wall in blocks",
+                                "minimum": 1
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Pane block type (e.g., 'minecraft:glass_pane', 'minecraft:iron_bars')",
+                                "default": "minecraft:glass_pane"
+                            },
+                            "waterlogged": {
+                                "type": "boolean",
+                                "description": "Whether the panes should be waterlogged",
+                                "default": false
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["start_x", "start_y", "start_z", "end_x", "end_z", "height", "block_type"]
+                    }
+                ),
+                Tool(
                     name="teleport_player",
                     description="Teleport a player to specified coordinates with optional rotation and dimension",
                     inputSchema={
@@ -636,6 +686,9 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "place_stairs":
                     result = await self.place_stairs(**arguments)
+                    return result.content
+                elif name == "place_window_pane_wall":
+                    result = await self.place_window_pane_wall(**arguments)
                     return result.content
                 elif name == "teleport_player":
                     result = await self.teleport_player(**arguments)
@@ -1198,6 +1251,53 @@ class MinecraftMCPServer:
                     )
         except Exception as e:
             print(f"Error placing door line: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def place_window_pane_wall(self, start_x: int, start_y: int, start_z: int, end_x: int, end_z: int,
+                                    height: int, block_type: str, waterlogged: bool = False, world: str = None) -> CallToolResult:
+        """Create a vertical wall of window panes between two points."""
+        try:
+            payload = {
+                "startX": start_x,
+                "startY": start_y,
+                "startZ": start_z,
+                "endX": end_x,
+                "endZ": end_z,
+                "height": height,
+                "blockType": block_type,
+                "waterlogged": waterlogged
+            }
+            if world:
+                payload["world"] = world
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/world/prefabs/window-pane",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Successfully placed {result['panes_placed']} window panes\n"
+                                 f"Wall: ({start_x}, {start_y}, {start_z}) to ({end_x}, {start_y + height - 1}, {end_z})\n"
+                                 f"Orientation: {result['orientation']}\n"
+                                 f"Block Type: {block_type}\n"
+                                 f"Waterlogged: {result['waterlogged']}\n"
+                                 f"World: {result['world']}"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to place window pane wall: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error placing window pane wall: {e}", file=sys.stderr)
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )
