@@ -425,7 +425,7 @@ class MinecraftMCPServer:
                 ),
                 Tool(
                     name="place_door_line",
-                    description="Place a line of doors with specified width, facing direction, and properties",
+                    description="Place a line of doors with specified width, facing direction, and properties. Can do single doors.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -542,6 +542,47 @@ class MinecraftMCPServer:
                     }
                 ),
                 Tool(
+                    name="teleport_player",
+                    description="Teleport a player to specified coordinates with optional rotation and dimension",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "player_name": {
+                                "type": "string",
+                                "description": "Name of the player to teleport"
+                            },
+                            "x": {
+                                "type": "number",
+                                "description": "X coordinate (east positive, west negative)"
+                            },
+                            "y": {
+                                "type": "number",
+                                "description": "Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z": {
+                                "type": "number",
+                                "description": "Z coordinate (south positive, north negative)"
+                            },
+                            "dimension": {
+                                "type": "string",
+                                "description": "World dimension (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            },
+                            "yaw": {
+                                "type": "number",
+                                "description": "Horizontal rotation in degrees (optional, 0=south, 90=west, 180=north, -90=east)",
+                                "default": 0.0
+                            },
+                            "pitch": {
+                                "type": "number",
+                                "description": "Vertical rotation in degrees (optional, 0=horizontal, 90=down, -90=up)",
+                                "default": 0.0
+                            }
+                        },
+                        "required": ["player_name", "x", "y", "z"]
+                    }
+                ),
+                Tool(
                     name="test_server_connection",
                     description="Test if the Minecraft server API is running and responding to requests",
                     inputSchema={
@@ -595,6 +636,9 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "place_stairs":
                     result = await self.place_stairs(**arguments)
+                    return result.content
+                elif name == "teleport_player":
+                    result = await self.teleport_player(**arguments)
                     return result.content
                 elif name == "test_server_connection":
                     result = await self.test_server_connection()
@@ -1154,6 +1198,62 @@ class MinecraftMCPServer:
                     )
         except Exception as e:
             print(f"Error placing door line: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def teleport_player(self, player_name: str, x: float, y: float, z: float, 
+                             dimension: str = None, yaw: float = 0.0, pitch: float = 0.0) -> CallToolResult:
+        """Teleport a player to specified coordinates."""
+        try:
+            payload = {
+                "playerName": player_name,
+                "x": x,
+                "y": y,
+                "z": z,
+                "yaw": yaw,
+                "pitch": pitch
+            }
+            if dimension:
+                payload["dimension"] = dimension
+            else:
+                payload["dimension"] = "minecraft:overworld"
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/players/teleport",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("status") == "success":
+                    facing = yaw_to_cardinal(yaw)
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Successfully teleported {result['playerName']} to ({result['x']:.1f}, {result['y']:.1f}, {result['z']:.1f})\n"
+                                 f"Dimension: {result['dimension']}\n"
+                                 f"Rotation: Yaw {result['yaw']:.1f}°, Pitch {result['pitch']:.1f}°\n"
+                                 f"Facing: {facing}"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to teleport player: {result.get('message', 'Unknown error')}")]
+                    )
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return CallToolResult(
+                    content=[TextContent(type="text", text=f"❌ Player '{player_name}' not found")]
+                )
+            else:
+                error_data = e.response.json() if e.response.headers.get('content-type', '').startswith('application/json') else {'error': e.response.text}
+                return CallToolResult(
+                    content=[TextContent(type="text", text=f"❌ Failed to teleport player: {error_data.get('error', 'HTTP error')}")]
+                )
+        except Exception as e:
+            print(f"Error teleporting player: {e}", file=sys.stderr)
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )
