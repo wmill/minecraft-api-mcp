@@ -260,17 +260,6 @@ public class PrefabEndpoint extends APIEndpoint{
         Direction stairBlockFacing;
         boolean isAscending = req.endY > req.startY;
         
-
-        // wtf was claude doing
-        // if (Math.abs(req.endX - req.startX) > Math.abs(req.endZ - req.startZ)) {
-        //     // Primary movement along X axis
-        //     Direction horizontalDirection = req.endX > req.startX ? Direction.EAST : Direction.WEST;
-        //     stairBlockFacing = isAscending ? horizontalDirection : horizontalDirection.getOpposite();
-        // } else {
-        //     // Primary movement along Z axis
-        //     Direction horizontalDirection = req.endZ > req.startZ ? Direction.SOUTH : Direction.NORTH;
-        //     stairBlockFacing = isAscending ? horizontalDirection : horizontalDirection.getOpposite();
-        // }
         
         if (isAscending) {
             stairBlockFacing = staircaseDirection;
@@ -295,8 +284,18 @@ public class PrefabEndpoint extends APIEndpoint{
         int x = req.startX, y = req.startY, z = req.startZ;
         int maxSteps = Math.max(Math.max(dx, dy), dz);
         
+        int prevY = y;
         for (int i = 0; i <= maxSteps; i++) {
             BlockPos centerPos = new BlockPos(x, y, z);
+            int nextX = x;
+            int nextY = y;
+            int nextZ = z;
+            if (i < maxSteps) {
+                double progress = (double)(i + 1) / maxSteps;
+                nextX = req.startX + (int)Math.round((req.endX - req.startX) * progress);
+                nextY = req.startY + (int)Math.round((req.endY - req.startY) * progress);
+                nextZ = req.startZ + (int)Math.round((req.endZ - req.startZ) * progress);
+            }
             
             // Place a line of blocks across the width
             for (int w = 0; w < width; w++) {
@@ -313,7 +312,7 @@ public class PrefabEndpoint extends APIEndpoint{
                 
                 // Determine if we should place a stair or solid block
                 // Use stairs when we're ascending/descending, solid blocks for flat sections
-                boolean useStair = (i <= maxSteps) && (req.startY != req.endY);
+                boolean useStair = (i == 0) ? (nextY != y) : (y != prevY);
                 
                 if (useStair) {
                     // Place stair block with calculated facing direction
@@ -341,12 +340,10 @@ public class PrefabEndpoint extends APIEndpoint{
             }
             
             // Advance to next position using 3D line interpolation
-            if (i < maxSteps) {
-                double progress = (double)(i + 1) / maxSteps;
-                x = req.startX + (int)Math.round((req.endX - req.startX) * progress);
-                y = req.startY + (int)Math.round((req.endY - req.startY) * progress);
-                z = req.startZ + (int)Math.round((req.endZ - req.startZ) * progress);
-            }
+            prevY = y;
+            x = nextX;
+            y = nextY;
+            z = nextZ;
         }
         
         return blocksPlaced;
