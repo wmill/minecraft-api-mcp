@@ -32,6 +32,7 @@ public class PrefabEndpoint extends APIEndpoint{
         registerDoor();
         registerStairs();
         registerWindowPane();
+        registerTorch();
     }
     private void registerDoor() {
         app.post("/api/world/prefabs/door", ctx -> {
@@ -496,6 +497,134 @@ public class PrefabEndpoint extends APIEndpoint{
         BlockState westState = world.getBlockState(westPos);
         return westState.getBlock() == paneBlock || westState.isSolidBlock(world, westPos);
     }
+
+    private void registerTorch() {
+        app.post("/api/world/prefabs/torch", ctx -> {
+            TorchRequest req = ctx.bodyAsClass(TorchRequest.class);
+
+            // Validate world
+            RegistryKey<World> worldKey = req.world != null
+                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
+                : World.OVERWORLD;
+
+            ServerWorld world = server.getWorld(worldKey);
+            if (world == null) {
+                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
+                return;
+            }
+
+            Identifier blockId = Identifier.tryParse(req.blockType);
+            if (blockId == null) {
+                ctx.status(400).json(Map.of("error", "Invalid block identifier"));
+                return;
+            }
+
+            Block block = Registries.BLOCK.get(blockId);
+            String blockName = blockId.getPath();
+            boolean isWallTorch = blockName.contains("wall_torch");
+
+            LOGGER.info("Placing torch in world {} at ({}, {}, {}) type {}",
+                worldKey.getValue(), req.x, req.y, req.z, req.blockType);
+
+            // Create future for async response
+            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+
+            // Execute on server thread
+            server.execute(() -> {
+                try {
+                    BlockPos pos = new BlockPos(req.x, req.y, req.z);
+                    BlockState torchState;
+
+                    if (isWallTorch) {
+                        // Wall torch - needs facing direction
+                        Direction facing = null;
+
+                        // If facing is provided, validate and use it
+                        if (req.facing != null && !req.facing.isEmpty()) {
+                            facing = switch(req.facing.toLowerCase()) {
+                                case "north" -> Direction.NORTH;
+                                case "south" -> Direction.SOUTH;
+                                case "east" -> Direction.EAST;
+                                case "west" -> Direction.WEST;
+                                default -> null;
+                            };
+
+                            if (facing == null) {
+                                future.complete(Map.of("error", "Invalid facing direction. Must be north, south, east, or west"));
+                                return;
+                            }
+
+                            // Validate there's a solid block to attach to
+                            BlockPos attachPos = pos.offset(facing);
+                            if (!world.getBlockState(attachPos).isSolidBlock(world, attachPos)) {
+                                future.complete(Map.of("error", "No solid block to attach wall torch to in " + facing.asString() + " direction"));
+                                return;
+                            }
+                        } else {
+                            // Auto-detect facing by finding a solid block
+                            Direction[] directions = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+                            for (Direction dir : directions) {
+                                BlockPos attachPos = pos.offset(dir);
+                                if (world.getBlockState(attachPos).isSolidBlock(world, attachPos)) {
+                                    facing = dir;
+                                    break;
+                                }
+                            }
+
+                            if (facing == null) {
+                                future.complete(Map.of("error", "No adjacent solid block found to attach wall torch. Please specify facing or provide a wall."));
+                                return;
+                            }
+                        }
+
+                        // Place wall torch with facing
+                        torchState = block.getDefaultState()
+                            .with(Properties.HORIZONTAL_FACING, facing);
+
+                        world.setBlockState(pos, torchState);
+
+                        future.complete(Map.of(
+                            "success", true,
+                            "world", worldKey.getValue().toString(),
+                            "position", Map.of("x", req.x, "y", req.y, "z", req.z),
+                            "blockType", req.blockType,
+                            "wall_mounted", true,
+                            "facing", facing.asString()
+                        ));
+                    } else {
+                        // Regular ground torch - no facing needed
+                        torchState = block.getDefaultState();
+                        world.setBlockState(pos, torchState);
+
+                        future.complete(Map.of(
+                            "success", true,
+                            "world", worldKey.getValue().toString(),
+                            "position", Map.of("x", req.x, "y", req.y, "z", req.z),
+                            "blockType", req.blockType,
+                            "wall_mounted", false
+                        ));
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Error placing torch", e);
+                    future.complete(Map.of("error", "Exception during torch placement: " + e.getMessage()));
+                }
+            });
+
+            // Wait for result and respond
+            try {
+                Map<String, Object> result = future.get(10, TimeUnit.SECONDS);
+                if (result.containsKey("error")) {
+                    ctx.status(500).json(result);
+                } else {
+                    ctx.json(result);
+                }
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for torch placement"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+    }
 }
 
 class DoorRequest {
@@ -535,4 +664,13 @@ class WindowPaneRequest {
     public int height; // Y dimension (how tall the wall is)
     public String blockType; // e.g., "minecraft:glass_pane", "minecraft:iron_bars"
     public boolean waterlogged = false;
+}
+
+class TorchRequest {
+    public String world; // optional, defaults to overworld
+    public int x;
+    public int y;
+    public int z;
+    public String blockType; // e.g., "minecraft:torch", "minecraft:wall_torch", "minecraft:soul_wall_torch"
+    public String facing; // optional for wall torches - "north", "south", "east", "west" - auto-detects if not provided
 }

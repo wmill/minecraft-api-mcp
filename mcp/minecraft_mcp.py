@@ -161,7 +161,7 @@ class MinecraftMCPServer:
                 ),
                 Tool(
                     name="set_blocks",
-                    description="Set blocks in the world using a 3D array of block objects with optional block states",
+                    description="Set blocks in the world using a 3D array of block objects with optional block states. Remember to set any non default states needed.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -601,6 +601,43 @@ class MinecraftMCPServer:
                     }
                 ),
                 Tool(
+                    name="place_torch",
+                    description="Place a single torch (ground or wall-mounted) at specified coordinates. For wall torches, facing can be auto-detected or manually specified.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "x": {
+                                "type": "integer",
+                                "description": "X coordinate (east positive, west negative)"
+                            },
+                            "y": {
+                                "type": "integer",
+                                "description": "Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z": {
+                                "type": "integer",
+                                "description": "Z coordinate (south positive, north negative)"
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Torch type (e.g., 'minecraft:torch' for ground, 'minecraft:wall_torch' for wall-mounted, 'minecraft:soul_wall_torch', 'minecraft:redstone_wall_torch')",
+                                "default": "minecraft:wall_torch"
+                            },
+                            "facing": {
+                                "type": "string",
+                                "description": "For wall torches: direction the torch faces OUT from the wall (north/south/east/west). If not provided, auto-detects based on adjacent solid blocks.",
+                                "enum": ["north", "south", "east", "west"]
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["x", "y", "z", "block_type"]
+                    }
+                ),
+                Tool(
                     name="teleport_player",
                     description="Teleport a player to specified coordinates with optional rotation and dimension",
                     inputSchema={
@@ -698,6 +735,9 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "place_window_pane_wall":
                     result = await self.place_window_pane_wall(**arguments)
+                    return result.content
+                elif name == "place_torch":
+                    result = await self.place_torch(**arguments)
                     return result.content
                 elif name == "teleport_player":
                     result = await self.teleport_player(**arguments)
@@ -1310,7 +1350,63 @@ class MinecraftMCPServer:
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )
-    
+
+    async def place_torch(self, x: int, y: int, z: int, block_type: str,
+                         facing: str = None, world: str = None) -> CallToolResult:
+        """Place a single torch (ground or wall-mounted) at specified coordinates."""
+        try:
+            payload = {
+                "x": x,
+                "y": y,
+                "z": z,
+                "blockType": block_type
+            }
+            if facing:
+                payload["facing"] = facing
+            if world:
+                payload["world"] = world
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/world/prefabs/torch",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+
+                if result.get("success"):
+                    position = result["position"]
+                    is_wall_mounted = result.get("wall_mounted", False)
+
+                    if is_wall_mounted:
+                        return CallToolResult(
+                            content=[TextContent(
+                                type="text",
+                                text=f"✅ Successfully placed wall torch at ({position['x']}, {position['y']}, {position['z']})\n"
+                                     f"Block Type: {result['blockType']}\n"
+                                     f"Facing: {result['facing']}\n"
+                                     f"World: {result['world']}"
+                            )]
+                        )
+                    else:
+                        return CallToolResult(
+                            content=[TextContent(
+                                type="text",
+                                text=f"✅ Successfully placed ground torch at ({position['x']}, {position['y']}, {position['z']})\n"
+                                     f"Block Type: {result['blockType']}\n"
+                                     f"World: {result['world']}"
+                            )]
+                        )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to place torch: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error placing torch: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+
     async def teleport_player(self, player_name: str, x: float, y: float, z: float, 
                              dimension: str = None, yaw: float = 0.0, pitch: float = 0.0) -> CallToolResult:
         """Teleport a player to specified coordinates."""
