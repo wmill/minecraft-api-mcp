@@ -38,6 +38,7 @@ from urllib.parse import urljoin
 import os
 
 import httpx
+from dotenv import dotenv_values
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
@@ -53,10 +54,12 @@ import sys
 
 from mcp.server.lowlevel import NotificationOptions
 
-# Local
+# Local default
 BASE_URL = "http://localhost:7070"
-# Docker
-BASE_URL = "http://admin:SamplePassword@localhost:80"
+# Read from .env
+config = dotenv_values(".env")
+if "BASE_URL" in config:
+    BASE_URL = config["BASE_URL"]
 
 if os.getenv('DEBUG'):
     try:
