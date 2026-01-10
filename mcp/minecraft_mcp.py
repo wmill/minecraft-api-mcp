@@ -580,7 +580,7 @@ class MinecraftMCPServer:
                             "waterlogged": {
                                 "type": "boolean",
                                 "description": "Whether the panes should be waterlogged",
-                                "default": false
+                                "default": False
                             },
                             "world": {
                                 "type": "string",
