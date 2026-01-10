@@ -119,6 +119,7 @@ publishing {
 def dockerImageName = "minecraft-fabric-server"
 // def dockerImageTag = "${dockerImageName}:${project.version}"
 // def dockerImageLatest = "${dockerImageName}:latest"
+def dockerFileName = "minecraft.Dockerfile"
 
 task dockerBuild(type: Exec) {
 	group = 'docker'
@@ -128,6 +129,7 @@ task dockerBuild(type: Exec) {
 	commandLine 'docker', 'build', 
 		'--build-arg', "JAR_FILE=${remapJar.archiveFileName.get()}",
 		'--build-arg', "VERSION=${project.version}",
+		'-f', dockerFileName,
 		'-t', dockerImageName,
 		'.'
 	
@@ -213,7 +215,7 @@ task dockerCompose(type: Exec) {
 	group = 'docker'
 	description = 'Start services using docker-compose'
 	
-	commandLine 'docker-compose', 'up', '-d'
+	commandLine 'docker', 'compose', 'up', '-d'
 	
 	doLast {
 		println "Docker Compose services started"
