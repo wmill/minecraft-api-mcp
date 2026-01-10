@@ -7,6 +7,8 @@ dependencies = [
     "mcp>=1.11.0",
     "httpx>=0.25.0",
     "dotenv>=0.9.9",
+    "starlette>=0.27.0",
+    "uvicorn>=0.23.0",
 ]
 
 [build-system]

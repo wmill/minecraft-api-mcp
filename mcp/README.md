@@ -61,19 +61,65 @@ Advanced messaging system with:
 
 1. Install dependencies:
 ```bash
-pip install -r requirements.txt
+cd mcp
+uv sync
 ```
 
 2. Make sure your Minecraft server is running with the Fabric mod on port 7070
 
-3. Run the MCP server:
+3. (Optional) Configure the Minecraft API base URL in a `.env` file:
 ```bash
-python minecraft_mcp.py
+BASE_URL=http://localhost:7070
+```
+
+## Transport Modes
+
+The MCP server supports two transport protocols:
+
+### stdio Transport (Default - for Claude Desktop)
+
+This is the default mode, compatible with Claude Desktop and other stdio-based MCP clients.
+
+**Run the server:**
+```bash
+uv run minecraft_mcp.py
+```
+
+**Or explicitly specify stdio:**
+```bash
+uv run minecraft_mcp.py --transport stdio
+```
+
+### HTTP/SSE Transport (for web clients and Claude API)
+
+This mode runs an HTTP server with Server-Sent Events, compatible with web-based MCP clients and the Claude API's MCP connector.
+
+**Run HTTP/SSE server:**
+```bash
+uv run minecraft_mcp.py --transport sse --host 0.0.0.0 --port 3000
+```
+
+**Command-line options:**
+- `--transport`: Transport protocol (`stdio` or `sse`). Default: `stdio`
+- `--host`: Host to bind server to. Default: `0.0.0.0`
+- `--port`: Port for HTTP server. Default: `3000`
+
+**Endpoints when using SSE transport:**
+- SSE connection: `http://localhost:3000/sse`
+- Messages: `http://localhost:3000/messages` (POST)
+
+**Test the HTTP/SSE server:**
+```bash
+# In one terminal, start the server
+uv run minecraft_mcp.py --transport sse --port 3000
+
+# In another terminal, test the connection
+curl http://localhost:3000/sse
 ```
 
 ## Usage
 
-The MCP server communicates via stdio and can be integrated with Claude Desktop or other MCP clients.
+The MCP server can be integrated with various MCP clients depending on the transport mode.
 
 ### Example Tool Calls
 
@@ -186,19 +232,29 @@ The MCP server communicates via stdio and can be integrated with Claude Desktop 
 
 ## Integration with Claude Desktop
 
-To use this with Claude Desktop, add the following to your MCP configuration:
+Claude Desktop uses the **stdio transport** (default mode). Add the following to your MCP configuration file:
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "minecraft-api": {
-      "command": "python",
-      "args": ["/path/to/minecraft_mcp.py"],
-      "cwd": "/path/to/mcp/directory"
+      "command": "/path/to/uv",
+      "args": [
+        "run",
+        "--project",
+        "/path/to/mcp",
+        "/path/to/mcp/minecraft_mcp.py"
+      ],
+      "cwd": "/path/to/mcp"
     }
   }
 }
 ```
+
+**Note:** Update the paths to match your local installation. The server will use stdio transport by default when launched this way.
 
 ## Configuration
 

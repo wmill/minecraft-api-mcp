@@ -186,6 +186,8 @@ dependencies = [
     { name = "dotenv" },
     { name = "httpx" },
     { name = "mcp" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -193,6 +195,8 @@ requires-dist = [
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "mcp", specifier = ">=1.11.0" },
+    { name = "starlette", specifier = ">=0.27.0" },
+    { name = "uvicorn", specifier = ">=0.23.0" },
 ]
 
 [[package]]

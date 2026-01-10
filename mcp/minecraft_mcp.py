@@ -31,6 +31,7 @@ Similarly positive Z is south.
 """
 
 import asyncio
+import argparse
 
 import logging
 from typing import Any, Dict, List, Optional, Sequence
@@ -42,6 +43,11 @@ from dotenv import dotenv_values
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
+from mcp.server.sse import SseServerTransport
+from starlette.applications import Starlette
+from starlette.routing import Route
+from starlette.responses import Response
+import uvicorn
 from mcp.types import (
     CallToolRequest,
     CallToolResult,
@@ -1463,8 +1469,8 @@ class MinecraftMCPServer:
                 )]
             )
     
-    async def run(self):
-        """Run the MCP server."""
+    async def run_stdio(self):
+        """Run the MCP server with stdio transport."""
         print("Starting MCP server stdio connection...", file=sys.stderr)
         async with stdio_server() as (read_stream, write_stream):
             print("MCP server connected, initializing...", file=sys.stderr)
@@ -1480,6 +1486,45 @@ class MinecraftMCPServer:
                     )
                 )
             )
+
+    def create_sse_app(self) -> Starlette:
+        """Create a Starlette app for SSE transport."""
+        sse = SseServerTransport("/messages")
+
+        async def handle_sse(request):
+            async with sse.connect_sse(
+                request.scope,
+                request.receive,
+                request._send
+            ) as streams:
+                await self.server.run(
+                    streams[0],
+                    streams[1],
+                    InitializationOptions(
+                        server_name="minecraft-api",
+                        server_version="1.0.0",
+                        capabilities=self.server.get_capabilities(
+                            notification_options=NotificationOptions(),
+                            experimental_capabilities={}
+                        )
+                    )
+                )
+
+        async def handle_messages(request):
+            await sse.handle_post_message(request.scope, request.receive, request._send)
+            return Response()
+
+        return Starlette(
+            debug=True,
+            routes=[
+                Route("/sse", endpoint=handle_sse),
+                Route("/messages", endpoint=handle_messages, methods=["POST"]),
+            ],
+        )
+
+    async def run(self):
+        """Run the MCP server (defaults to stdio for backward compatibility)."""
+        await self.run_stdio()
 
 def yaw_to_cardinal(yaw: float) -> str:
     # Normalize to [-180, 180)
@@ -1499,10 +1544,47 @@ def safe_url(url: str) -> str:
 
 async def main():
     """Main entry point."""
-    print("Main function started", file=sys.stderr)
+    parser = argparse.ArgumentParser(description="Minecraft MCP Server")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse"],
+        default="stdio",
+        help="Transport protocol to use (default: stdio)"
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind HTTP/SSE server to (default: 0.0.0.0)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=3000,
+        help="Port for HTTP/SSE server (default: 3000)"
+    )
+
+    args = parser.parse_args()
+
+    print(f"Main function started with transport: {args.transport}", file=sys.stderr)
+
     try:
         server = MinecraftMCPServer(BASE_URL)
-        await server.run()
+
+        if args.transport == "stdio":
+            await server.run_stdio()
+        elif args.transport == "sse":
+            print(f"Starting HTTP/SSE server on {args.host}:{args.port}", file=sys.stderr)
+            print(f"SSE endpoint: http://{args.host}:{args.port}/sse", file=sys.stderr)
+            print(f"Messages endpoint: http://{args.host}:{args.port}/messages", file=sys.stderr)
+            app = server.create_sse_app()
+            config = uvicorn.Config(
+                app,
+                host=args.host,
+                port=args.port,
+                log_level="info"
+            )
+            server_instance = uvicorn.Server(config)
+            await server_instance.serve()
     except Exception as e:
         print(f"Fatal error: {e}", file=sys.stderr)
         raise
