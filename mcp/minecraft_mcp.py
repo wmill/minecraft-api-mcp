@@ -640,6 +640,67 @@ class MinecraftMCPServer:
                     }
                 ),
                 Tool(
+                    name="place_sign",
+                    description="Place a single sign (wall or standing) with custom text on front and back. Supports glowing text.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "x": {
+                                "type": "integer",
+                                "description": "X coordinate (east positive, west negative)"
+                            },
+                            "y": {
+                                "type": "integer",
+                                "description": "Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z": {
+                                "type": "integer",
+                                "description": "Z coordinate (south positive, north negative)"
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Sign type (e.g., 'minecraft:oak_wall_sign' for wall, 'minecraft:oak_sign' for standing, 'minecraft:birch_wall_sign', etc.)",
+                                "default": "minecraft:oak_wall_sign"
+                            },
+                            "front_lines": {
+                                "type": "array",
+                                "description": "Array of 0-4 text lines for the front of the sign",
+                                "items": {"type": "string"},
+                                "maxItems": 4
+                            },
+                            "back_lines": {
+                                "type": "array",
+                                "description": "Array of 0-4 text lines for the back of the sign (optional)",
+                                "items": {"type": "string"},
+                                "maxItems": 4
+                            },
+                            "facing": {
+                                "type": "string",
+                                "description": "For wall signs: direction the sign faces OUT from the wall (north/south/east/west). If not provided, auto-detects based on adjacent solid blocks.",
+                                "enum": ["north", "south", "east", "west"]
+                            },
+                            "rotation": {
+                                "type": "integer",
+                                "description": "For standing signs: rotation angle 0-15 (0=south, 4=west, 8=north, 12=east). Default: 0",
+                                "minimum": 0,
+                                "maximum": 15,
+                                "default": 0
+                            },
+                            "glowing": {
+                                "type": "boolean",
+                                "description": "Whether the sign text should glow (visible in darkness)",
+                                "default": False
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["x", "y", "z", "block_type"]
+                    }
+                ),
+                Tool(
                     name="teleport_player",
                     description="Teleport a player to specified coordinates with optional rotation and dimension",
                     inputSchema={
@@ -740,6 +801,9 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "place_torch":
                     result = await self.place_torch(**arguments)
+                    return result.content
+                elif name == "place_sign":
+                    result = await self.place_sign(**arguments)
                     return result.content
                 elif name == "teleport_player":
                     result = await self.teleport_player(**arguments)
@@ -1405,6 +1469,70 @@ class MinecraftMCPServer:
                     )
         except Exception as e:
             print(f"Error placing torch: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+
+    async def place_sign(self, x: int, y: int, z: int, block_type: str,
+                        front_lines: list = None, back_lines: list = None,
+                        facing: str = None, rotation: int = None, glowing: bool = False,
+                        world: str = None) -> CallToolResult:
+        """Place a single sign (wall or standing) with custom text."""
+        try:
+            payload = {
+                "x": x,
+                "y": y,
+                "z": z,
+                "blockType": block_type
+            }
+            if front_lines:
+                payload["frontLines"] = front_lines
+            if back_lines:
+                payload["backLines"] = back_lines
+            if facing:
+                payload["facing"] = facing
+            if rotation is not None:
+                payload["rotation"] = rotation
+            if glowing:
+                payload["glowing"] = glowing
+            if world:
+                payload["world"] = world
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/world/prefabs/sign",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+
+                if result.get("success"):
+                    position = result["position"]
+                    sign_type = result.get("sign_type", "unknown")
+                    is_glowing = result.get("glowing", False)
+
+                    response_text = f"✅ Successfully placed {sign_type} sign at ({position['x']}, {position['y']}, {position['z']})\n"
+                    response_text += f"Block Type: {result['blockType']}\n"
+
+                    if sign_type == "wall":
+                        response_text += f"Facing: {result.get('facing', 'unknown')}\n"
+                    elif sign_type == "standing":
+                        response_text += f"Rotation: {result.get('rotation', 0)}\n"
+
+                    if is_glowing:
+                        response_text += "Glowing: Yes\n"
+
+                    response_text += f"World: {result['world']}"
+
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=response_text)]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to place sign: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error placing sign: {e}", file=sys.stderr)
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )

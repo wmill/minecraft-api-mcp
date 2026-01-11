@@ -9,6 +9,12 @@ import net.minecraft.block.DoorBlock;
 import net.minecraft.block.StairsBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.WallSignBlock;
+import net.minecraft.block.SignBlock;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.SignBlockEntity;
+import net.minecraft.block.entity.SignText;
+import net.minecraft.text.Text;
 import net.minecraft.block.enums.DoorHinge;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.StairShape;
@@ -33,6 +39,7 @@ public class PrefabEndpoint extends APIEndpoint{
         registerStairs();
         registerWindowPane();
         registerTorch();
+        registerSign();
     }
     private void registerDoor() {
         app.post("/api/world/prefabs/door", ctx -> {
@@ -628,6 +635,211 @@ public class PrefabEndpoint extends APIEndpoint{
             }
         });
     }
+
+    private void registerSign() {
+        app.post("/api/world/prefabs/sign", ctx -> {
+            SignRequest req = ctx.bodyAsClass(SignRequest.class);
+
+            // Validate world
+            RegistryKey<World> worldKey = req.world != null
+                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
+                : World.OVERWORLD;
+
+            ServerWorld world = server.getWorld(worldKey);
+            if (world == null) {
+                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
+                return;
+            }
+
+            Identifier blockId = Identifier.tryParse(req.blockType);
+            if (blockId == null) {
+                ctx.status(400).json(Map.of("error", "Invalid block identifier"));
+                return;
+            }
+
+            Block block = Registries.BLOCK.get(blockId);
+            boolean isWallSign = block instanceof WallSignBlock;
+            boolean isStandingSign = block instanceof SignBlock && !isWallSign;
+
+            if (!isWallSign && !isStandingSign) {
+                ctx.status(400).json(Map.of("error", "Block is not a sign: " + req.blockType));
+                return;
+            }
+
+            // Validate lines (max 4 for front, max 4 for back)
+            if (req.frontLines != null && req.frontLines.length > 4) {
+                ctx.status(400).json(Map.of("error", "Front text can have maximum 4 lines"));
+                return;
+            }
+            if (req.backLines != null && req.backLines.length > 4) {
+                ctx.status(400).json(Map.of("error", "Back text can have maximum 4 lines"));
+                return;
+            }
+
+            LOGGER.info("Placing sign in world {} at ({}, {}, {}) type {}",
+                worldKey.getValue(), req.x, req.y, req.z, req.blockType);
+
+            // Create future for async response
+            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+
+            // Execute on server thread
+            server.execute(() -> {
+                try {
+                    BlockPos pos = new BlockPos(req.x, req.y, req.z);
+                    BlockState signState;
+
+                    if (isWallSign) {
+                        // Wall sign - needs facing direction
+                        Direction facing = null;
+
+                        // If facing is provided, validate and use it
+                        if (req.facing != null && !req.facing.isEmpty()) {
+                            facing = switch(req.facing.toLowerCase()) {
+                                case "north" -> Direction.NORTH;
+                                case "south" -> Direction.SOUTH;
+                                case "east" -> Direction.EAST;
+                                case "west" -> Direction.WEST;
+                                default -> null;
+                            };
+
+                            if (facing == null) {
+                                future.complete(Map.of("error", "Invalid facing direction. Must be north, south, east, or west"));
+                                return;
+                            }
+                        } else {
+                            // Auto-detect facing by finding a solid block
+                            Direction[] directions = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+                            for (Direction dir : directions) {
+                                BlockPos attachPos = pos.offset(dir);
+                                if (world.getBlockState(attachPos).isSolidBlock(world, attachPos)) {
+                                    facing = dir;
+                                    break;
+                                }
+                            }
+
+                            if (facing == null) {
+                                // Default to north if no wall found
+                                facing = Direction.NORTH;
+                                LOGGER.warn("No adjacent solid block found for wall sign, defaulting to north");
+                            }
+                        }
+
+                        signState = block.getDefaultState()
+                            .with(Properties.HORIZONTAL_FACING, facing);
+
+                        world.setBlockState(pos, signState);
+
+                        // Get the sign block entity and set text
+                        BlockEntity blockEntity = world.getBlockEntity(pos);
+                        if (blockEntity instanceof SignBlockEntity signBlockEntity) {
+                            // Set front text
+                            if (req.frontLines != null && req.frontLines.length > 0) {
+                                SignText frontText = createSignText(req.frontLines, req.glowing);
+                                signBlockEntity.setText(frontText, true);
+                            }
+
+                            // Set back text
+                            if (req.backLines != null && req.backLines.length > 0) {
+                                SignText backText = createSignText(req.backLines, req.glowing);
+                                signBlockEntity.setText(backText, false);
+                            }
+
+                            signBlockEntity.markDirty();
+                        }
+
+                        future.complete(Map.of(
+                            "success", true,
+                            "world", worldKey.getValue().toString(),
+                            "position", Map.of("x", req.x, "y", req.y, "z", req.z),
+                            "blockType", req.blockType,
+                            "sign_type", "wall",
+                            "facing", facing.asString(),
+                            "glowing", req.glowing != null ? req.glowing : false
+                        ));
+                    } else {
+                        // Standing sign - use rotation
+                        int rotation = req.rotation != null ? req.rotation : 0;
+
+                        // Clamp rotation to 0-15
+                        rotation = Math.max(0, Math.min(15, rotation));
+
+                        signState = block.getDefaultState()
+                            .with(Properties.ROTATION, rotation);
+
+                        world.setBlockState(pos, signState);
+
+                        // Get the sign block entity and set text
+                        BlockEntity blockEntity = world.getBlockEntity(pos);
+                        if (blockEntity instanceof SignBlockEntity signBlockEntity) {
+                            // Set front text
+                            if (req.frontLines != null && req.frontLines.length > 0) {
+                                SignText frontText = createSignText(req.frontLines, req.glowing);
+                                signBlockEntity.setText(frontText, true);
+                            }
+
+                            // Set back text
+                            if (req.backLines != null && req.backLines.length > 0) {
+                                SignText backText = createSignText(req.backLines, req.glowing);
+                                signBlockEntity.setText(backText, false);
+                            }
+
+                            signBlockEntity.markDirty();
+                        }
+
+                        future.complete(Map.of(
+                            "success", true,
+                            "world", worldKey.getValue().toString(),
+                            "position", Map.of("x", req.x, "y", req.y, "z", req.z),
+                            "blockType", req.blockType,
+                            "sign_type", "standing",
+                            "rotation", rotation,
+                            "glowing", req.glowing != null ? req.glowing : false
+                        ));
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Error placing sign", e);
+                    future.complete(Map.of("error", "Exception during sign placement: " + e.getMessage()));
+                }
+            });
+
+            // Wait for result and respond
+            try {
+                Map<String, Object> result = future.get(10, TimeUnit.SECONDS);
+                if (result.containsKey("error")) {
+                    ctx.status(500).json(result);
+                } else {
+                    ctx.json(result);
+                }
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for sign placement"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+    }
+
+    private SignText createSignText(String[] lines, Boolean glowing) {
+        // Ensure we have exactly 4 lines (pad with empty if needed)
+        Text[] textLines = new Text[4];
+        for (int i = 0; i < 4; i++) {
+            if (i < lines.length && lines[i] != null) {
+                textLines[i] = Text.literal(lines[i]);
+            } else {
+                textLines[i] = Text.literal("");
+            }
+        }
+
+        // filteredMessages - same as regular messages for now
+        Text[] filteredLines = new Text[4];
+        System.arraycopy(textLines, 0, filteredLines, 0, 4);
+
+        return new SignText(
+            textLines,
+            filteredLines,
+            net.minecraft.util.DyeColor.BLACK, // default color
+            glowing != null && glowing // hasGlowingText
+        );
+    }
 }
 
 class DoorRequest {
@@ -676,4 +888,17 @@ class TorchRequest {
     public int z;
     public String blockType; // e.g., "minecraft:torch", "minecraft:wall_torch", "minecraft:soul_wall_torch"
     public String facing; // optional for wall torches - "north", "south", "east", "west" - auto-detects if not provided
+}
+
+class SignRequest {
+    public String world; // optional, defaults to overworld
+    public int x;
+    public int y;
+    public int z;
+    public String blockType; // e.g., "minecraft:oak_wall_sign", "minecraft:oak_sign", "minecraft:birch_wall_sign"
+    public String[] frontLines; // 0-4 lines of text for front of sign
+    public String[] backLines; // 0-4 lines of text for back of sign (optional)
+    public String facing; // optional for wall signs - "north", "south", "east", "west" - auto-detects if not provided
+    public Integer rotation; // for standing signs - 0-15 (optional, defaults to 0)
+    public Boolean glowing; // whether text glows (optional, defaults to false)
 }
