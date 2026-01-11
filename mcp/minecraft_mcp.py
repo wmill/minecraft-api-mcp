@@ -62,8 +62,10 @@ from mcp.server.lowlevel import NotificationOptions
 
 # Local default
 BASE_URL = "http://localhost:7070"
-# Read from .env
-config = dotenv_values(".env")
+# Read from .env file in the same directory as this script
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_FILE = os.path.join(SCRIPT_DIR, ".env")
+config = dotenv_values(ENV_FILE)
 if "BASE_URL" in config:
     BASE_URL = config["BASE_URL"]
 
@@ -602,7 +604,7 @@ class MinecraftMCPServer:
                 ),
                 Tool(
                     name="place_torch",
-                    description="Place a single torch (ground or wall-mounted) at specified coordinates. For wall torches, facing can be auto-detected or manually specified.",
+                    description="Place a single torch (ground or wall-mounted) at specified coordinates. For wall torches, facing can be auto-detected or manually specified. Note, wall torches are in the block next to the wall they are attachd to.",
                     inputSchema={
                         "type": "object",
                         "properties": {
