@@ -557,8 +557,11 @@ public class PrefabEndpoint extends APIEndpoint{
                             // Validate there's a solid block to attach to
                             BlockPos attachPos = pos.offset(facing);
                             if (!world.getBlockState(attachPos).isSolidBlock(world, attachPos)) {
-                                future.complete(Map.of("error", "No solid block to attach wall torch to in " + facing.asString() + " direction"));
-                                return;
+                                //future.complete(Map.of("error", "No solid block to attach wall torch to in " + facing.asString() + " direction"));
+                                //return;
+                                // screw the error, just place it anyways
+                                // TODO fix this later, floating torches for now
+                                LOGGER.error("No solid block to attach wall torch to in " + facing.asString() + " direction, doing it anyways.");
                             }
                         } else {
                             // Auto-detect facing by finding a solid block
