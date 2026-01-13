@@ -790,7 +790,7 @@ class MinecraftMCPServer:
                             },
                             "task_data": {
                                 "type": "object",
-                                "description": "Task-specific parameters matching the corresponding endpoint schema"
+                                "description": "Task-specific parameters matching the corresponding endpoint schema, camelCase like the equivalent function calls in this MCP server."
                             }
                         },
                         "required": ["build_id", "task_type", "task_data"]
