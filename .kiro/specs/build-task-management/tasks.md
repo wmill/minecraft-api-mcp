@@ -18,8 +18,8 @@ This implementation plan breaks down the build task management system into discr
   - Test schema creation and index setup
   - _Requirements: 5.2, 5.3_
 
-- [ ] 2. Create core data models and repositories
-  - [ ] 2.1 Implement Build and BuildTask entity classes
+- [x] 2. Create core data models and repositories
+  - [x] 2.1 Implement Build and BuildTask entity classes
     - Create Build class with UUID, metadata, and status tracking
     - Create BuildTask class with task data, coordinates, and execution status
     - Create BoundingBox utility class for coordinate operations
@@ -29,7 +29,7 @@ This implementation plan breaks down the build task management system into discr
     - **Property 3: Build Metadata Completeness**
     - **Validates: Requirements 1.4**
 
-  - [ ] 2.3 Implement BuildRepository with CRUD operations
+  - [x] 2.3 Implement BuildRepository with CRUD operations
     - Create repository interface and PostgreSQL implementation
     - Implement build creation, retrieval, and status updates
     - Add location-based query methods with spatial indexing
@@ -39,7 +39,7 @@ This implementation plan breaks down the build task management system into discr
     - **Property 2: Build Persistence Round Trip**
     - **Validates: Requirements 1.2, 1.3**
 
-  - [ ] 2.5 Implement TaskRepository with queue operations
+  - [x] 2.5 Implement TaskRepository with queue operations
     - Create repository for task CRUD and queue management
     - Implement task ordering and batch operations
     - Add coordinate tracking and spatial queries
@@ -49,7 +49,7 @@ This implementation plan breaks down the build task management system into discr
     - **Property 4: Task Queue Ordering**
     - **Validates: Requirements 2.1, 2.3**
 
-- [ ] 3. Checkpoint - Ensure database layer tests pass
+- [x] 3. Checkpoint - Ensure database layer tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 4. Refactor existing endpoints to support programmatic calls
