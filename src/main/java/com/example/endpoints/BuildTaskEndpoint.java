@@ -8,10 +8,7 @@ import io.javalin.Javalin;
 import net.minecraft.server.MinecraftServer;
 
 import java.sql.SQLException;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -53,7 +50,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
                         "description", build.getDescription() != null ? build.getDescription() : "",
                         "world", build.getWorld(),
                         "status", build.getStatus().toString(),
-                        "created_at", build.getCreatedAt().toString()
+                        "createdAt", build.getCreatedAt().toString()
                     )
                 ));
                 
@@ -84,25 +81,50 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 }
                 
                 Optional<Build> buildOpt = buildService.getBuild(buildId);
-                
+
                 if (buildOpt.isEmpty()) {
                     ctx.status(404).json(Map.of("error", "Build not found"));
                     return;
                 }
-                
+
                 Build build = buildOpt.get();
-                
+
+                Map<String, Object> buildJson = new LinkedHashMap<>();
+                buildJson.put("id", build.getId().toString());
+                buildJson.put("name", build.getName());
+                buildJson.put("description", Objects.toString(build.getDescription(), ""));
+                buildJson.put("world", build.getWorld());
+                buildJson.put("status", build.getStatus().toString());
+                buildJson.put("createdAt", build.getCreatedAt().toString());
+                if (build.getCompletedAt() != null) {
+                    buildJson.put("completedAt", build.getCompletedAt().toString());
+                }
+
+                // Also fetch tasks for this build
+                List<BuildTask> tasks = buildService.getTasks(buildId);
+                List<Map<String, Object>> taskMaps = tasks.stream()
+                    .map(task -> {
+                        Map<String, Object> taskMap = new LinkedHashMap<>();
+                        taskMap.put("id", task.getId().toString());
+                        taskMap.put("buildId", task.getBuildId().toString());
+                        taskMap.put("taskOrder", task.getTaskOrder());
+                        taskMap.put("taskType", task.getTaskType().toString());
+                        taskMap.put("status", task.getStatus().toString());
+                        taskMap.put("taskData", task.getTaskData());
+                        if (task.getExecutedAt() != null) {
+                            taskMap.put("executedAt", task.getExecutedAt().toString());
+                        }
+                        if (task.getErrorMessage() != null) {
+                            taskMap.put("errorMessage", task.getErrorMessage());
+                        }
+                        return taskMap;
+                    })
+                    .collect(Collectors.toList());
+
                 ctx.json(Map.of(
                     "success", true,
-                    "build", Map.of(
-                        "id", build.getId().toString(),
-                        "name", build.getName(),
-                        "description", build.getDescription() != null ? build.getDescription() : "",
-                        "world", build.getWorld(),
-                        "status", build.getStatus().toString(),
-                        "created_at", build.getCreatedAt().toString(),
-                        "completed_at", build.getCompletedAt() != null ? build.getCompletedAt().toString() : null
-                    )
+                    "build", buildJson,
+                    "tasks", taskMaps
                 ));
                 
             } catch (SQLException e) {
@@ -145,11 +167,11 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     "success", true,
                     "task", Map.of(
                         "id", task.getId().toString(),
-                        "build_id", task.getBuildId().toString(),
-                        "task_order", task.getTaskOrder(),
-                        "task_type", task.getTaskType().toString(),
+                        "buildId", task.getBuildId().toString(),
+                        "taskOrder", task.getTaskOrder(),
+                        "taskType", task.getTaskType().toString(),
                         "status", task.getStatus().toString(),
-                        "task_data", task.getTaskData()
+                        "taskData", task.getTaskData()
                     )
                 ));
                 
@@ -184,22 +206,28 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 List<BuildTask> tasks = buildService.getTasks(buildId);
                 
                 List<Map<String, Object>> taskMaps = tasks.stream()
-                    .map(task -> Map.<String, Object>of(
-                        "id", task.getId().toString(),
-                        "build_id", task.getBuildId().toString(),
-                        "task_order", task.getTaskOrder(),
-                        "task_type", task.getTaskType().toString(),
-                        "status", task.getStatus().toString(),
-                        "task_data", task.getTaskData(),
-                        "executed_at", task.getExecutedAt() != null ? task.getExecutedAt().toString() : null,
-                        "error_message", task.getErrorMessage()
-                    ))
+                    .map(task -> {
+                        Map<String, Object> taskMap = new LinkedHashMap<>();
+                        taskMap.put("id", task.getId().toString());
+                        taskMap.put("buildId", task.getBuildId().toString());
+                        taskMap.put("taskOrder", task.getTaskOrder());
+                        taskMap.put("taskType", task.getTaskType().toString());
+                        taskMap.put("status", task.getStatus().toString());
+                        taskMap.put("taskData", task.getTaskData());
+                        if (task.getExecutedAt() != null) {
+                            taskMap.put("executedAt", task.getExecutedAt().toString());
+                        }
+                        if (task.getErrorMessage() != null) {
+                            taskMap.put("errorMessage", task.getErrorMessage());
+                        }
+                        return taskMap;
+                    })
                     .collect(Collectors.toList());
                 
                 ctx.json(Map.of(
                     "success", true,
-                    "build_id", buildId.toString(),
-                    "task_count", tasks.size(),
+                    "buildId", buildId.toString(),
+                    "taskCount", tasks.size(),
                     "tasks", taskMaps
                 ));
                 
@@ -257,8 +285,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 
                 ctx.json(Map.of(
                     "success", true,
-                    "build_id", buildId.toString(),
-                    "task_count", tasks.size(),
+                    "buildId", buildId.toString(),
+                    "taskCount", tasks.size(),
                     "message", "Task queue updated successfully"
                 ));
                 
@@ -304,7 +332,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 // Return immediate response that execution has started
                 ctx.status(202).json(Map.of(
                     "success", true,
-                    "build_id", buildId.toString(),
+                    "buildId", buildId.toString(),
                     "message", "Build execution started",
                     "status", "accepted"
                 ));
@@ -338,48 +366,59 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 
                 // Convert result to JSON-friendly format
                 List<Map<String, Object>> buildResults = result.builds.stream()
-                    .map(buildResult -> Map.<String, Object>of(
-                        "build", Map.of(
-                            "id", buildResult.build.getId().toString(),
-                            "name", buildResult.build.getName(),
-                            "description", buildResult.build.getDescription() != null ? buildResult.build.getDescription() : "",
-                            "world", buildResult.build.getWorld(),
-                            "status", buildResult.build.getStatus().toString(),
-                            "created_at", buildResult.build.getCreatedAt().toString(),
-                            "completed_at", buildResult.build.getCompletedAt() != null ? buildResult.build.getCompletedAt().toString() : null
-                        ),
-                        "intersecting_tasks", buildResult.intersectingTasks.stream()
-                            .map(task -> Map.<String, Object>of(
-                                "id", task.getId().toString(),
-                                "task_order", task.getTaskOrder(),
-                                "task_type", task.getTaskType().toString(),
-                                "status", task.getStatus().toString(),
-                                "coordinates", task.getCoordinates() != null ? Map.of(
-                                    "min_x", task.getCoordinates().getMinX(),
-                                    "min_y", task.getCoordinates().getMinY(),
-                                    "min_z", task.getCoordinates().getMinZ(),
-                                    "max_x", task.getCoordinates().getMaxX(),
-                                    "max_y", task.getCoordinates().getMaxY(),
-                                    "max_z", task.getCoordinates().getMaxZ()
-                                ) : null
-                            ))
-                            .collect(Collectors.toList())
-                    ))
+                    .map(buildResult -> {
+                        Map<String, Object> buildMap = new LinkedHashMap<>();
+                        buildMap.put("id", buildResult.build.getId().toString());
+                        buildMap.put("name", buildResult.build.getName());
+                        buildMap.put("description", buildResult.build.getDescription() != null ? buildResult.build.getDescription() : "");
+                        buildMap.put("world", buildResult.build.getWorld());
+                        buildMap.put("status", buildResult.build.getStatus().toString());
+                        buildMap.put("createdAt", buildResult.build.getCreatedAt().toString());
+                        if (buildResult.build.getCompletedAt() != null) {
+                            buildMap.put("completedAt", buildResult.build.getCompletedAt().toString());
+                        }
+
+                        List<Map<String, Object>> taskMaps = buildResult.intersectingTasks.stream()
+                            .map(task -> {
+                                Map<String, Object> taskMap = new LinkedHashMap<>();
+                                taskMap.put("id", task.getId().toString());
+                                taskMap.put("taskOrder", task.getTaskOrder());
+                                taskMap.put("taskType", task.getTaskType().toString());
+                                taskMap.put("status", task.getStatus().toString());
+                                if (task.getCoordinates() != null) {
+                                    taskMap.put("coordinates", Map.of(
+                                        "minX", task.getCoordinates().getMinX(),
+                                        "minY", task.getCoordinates().getMinY(),
+                                        "minZ", task.getCoordinates().getMinZ(),
+                                        "maxX", task.getCoordinates().getMaxX(),
+                                        "maxY", task.getCoordinates().getMaxY(),
+                                        "maxZ", task.getCoordinates().getMaxZ()
+                                    ));
+                                }
+                                return taskMap;
+                            })
+                            .collect(Collectors.toList());
+
+                        return Map.<String, Object>of(
+                            "build", buildMap,
+                            "intersectingTasks", taskMaps
+                        );
+                    })
                     .collect(Collectors.toList());
                 
                 ctx.json(Map.of(
                     "success", true,
-                    "query_area", Map.of(
+                    "queryArea", Map.of(
                         "world", request.world,
-                        "min_x", result.queryArea.getMinX(),
-                        "min_y", result.queryArea.getMinY(),
-                        "min_z", result.queryArea.getMinZ(),
-                        "max_x", result.queryArea.getMaxX(),
-                        "max_y", result.queryArea.getMaxY(),
-                        "max_z", result.queryArea.getMaxZ()
+                        "minX", result.queryArea.getMinX(),
+                        "minY", result.queryArea.getMinY(),
+                        "minZ", result.queryArea.getMinZ(),
+                        "maxX", result.queryArea.getMaxX(),
+                        "maxY", result.queryArea.getMaxY(),
+                        "maxZ", result.queryArea.getMaxZ()
                     ),
-                    "build_count", result.getBuildCount(),
-                    "total_task_count", result.getTotalTaskCount(),
+                    "buildCount", result.getBuildCount(),
+                    "totalTaskCount", result.getTotalTaskCount(),
                     "builds", buildResults
                 ));
                 

@@ -1845,7 +1845,7 @@ class MinecraftMCPServer:
                             text=f"✅ Successfully added {task_type} task to build\n"
                                  f"Task ID: {task['id']}\n"
                                  f"Build ID: {build_id}\n"
-                                 f"Task Order: {task['taskOrder']}\n"
+                                 f"Task Order: {task.get('taskOrder', 'N/A')}\n"
                                  f"Status: {task['status']}"
                         )]
                     )
@@ -1926,19 +1926,21 @@ class MinecraftMCPServer:
                                 text=f"No builds found in area ({min_x}, {min_y}, {min_z}) to ({max_x}, {max_y}, {max_z})"
                             )]
                         )
-                    
+
                     result_text = f"**Found {len(builds)} builds in area ({min_x}, {min_y}, {min_z}) to ({max_x}, {max_y}, {max_z}):**\n\n"
-                    
-                    for build in builds:
+
+                    for buildResult in builds:
+                        build = buildResult['build']
+                        intersecting_tasks = buildResult.get('intersectingTasks', [])
                         result_text += f"**{build['name']}** (ID: {build['id']})\n"
                         result_text += f"- Status: {build['status']}\n"
                         result_text += f"- Description: {build.get('description', 'No description')}\n"
-                        result_text += f"- Created: {build['createdAt']}\n"
+                        result_text += f"- Created: {build.get('createdAt', 'N/A')}\n"
                         if build.get('completedAt'):
                             result_text += f"- Completed: {build['completedAt']}\n"
-                        result_text += f"- Tasks: {build.get('taskCount', 0)}\n"
+                        result_text += f"- Intersecting Tasks: {len(intersecting_tasks)}\n"
                         result_text += f"- World: {build['world']}\n\n"
-                    
+
                     return CallToolResult(
                         content=[TextContent(type="text", text=result_text)]
                     )
@@ -1965,7 +1967,7 @@ class MinecraftMCPServer:
                 if result.get("success"):
                     build = result["build"]
                     tasks = result.get("tasks", [])
-                    
+
                     result_text = f"**Build Status: {build['name']}**\n\n"
                     result_text += f"**Build Details:**\n"
                     result_text += f"- ID: {build['id']}\n"
@@ -1973,20 +1975,20 @@ class MinecraftMCPServer:
                     result_text += f"- Description: {build.get('description', 'No description')}\n"
                     result_text += f"- Status: {build['status']}\n"
                     result_text += f"- World: {build['world']}\n"
-                    result_text += f"- Created: {build['createdAt']}\n"
+                    result_text += f"- Created: {build.get('createdAt', 'N/A')}\n"
                     if build.get('completedAt'):
                         result_text += f"- Completed: {build['completedAt']}\n"
-                    
+
                     result_text += f"\n**Task Queue ({len(tasks)} tasks):**\n"
                     if not tasks:
                         result_text += "No tasks in queue\n"
                     else:
                         for task in tasks:
                             status_icon = "✅" if task['status'] == 'completed' else "❌" if task['status'] == 'failed' else "⏳"
-                            result_text += f"{status_icon} Task {task['taskOrder']}: {task['taskType']} - {task['status']}\n"
+                            result_text += f"{status_icon} Task {task.get('taskOrder', 'N/A')}: {task.get('taskType', 'unknown')} - {task['status']}\n"
                             if task.get('errorMessage'):
                                 result_text += f"   Error: {task['errorMessage']}\n"
-                    
+
                     return CallToolResult(
                         content=[TextContent(type="text", text=result_text)]
                     )
