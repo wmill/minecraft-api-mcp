@@ -749,6 +749,124 @@ class MinecraftMCPServer:
                         "properties": {},
                         "required": []
                     }
+                ),
+                Tool(
+                    name="create_build",
+                    description="Create a new build with metadata for organizing building tasks",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Build name"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Build description"
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["name"]
+                    }
+                ),
+                Tool(
+                    name="add_build_task",
+                    description="Add a building task to a build queue",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            },
+                            "task_type": {
+                                "type": "string",
+                                "description": "Type of building task",
+                                "enum": ["BLOCK_SET", "BLOCK_FILL", "PREFAB_DOOR", "PREFAB_STAIRS", "PREFAB_WINDOW", "PREFAB_TORCH", "PREFAB_SIGN"]
+                            },
+                            "task_data": {
+                                "type": "object",
+                                "description": "Task-specific parameters matching the corresponding endpoint schema"
+                            }
+                        },
+                        "required": ["build_id", "task_type", "task_data"]
+                    }
+                ),
+                Tool(
+                    name="execute_build",
+                    description="Execute all queued tasks in a build",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            }
+                        },
+                        "required": ["build_id"]
+                    }
+                ),
+                Tool(
+                    name="query_builds_by_location",
+                    description="Find builds that intersect with a specified area",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "min_x": {
+                                "type": "integer",
+                                "description": "Minimum X coordinate (east positive, west negative)"
+                            },
+                            "min_y": {
+                                "type": "integer",
+                                "description": "Minimum Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "min_z": {
+                                "type": "integer",
+                                "description": "Minimum Z coordinate (south positive, north negative)"
+                            },
+                            "max_x": {
+                                "type": "integer",
+                                "description": "Maximum X coordinate (east positive, west negative)"
+                            },
+                            "max_y": {
+                                "type": "integer",
+                                "description": "Maximum Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "max_z": {
+                                "type": "integer",
+                                "description": "Maximum Z coordinate (south positive, north negative)"
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            },
+                            "include_in_progress": {
+                                "type": "boolean",
+                                "description": "Whether to include builds that are still in progress (default: false)",
+                                "default": False
+                            }
+                        },
+                        "required": ["min_x", "min_y", "min_z", "max_x", "max_y", "max_z"]
+                    }
+                ),
+                Tool(
+                    name="get_build_status",
+                    description="Get build details, status, and task information",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            }
+                        },
+                        "required": ["build_id"]
+                    }
                 )
             ]
         
@@ -810,6 +928,21 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "test_server_connection":
                     result = await self.test_server_connection()
+                    return result.content
+                elif name == "create_build":
+                    result = await self.create_build(**arguments)
+                    return result.content
+                elif name == "add_build_task":
+                    result = await self.add_build_task(**arguments)
+                    return result.content
+                elif name == "execute_build":
+                    result = await self.execute_build(**arguments)
+                    return result.content
+                elif name == "query_builds_by_location":
+                    result = await self.query_builds_by_location(**arguments)
+                    return result.content
+                elif name == "get_build_status":
+                    result = await self.get_build_status(**arguments)
                     return result.content
                 else:
                     raise ValueError(f"Unknown tool: {name}")
@@ -1643,6 +1776,230 @@ class MinecraftMCPServer:
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )
     
+    
+    async def create_build(self, name: str, description: str = None, world: str = None) -> CallToolResult:
+        """Create a new build with metadata."""
+        try:
+            payload = {
+                "name": name
+            }
+            if description:
+                payload["description"] = description
+            if world:
+                payload["world"] = world
+            else:
+                payload["world"] = "minecraft:overworld"
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/builds",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    build = result["build"]
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Successfully created build '{build['name']}'\n"
+                                 f"Build ID: {build['id']}\n"
+                                 f"Description: {build.get('description', 'No description')}\n"
+                                 f"World: {build['world']}\n"
+                                 f"Status: {build['status']}\n"
+                                 f"Created: {build['createdAt']}"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to create build: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error creating build: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def add_build_task(self, build_id: str, task_type: str, task_data: Dict[str, Any]) -> CallToolResult:
+        """Add a building task to a build queue."""
+        try:
+            payload = {
+                "taskType": task_type,
+                "taskData": task_data
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/builds/{build_id}/tasks",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    task = result["task"]
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Successfully added {task_type} task to build\n"
+                                 f"Task ID: {task['id']}\n"
+                                 f"Build ID: {build_id}\n"
+                                 f"Task Order: {task['taskOrder']}\n"
+                                 f"Status: {task['status']}"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error adding build task: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def execute_build(self, build_id: str) -> CallToolResult:
+        """Execute all queued tasks in a build."""
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:  # Longer timeout for build execution
+                response = await client.post(
+                    f"{self.api_base}/api/builds/{build_id}/execute"
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    return CallToolResult(
+                        content=[TextContent(
+                            type="text",
+                            text=f"✅ Successfully executed build {build_id}\n"
+                                 f"Tasks executed: {result['tasksExecuted']}\n"
+                                 f"Tasks failed: {result['tasksFailed']}\n"
+                                 f"Build status: {result.get('buildStatus', 'completed')}\n"
+                                 f"Execution time: {result.get('executionTime', 'N/A')}"
+                        )]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to execute build: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error executing build: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def query_builds_by_location(self, min_x: int, min_y: int, min_z: int, 
+                                     max_x: int, max_y: int, max_z: int,
+                                     world: str = None, include_in_progress: bool = False) -> CallToolResult:
+        """Find builds that intersect with a specified area."""
+        try:
+            payload = {
+                "minX": min_x,
+                "minY": min_y,
+                "minZ": min_z,
+                "maxX": max_x,
+                "maxY": max_y,
+                "maxZ": max_z,
+                "includeInProgress": include_in_progress
+            }
+            if world:
+                payload["world"] = world
+            else:
+                payload["world"] = "minecraft:overworld"
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_base}/api/builds/query-location",
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    builds = result["builds"]
+                    if not builds:
+                        return CallToolResult(
+                            content=[TextContent(
+                                type="text",
+                                text=f"No builds found in area ({min_x}, {min_y}, {min_z}) to ({max_x}, {max_y}, {max_z})"
+                            )]
+                        )
+                    
+                    result_text = f"**Found {len(builds)} builds in area ({min_x}, {min_y}, {min_z}) to ({max_x}, {max_y}, {max_z}):**\n\n"
+                    
+                    for build in builds:
+                        result_text += f"**{build['name']}** (ID: {build['id']})\n"
+                        result_text += f"- Status: {build['status']}\n"
+                        result_text += f"- Description: {build.get('description', 'No description')}\n"
+                        result_text += f"- Created: {build['createdAt']}\n"
+                        if build.get('completedAt'):
+                            result_text += f"- Completed: {build['completedAt']}\n"
+                        result_text += f"- Tasks: {build.get('taskCount', 0)}\n"
+                        result_text += f"- World: {build['world']}\n\n"
+                    
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=result_text)]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to query builds: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error querying builds by location: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+    
+    async def get_build_status(self, build_id: str) -> CallToolResult:
+        """Get build details, status, and task information."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.api_base}/api/builds/{build_id}"
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("success"):
+                    build = result["build"]
+                    tasks = result.get("tasks", [])
+                    
+                    result_text = f"**Build Status: {build['name']}**\n\n"
+                    result_text += f"**Build Details:**\n"
+                    result_text += f"- ID: {build['id']}\n"
+                    result_text += f"- Name: {build['name']}\n"
+                    result_text += f"- Description: {build.get('description', 'No description')}\n"
+                    result_text += f"- Status: {build['status']}\n"
+                    result_text += f"- World: {build['world']}\n"
+                    result_text += f"- Created: {build['createdAt']}\n"
+                    if build.get('completedAt'):
+                        result_text += f"- Completed: {build['completedAt']}\n"
+                    
+                    result_text += f"\n**Task Queue ({len(tasks)} tasks):**\n"
+                    if not tasks:
+                        result_text += "No tasks in queue\n"
+                    else:
+                        for task in tasks:
+                            status_icon = "✅" if task['status'] == 'completed' else "❌" if task['status'] == 'failed' else "⏳"
+                            result_text += f"{status_icon} Task {task['taskOrder']}: {task['taskType']} - {task['status']}\n"
+                            if task.get('errorMessage'):
+                                result_text += f"   Error: {task['errorMessage']}\n"
+                    
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=result_text)]
+                    )
+                else:
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"❌ Failed to get build status: {result.get('error', 'Unknown error')}")]
+                    )
+        except Exception as e:
+            print(f"Error getting build status: {e}", file=sys.stderr)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
+            )
+
     async def test_server_connection(self) -> CallToolResult:
         """Test if the Minecraft server API is running and responding."""
         try:

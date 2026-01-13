@@ -94,8 +94,8 @@ This implementation plan reflects the current state of the build task management
     - Ensure proper dependency injection and initialization
     - _Requirements: 6.1, 6.2, 6.3_
 
-- [ ] 7. Implement MCP server integration
-  - [ ] 7.1 Add build task management tools to MCP server
+- [-] 7. Implement MCP server integration
+  - [x] 7.1 Add build task management tools to MCP server
     - Add create_build tool to minecraft_mcp.py
     - Add add_build_task tool for task queue management
     - Add execute_build tool for build execution
