@@ -15,6 +15,9 @@ A build task management system that allows LLMs to create, queue, review, and ex
 - **Task_Executor**: Component that applies build tasks to the Minecraft world
 - **HTTP_API**: REST endpoints for build task management
 - **MCP_Server**: Model Context Protocol server exposing build task tools
+- **LLM**: Large Language Model client using the system
+- **System_Administrator**: User responsible for system configuration and maintenance
+- **Developer**: Software developer working on the system
 
 ## Requirements
 
@@ -66,7 +69,7 @@ A build task management system that allows LLMs to create, queue, review, and ex
 
 ### Requirement 5: Database Integration
 
-**User Story:** As a system administrator, I want persistent storage of build information, so that build data survives server restarts and can be queried efficiently.
+**User Story:** As a System_Administrator, I want persistent storage of build information, so that build data survives server restarts and can be queried efficiently.
 
 #### Acceptance Criteria
 
@@ -99,9 +102,23 @@ A build task management system that allows LLMs to create, queue, review, and ex
 4. THE PrefabEndpoint SHALL maintain backward compatibility with existing HTTP routes
 5. WHEN endpoint refactoring is complete, THE Build_Task_System SHALL use refactored methods for task execution
 
-### Requirement 8: Testing and Validation
+### Requirement 8: MCP Server Integration
 
-**User Story:** As a developer, I want comprehensive tests for the build task system, so that I can ensure functionality works correctly and refactoring doesn't break existing features.
+**User Story:** As an LLM using the MCP_Server, I want build task management tools exposed through the Model Context Protocol, so that I can create, manage, and execute builds through the existing MCP interface.
+
+#### Acceptance Criteria
+
+1. THE MCP_Server SHALL provide a tool for creating new builds with metadata
+2. THE MCP_Server SHALL provide a tool for adding tasks to build queues
+3. THE MCP_Server SHALL provide a tool for executing builds and returning execution status
+4. THE MCP_Server SHALL provide a tool for querying builds by location with coordinate parameters
+5. THE MCP_Server SHALL provide a tool for retrieving build status and task details
+6. WHEN MCP tools are called, THE MCP_Server SHALL use the HTTP_API endpoints for build task operations
+7. WHEN MCP tool calls fail, THE MCP_Server SHALL return descriptive error messages to the LLM client
+
+### Requirement 9: Testing and Validation
+
+**User Story:** As a Developer, I want comprehensive tests for the build task system, so that I can ensure functionality works correctly and refactoring doesn't break existing features.
 
 #### Acceptance Criteria
 

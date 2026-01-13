@@ -12,6 +12,10 @@ The design integrates with the existing Javalin API server and leverages current
 
 ```mermaid
 graph TB
+    subgraph "MCP Layer"
+        MCP[MCP Server Tools] --> A
+    end
+    
     subgraph "HTTP API Layer"
         A[BuildTaskEndpoint] --> B[Task Queue API]
         A --> C[Build Management API]
@@ -35,6 +39,7 @@ graph TB
         N[Javalin Framework]
     end
     
+    MCP --> A
     A --> E
     E --> J
     E --> L
@@ -145,6 +150,78 @@ public class TaskExecutor {
     private TaskExecutionResult executePrefabTask(PrefabTaskData data);
 }
 ```
+
+### MCP Server Integration
+
+The MCP server (`mcp/minecraft_mcp.py`) will be extended with new tools for build task management:
+
+```python
+# New MCP tools to be added to MinecraftMCPServer.list_tools()
+Tool(
+    name="create_build",
+    description="Create a new build with metadata for organizing building tasks",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Build name"},
+            "description": {"type": "string", "description": "Build description"},
+            "world": {"type": "string", "default": "minecraft:overworld"}
+        },
+        "required": ["name"]
+    }
+),
+Tool(
+    name="add_build_task",
+    description="Add a building task to a build queue",
+    inputSchema={
+        "type": "object", 
+        "properties": {
+            "build_id": {"type": "string", "description": "Build UUID"},
+            "task_type": {"type": "string", "enum": ["BLOCK_SET", "BLOCK_FILL", "PREFAB_DOOR", "PREFAB_STAIRS", "PREFAB_WINDOW", "PREFAB_TORCH", "PREFAB_SIGN"]},
+            "task_data": {"type": "object", "description": "Task-specific parameters"}
+        },
+        "required": ["build_id", "task_type", "task_data"]
+    }
+),
+Tool(
+    name="execute_build",
+    description="Execute all queued tasks in a build",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {"type": "string", "description": "Build UUID"}
+        },
+        "required": ["build_id"]
+    }
+),
+Tool(
+    name="query_builds_by_location", 
+    description="Find builds that intersect with a specified area",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "min_x": {"type": "integer"}, "min_y": {"type": "integer"}, "min_z": {"type": "integer"},
+            "max_x": {"type": "integer"}, "max_y": {"type": "integer"}, "max_z": {"type": "integer"},
+            "world": {"type": "string", "default": "minecraft:overworld"},
+            "include_in_progress": {"type": "boolean", "default": false}
+        },
+        "required": ["min_x", "min_y", "min_z", "max_x", "max_y", "max_z"]
+    }
+),
+Tool(
+    name="get_build_status",
+    description="Get build details, status, and task information",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {"type": "string", "description": "Build UUID"}
+        },
+        "required": ["build_id"]
+    }
+)
+```
+
+Each MCP tool will make HTTP requests to the corresponding BuildTaskEndpoint routes and format responses appropriately for LLM consumption.
 
 ### Refactored Endpoint Cores
 
@@ -317,9 +394,37 @@ After analyzing the acceptance criteria, the following properties have been iden
 *For any* existing endpoint functionality, the refactored version should produce identical results when called programmatically
 **Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5**
 
-### Property 19: Existing API Functionality Preservation
-*For any* existing API endpoint, functionality should remain unchanged after build task system integration
+### Property 19: MCP Build Creation Tool
+*For any* valid build creation request through MCP, the tool should create a build with the same metadata as direct HTTP API calls
+**Validates: Requirements 8.1**
+
+### Property 20: MCP Task Addition Tool
+*For any* valid task addition request through MCP, the tool should add tasks to the build queue identically to direct HTTP API calls
+**Validates: Requirements 8.2**
+
+### Property 21: MCP Build Execution Tool
+*For any* build execution request through MCP, the tool should execute builds and return status identically to direct HTTP API calls
+**Validates: Requirements 8.3**
+
+### Property 22: MCP Location Query Tool
+*For any* location query request through MCP, the tool should return builds that intersect the area identically to direct HTTP API calls
 **Validates: Requirements 8.4**
+
+### Property 23: MCP Build Status Tool
+*For any* build status request through MCP, the tool should return complete build information identically to direct HTTP API calls
+**Validates: Requirements 8.5**
+
+### Property 24: MCP HTTP API Delegation
+*For any* MCP tool operation, the result should be equivalent to calling the corresponding HTTP API endpoint directly
+**Validates: Requirements 8.6**
+
+### Property 25: MCP Error Message Descriptiveness
+*For any* MCP tool call that fails, the error message should contain sufficient detail for debugging and user understanding
+**Validates: Requirements 8.7**
+
+### Property 26: Existing API Functionality Preservation
+*For any* existing API endpoint, functionality should remain unchanged after build task system integration
+**Validates: Requirements 9.4**
 
 <function_calls>
 <invoke name="prework">
@@ -367,12 +472,14 @@ After analyzing the acceptance criteria, the following properties have been iden
 ### Integration Testing Strategy
 - **Database Integration**: Test with real PostgreSQL instance using Testcontainers
 - **Endpoint Integration**: Test HTTP endpoints with embedded Javalin server
+- **MCP Integration**: Test MCP tools against running HTTP API server
 - **Minecraft Integration**: Test with mock MinecraftServer for world operations
 - **End-to-End Flows**: Test complete build creation → task addition → execution → query workflows
 
 ### Compatibility Testing
 - **Existing Endpoint Preservation**: Verify all existing API endpoints continue to work unchanged
 - **Refactoring Validation**: Ensure refactored endpoint cores produce identical results
+- **MCP Tool Equivalence**: Verify MCP tools produce identical results to direct HTTP API calls
 - **Performance Regression**: Monitor response times for existing endpoints
 - **Data Migration**: Test database schema initialization and upgrades
 
@@ -390,6 +497,8 @@ src/test/java/com/example/
 │   ├── endpoint/
 │   │   ├── BuildTaskEndpointTest.java     # HTTP endpoint tests
 │   │   └── EndpointCompatibilityTest.java # Compatibility tests
+│   ├── mcp/
+│   │   └── MCPIntegrationTest.java        # MCP tool tests
 │   └── integration/
 │       └── BuildTaskSystemIntegrationTest.java # End-to-end tests
 └── endpoints/
@@ -419,5 +528,27 @@ void taskQueuePreservesOrder(@ForAll("taskLists") List<BuildTask> tasks) {
     List<BuildTask> retrieved = buildService.getTasks(buildId);
     
     assertThat(retrieved).containsExactlyElementsOf(tasks);
+}
+
+@Property
+@Tag("Feature: build-task-management, Property 24: MCP HTTP API Delegation")
+void mcpToolsProduceSameResultsAsHttpApi(@ForAll("buildRequests") CreateBuildRequest request) {
+    // Create build via HTTP API
+    Build httpBuild = buildService.createBuild(request);
+    
+    // Create build via MCP tool (simulated)
+    CallToolResult mcpResult = mcpServer.callTool("create_build", Map.of(
+        "name", request.getName(),
+        "description", request.getDescription(),
+        "world", request.getWorld()
+    ));
+    
+    // Extract build ID from MCP response and verify equivalence
+    UUID mcpBuildId = extractBuildIdFromMcpResponse(mcpResult);
+    Build mcpBuild = buildService.getBuild(mcpBuildId);
+    
+    assertThat(mcpBuild.getName()).isEqualTo(httpBuild.getName());
+    assertThat(mcpBuild.getDescription()).isEqualTo(httpBuild.getDescription());
+    assertThat(mcpBuild.getWorld()).isEqualTo(httpBuild.getWorld());
 }
 ```
