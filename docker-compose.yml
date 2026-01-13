@@ -1,6 +1,24 @@
 #version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: minecraft-postgres
+    environment:
+      POSTGRES_DB: minecraft_builds
+      POSTGRES_USER: minecraft
+      POSTGRES_PASSWORD: minecraft_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minecraft -d minecraft_builds"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   nginx:
     build:
       context: .
@@ -13,7 +31,8 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - minecraft
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   minecraft:
@@ -31,6 +50,12 @@ services:
       - minecraft_world:/minecraft/world
       - minecraft_logs:/minecraft/logs
     environment:
+      # Database connection
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=minecraft_builds
+      - DB_USER=minecraft
+      - DB_PASSWORD=minecraft_password
       # JVM memory settings
       - JAVA_OPTS=-Xmx2G -Xms1G -XX:+UseG1GC -XX:+UseStringDeduplication
       # Optional: Set server properties via environment
@@ -48,6 +73,8 @@ services:
           memory: 1G
 
 volumes:
+  postgres_data:
+    driver: local
   minecraft_world:
     driver: local
   minecraft_logs:
