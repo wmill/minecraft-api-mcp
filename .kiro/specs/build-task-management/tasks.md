@@ -99,8 +99,8 @@ This implementation plan breaks down the build task management system into discr
     - **Property 5: Task Validation Consistency**
     - **Validates: Requirements 2.2**
 
-- [ ] 6. Implement BuildService for core business logic
-  - [ ] 6.1 Create BuildService class
+- [x] 6. Implement BuildService for core business logic
+  - [x] 6.1 Create BuildService class
     - Implement build creation with unique ID generation
     - Add task queue management operations
     - Implement build execution orchestration
@@ -114,7 +114,7 @@ This implementation plan breaks down the build task management system into discr
     - **Property 6: Task Queue Persistence**
     - **Validates: Requirements 2.5**
 
-  - [ ] 6.4 Implement LocationQueryService
+  - [x] 6.4 Implement LocationQueryService
     - Create service for location-based build queries
     - Implement spatial intersection logic
     - Add chronological ordering for overlapping builds
@@ -124,23 +124,23 @@ This implementation plan breaks down the build task management system into discr
     - **Property 11: Location Query Intersection**
     - **Validates: Requirements 4.1**
 
-- [ ] 7. Checkpoint - Ensure core services tests pass
+- [x] 7. Checkpoint - Ensure core services tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Implement HTTP API endpoints
-  - [ ] 8.1 Create BuildTaskEndpoint class
+- [x] 8. Implement HTTP API endpoints
+  - [x] 8.1 Create BuildTaskEndpoint class
     - Implement POST /api/builds for build creation
     - Implement GET /api/builds/{id} for build retrieval
     - Follow existing endpoint patterns and error handling
     - _Requirements: 6.1, 6.4, 6.5_
 
-  - [ ] 8.2 Add task queue management endpoints
+  - [x] 8.2 Add task queue management endpoints
     - Implement POST /api/builds/{id}/tasks for adding tasks
     - Implement GET /api/builds/{id}/tasks for queue retrieval
     - Implement PUT /api/builds/{id}/tasks for queue updates
     - _Requirements: 6.1, 6.4, 6.5_
 
-  - [ ] 8.3 Add build execution and query endpoints
+  - [x] 8.3 Add build execution and query endpoints
     - Implement POST /api/builds/{id}/execute for build execution
     - Implement POST /api/builds/query-location for location queries
     - Add comprehensive error handling and validation
