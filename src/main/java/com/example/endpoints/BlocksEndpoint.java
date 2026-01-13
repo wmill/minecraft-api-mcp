@@ -20,20 +20,19 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 public class BlocksEndpoint extends APIEndpoint {
+    private final BlocksEndpointCore core;
+    
     public BlocksEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
         super(app, server, logger);
+        this.core = new BlocksEndpointCore(server, logger);
         init();
     }
 
     private void init() {
         // Define your endpoints here
         app.get("/api/world/blocks/list", ctx -> {
-            // Map over Registries.BLOCK and return a list of BlockInfo
-            var blockInfos = Registries.BLOCK.stream()
-                    .map(block -> new BlockInfo(
-                            Registries.BLOCK.getId(block).toString(),
-                            block.getTranslationKey()))
-                    .toList();
+            // Delegate to core method
+            var blockInfos = core.getBlockList();
             ctx.json(blockInfos);
         });
 
@@ -43,86 +42,21 @@ public class BlocksEndpoint extends APIEndpoint {
         app.post("/api/world/blocks/set", ctx -> {
             BlockSetRequest req = ctx.bodyAsClass(BlockSetRequest.class);
             
-            // Validate world
-            RegistryKey<World> worldKey = req.world != null
-                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
-                : World.OVERWORLD;
-            
-            ServerWorld world = server.getWorld(worldKey);
-            if (world == null) {
-                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
-                return;
-            }
-            
-            LOGGER.info("Setting blocks in world {} starting at ({}, {}, {})", 
-                worldKey.getValue(), req.startX, req.startY, req.startZ);
-            
-            // Create future for async response
-            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
-            
-            // Execute on server thread
-            server.execute(() -> {
-                try {
-                    int blocksSet = 0;
-                    int blocksSkipped = 0;
-                    
-                    // Iterate through 3D array
-                    for (int x = 0; x < req.blocks.length; x++) {
-                        for (int y = 0; y < req.blocks[x].length; y++) {
-                            for (int z = 0; z < req.blocks[x][y].length; z++) {
-                                BlockData blockData = req.blocks[x][y][z];
-                                
-                                // Skip null blocks (no change)
-                                if (blockData == null) {
-                                    blocksSkipped++;
-                                    continue;
-                                }
-                                
-                                // Convert BlockData to BlockState
-                                BlockState blockState = blockData.toBlockState();
-                                if (blockState == null) {
-                                    LOGGER.warn("Invalid block data: {}", blockData.blockName);
-                                    blocksSkipped++;
-                                    continue;
-                                }
-                                
-                                // Calculate world position
-                                BlockPos pos = new BlockPos(req.startX + x, req.startY + y, req.startZ + z);
-                                
-                                // Set block in world
-                                if (world.setBlockState(pos, blockState)) {
-                                    blocksSet++;
-                                } else {
-                                    LOGGER.warn("Failed to set block {} at {}", blockData.blockName, pos);
-                                    blocksSkipped++;
-                                }
-                            }
-                        }
-                    }
-                    
-                    LOGGER.info("Block operation completed: {} blocks set, {} blocks skipped", 
-                        blocksSet, blocksSkipped);
-                    
-                    future.complete(Map.of(
-                        "success", true,
-                        "blocks_set", blocksSet,
-                        "blocks_skipped", blocksSkipped,
-                        "world", worldKey.getValue().toString()
-                    ));
-                    
-                } catch (Exception e) {
-                    LOGGER.error("Error setting blocks", e);
-                    future.complete(Map.of("error", "Exception during block setting: " + e.getMessage()));
-                }
-            });
+            // Delegate to core method
+            CompletableFuture<BlockSetResult> future = core.setBlocks(req);
             
             // Wait for result and respond
             try {
-                Map<String, Object> result = future.get(10, TimeUnit.SECONDS);
-                if (result.containsKey("error")) {
-                    ctx.status(500).json(result);
+                BlockSetResult result = future.get(10, TimeUnit.SECONDS);
+                if (!result.success()) {
+                    ctx.status(500).json(Map.of("error", result.error()));
                 } else {
-                    ctx.json(result);
+                    ctx.json(Map.of(
+                        "success", true,
+                        "blocks_set", result.blocksSet(),
+                        "blocks_skipped", result.blocksSkipped(),
+                        "world", result.world()
+                    ));
                 }
             } catch (java.util.concurrent.TimeoutException e) {
                 ctx.status(500).json(Map.of("error", "Timeout waiting for block operation"));
@@ -136,76 +70,22 @@ public class BlocksEndpoint extends APIEndpoint {
         app.post("/api/world/blocks/chunk", ctx -> {
             ChunkRequest req = ctx.bodyAsClass(ChunkRequest.class);
             
-            // Validate world
-            RegistryKey<World> worldKey = req.world != null
-                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
-                : World.OVERWORLD;
-            
-            ServerWorld world = server.getWorld(worldKey);
-            if (world == null) {
-                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
-                return;
-            }
-            
-            // Validate chunk size limits (prevent huge requests)
-            int maxChunkSize = 64; // Maximum 64x64x64 chunk
-            if (req.sizeX > maxChunkSize || req.sizeY > maxChunkSize || req.sizeZ > maxChunkSize) {
-                ctx.status(400).json(Map.of("error", "Chunk size too large. Maximum size is " + maxChunkSize + " per dimension"));
-                return;
-            }
-            
-            LOGGER.info("Getting chunk from world {} at ({}, {}, {}) with size {}x{}x{}", 
-                worldKey.getValue(), req.startX, req.startY, req.startZ, req.sizeX, req.sizeY, req.sizeZ);
-            
-            // Create future for async response
-            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
-            
-            // Execute on server thread
-            server.execute(() -> {
-                try {
-                    // Create 3D array to hold block data
-                    BlockData[][][] blocks = new BlockData[req.sizeX][req.sizeY][req.sizeZ];
-                    
-                    // Iterate through the requested chunk area
-                    for (int x = 0; x < req.sizeX; x++) {
-                        for (int y = 0; y < req.sizeY; y++) {
-                            for (int z = 0; z < req.sizeZ; z++) {
-                                // Calculate world position
-                                BlockPos pos = new BlockPos(req.startX + x, req.startY + y, req.startZ + z);
-                                
-                                // Get block state at position
-                                BlockState blockState = world.getBlockState(pos);
-                                
-                                // Convert to BlockData format
-                                blocks[x][y][z] = BlockData.fromBlockState(blockState);
-                            }
-                        }
-                    }
-                    
-                    LOGGER.info("Successfully retrieved chunk data: {}x{}x{} blocks", 
-                        req.sizeX, req.sizeY, req.sizeZ);
-                    
-                    future.complete(Map.of(
-                        "success", true,
-                        "world", worldKey.getValue().toString(),
-                        "start_position", Map.of("x", req.startX, "y", req.startY, "z", req.startZ),
-                        "size", Map.of("x", req.sizeX, "y", req.sizeY, "z", req.sizeZ),
-                        "blocks", blocks
-                    ));
-                    
-                } catch (Exception e) {
-                    LOGGER.error("Error getting chunk data", e);
-                    future.complete(Map.of("error", "Exception during chunk retrieval: " + e.getMessage()));
-                }
-            });
+            // Delegate to core method
+            CompletableFuture<ChunkResult> future = core.getChunk(req);
             
             // Wait for result and respond
             try {
-                Map<String, Object> result = future.get(10, TimeUnit.SECONDS);
-                if (result.containsKey("error")) {
-                    ctx.status(500).json(result);
+                ChunkResult result = future.get(10, TimeUnit.SECONDS);
+                if (!result.success()) {
+                    ctx.status(500).json(Map.of("error", result.error()));
                 } else {
-                    ctx.json(result);
+                    ctx.json(Map.of(
+                        "success", true,
+                        "world", result.world(),
+                        "start_position", result.startPosition(),
+                        "size", result.size(),
+                        "blocks", result.blocks()
+                    ));
                 }
             } catch (java.util.concurrent.TimeoutException e) {
                 ctx.status(500).json(Map.of("error", "Timeout waiting for chunk operation"));
@@ -218,108 +98,23 @@ public class BlocksEndpoint extends APIEndpoint {
         app.post("/api/world/blocks/fill", ctx -> {
             FillBoxRequest req = ctx.bodyAsClass(FillBoxRequest.class);
             
-            // Validate world
-            RegistryKey<World> worldKey = req.world != null
-                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
-                : World.OVERWORLD;
-            
-            ServerWorld world = server.getWorld(worldKey);
-            if (world == null) {
-                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
-                return;
-            }
-            
-            // Calculate box bounds (ensure min/max are correct)
-            int minX = Math.min(req.x1, req.x2);
-            int maxX = Math.max(req.x1, req.x2);
-            int minY = Math.min(req.y1, req.y2);
-            int maxY = Math.max(req.y1, req.y2);
-            int minZ = Math.min(req.z1, req.z2);
-            int maxZ = Math.max(req.z1, req.z2);
-            
-            // Calculate box size for validation
-            int sizeX = maxX - minX + 1;
-            int sizeY = maxY - minY + 1;
-            int sizeZ = maxZ - minZ + 1;
-            int totalBlocks = sizeX * sizeY * sizeZ;
-            
-            // Validate box size (prevent huge operations)
-            int maxBoxSize = 100000; // Maximum 100k blocks
-            if (totalBlocks > maxBoxSize) {
-                ctx.status(400).json(Map.of("error", "Box too large. Maximum " + maxBoxSize + " blocks allowed"));
-                return;
-            }
-            
-            LOGGER.info("Filling box in world {} from ({}, {}, {}) to ({}, {}, {}) with {} blocks of type {}", 
-                worldKey.getValue(), minX, minY, minZ, maxX, maxY, maxZ, totalBlocks, req.blockType);
-            
-            // Create future for async response
-            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
-            
-            // Execute on server thread
-            server.execute(() -> {
-                try {
-                    // Parse block identifier
-                    Identifier blockIdentifier = Identifier.tryParse(req.blockType);
-                    if (blockIdentifier == null) {
-                        future.complete(Map.of("error", "Invalid block identifier: " + req.blockType));
-                        return;
-                    }
-                    
-                    // Get block from registry
-                    Block block = Registries.BLOCK.get(blockIdentifier);
-                    if (block == null) {
-                        future.complete(Map.of("error", "Unknown block: " + req.blockType));
-                        return;
-                    }
-                    
-                    BlockState blockState = block.getDefaultState();
-                    int blocksSet = 0;
-                    int blocksFailed = 0;
-                    
-                    // Fill the box
-                    for (int x = minX; x <= maxX; x++) {
-                        for (int y = minY; y <= maxY; y++) {
-                            for (int z = minZ; z <= maxZ; z++) {
-                                BlockPos pos = new BlockPos(x, y, z);
-                                
-                                if (world.setBlockState(pos, blockState)) {
-                                    blocksSet++;
-                                } else {
-                                    blocksFailed++;
-                                }
-                            }
-                        }
-                    }
-                    
-                    LOGGER.info("Box fill completed: {} blocks set, {} blocks failed", 
-                        blocksSet, blocksFailed);
-                    
-                    future.complete(Map.of(
-                        "success", true,
-                        "blocks_set", blocksSet,
-                        "blocks_failed", blocksFailed,
-                        "total_blocks", totalBlocks,
-                        "world", worldKey.getValue().toString(),
-                        "box_bounds", Map.of(
-                            "min", Map.of("x", minX, "y", minY, "z", minZ),
-                            "max", Map.of("x", maxX, "y", maxY, "z", maxZ)
-                        )
-                    ));
-                    
-                } catch (Exception e) {
-                    LOGGER.error("Error filling box", e);
-                    future.complete(Map.of("error", "Exception during box fill: " + e.getMessage()));
-                }
-            });
+            // Delegate to core method
+            CompletableFuture<FillResult> future = core.fillBox(req);
             
             // Wait for result and respond
             try {
-                Map<String, Object> result = future.get(30, TimeUnit.SECONDS);
-                if (result.containsKey("error")) {
-                    ctx.status(500).json(result);
+                FillResult result = future.get(30, TimeUnit.SECONDS);
+                if (!result.success()) {
+                    ctx.status(500).json(Map.of("error", result.error()));
                 } else {
-                    ctx.json(result);
+                    ctx.json(Map.of(
+                        "success", true,
+                        "blocks_set", result.blocksSet(),
+                        "blocks_failed", result.blocksFailed(),
+                        "total_blocks", result.totalBlocks(),
+                        "world", result.world(),
+                        "box_bounds", result.boxBounds()
+                    ));
                 }
             } catch (java.util.concurrent.TimeoutException e) {
                 ctx.status(500).json(Map.of("error", "Timeout waiting for box fill operation"));
@@ -332,106 +127,24 @@ public class BlocksEndpoint extends APIEndpoint {
         app.post("/api/world/blocks/heightmap", ctx -> {
             HeightmapRequest req = ctx.bodyAsClass(HeightmapRequest.class);
             
-            // Validate world
-            RegistryKey<World> worldKey = req.world != null
-                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
-                : World.OVERWORLD;
-            
-            ServerWorld world = server.getWorld(worldKey);
-            if (world == null) {
-                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
-                return;
-            }
-            
-            // Calculate area bounds (ensure min/max are correct)
-            int minX = Math.min(req.x1, req.x2);
-            int maxX = Math.max(req.x1, req.x2);
-            int minZ = Math.min(req.z1, req.z2);
-            int maxZ = Math.max(req.z1, req.z2);
-            
-            // Calculate area size for validation
-            int sizeX = maxX - minX + 1;
-            int sizeZ = maxZ - minZ + 1;
-            int totalPoints = sizeX * sizeZ;
-            
-            // Validate area size (prevent huge operations)
-            int maxAreaSize = 10000; // Maximum 10k height points (100x100 area)
-            if (totalPoints > maxAreaSize) {
-                ctx.status(400).json(Map.of("error", "Area too large. Maximum " + maxAreaSize + " height points allowed"));
-                return;
-            }
-            
-            // Parse heightmap type
-            Heightmap.Type heightmapType;
-            try {
-                heightmapType = req.heightmapType != null 
-                    ? Heightmap.Type.valueOf(req.heightmapType.toUpperCase())
-                    : Heightmap.Type.WORLD_SURFACE;
-            } catch (IllegalArgumentException e) {
-                ctx.status(400).json(Map.of("error", "Invalid heightmap type: " + req.heightmapType + 
-                    ". Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR"));
-                return;
-            }
-            
-            LOGGER.info("Getting heightmap for world {} from ({}, {}) to ({}, {}) using {}", 
-                worldKey.getValue(), minX, minZ, maxX, maxZ, heightmapType);
-            
-            // Create future for async response
-            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
-            
-            // Execute on server thread
-            server.execute(() -> {
-                try {
-                    // Create 2D array to hold height data
-                    int[][] heights = new int[sizeX][sizeZ];
-                    int minHeight = Integer.MAX_VALUE;
-                    int maxHeight = Integer.MIN_VALUE;
-                    
-                    // Iterate through the area and get height at each point
-                    for (int x = 0; x < sizeX; x++) {
-                        for (int z = 0; z < sizeZ; z++) {
-                            int worldX = minX + x;
-                            int worldZ = minZ + z;
-                            
-                            // Get height using Minecraft's heightmap
-                            int height = world.getTopY(heightmapType, worldX, worldZ);
-                            heights[x][z] = height;
-                            
-                            // Track min/max for statistics
-                            minHeight = Math.min(minHeight, height);
-                            maxHeight = Math.max(maxHeight, height);
-                        }
-                    }
-                    
-                    LOGGER.info("Successfully generated heightmap: {}x{} points, height range {}-{}", 
-                        sizeX, sizeZ, minHeight, maxHeight);
-                    
-                    future.complete(Map.of(
-                        "success", true,
-                        "world", worldKey.getValue().toString(),
-                        "area_bounds", Map.of(
-                            "min", Map.of("x", minX, "z", minZ),
-                            "max", Map.of("x", maxX, "z", maxZ)
-                        ),
-                        "size", Map.of("x", sizeX, "z", sizeZ),
-                        "heightmap_type", heightmapType.toString(),
-                        "height_range", Map.of("min", minHeight, "max", maxHeight),
-                        "heights", heights
-                    ));
-                    
-                } catch (Exception e) {
-                    LOGGER.error("Error generating heightmap", e);
-                    future.complete(Map.of("error", "Exception during heightmap generation: " + e.getMessage()));
-                }
-            });
+            // Delegate to core method
+            CompletableFuture<HeightmapResult> future = core.getHeightmap(req);
             
             // Wait for result and respond
             try {
-                Map<String, Object> result = future.get(30, TimeUnit.SECONDS);
-                if (result.containsKey("error")) {
-                    ctx.status(500).json(result);
+                HeightmapResult result = future.get(30, TimeUnit.SECONDS);
+                if (!result.success()) {
+                    ctx.status(500).json(Map.of("error", result.error()));
                 } else {
-                    ctx.json(result);
+                    ctx.json(Map.of(
+                        "success", true,
+                        "world", result.world(),
+                        "area_bounds", result.areaBounds(),
+                        "size", result.size(),
+                        "heightmap_type", result.heightmapType(),
+                        "height_range", result.heightRange(),
+                        "heights", result.heights()
+                    ));
                 }
             } catch (java.util.concurrent.TimeoutException e) {
                 ctx.status(500).json(Map.of("error", "Timeout waiting for heightmap operation"));
@@ -439,6 +152,13 @@ public class BlocksEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });
+    }
+
+    /**
+     * Get access to the core block operations for programmatic use
+     */
+    public BlocksEndpointCore getCore() {
+        return core;
     }
 }
 

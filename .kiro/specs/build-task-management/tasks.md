@@ -52,8 +52,8 @@ This implementation plan breaks down the build task management system into discr
 - [x] 3. Checkpoint - Ensure database layer tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Refactor existing endpoints to support programmatic calls
-  - [ ] 4.1 Extract BlocksEndpointCore from BlocksEndpoint
+- [x] 4. Refactor existing endpoints to support programmatic calls
+  - [x] 4.1 Extract BlocksEndpointCore from BlocksEndpoint
     - Create BlocksEndpointCore class with core block operations
     - Refactor existing HTTP handlers to delegate to core methods
     - Ensure all block operations work without Javalin Context
@@ -64,7 +64,7 @@ This implementation plan breaks down the build task management system into discr
     - Test that core methods work without HTTP context
     - _Requirements: 7.1, 7.3_
 
-  - [ ] 4.3 Extract PrefabEndpointCore from PrefabEndpoint
+  - [x] 4.3 Extract PrefabEndpointCore from PrefabEndpoint
     - Create PrefabEndpointCore class with core prefab operations
     - Refactor existing HTTP handlers to delegate to core methods
     - Ensure all prefab operations work without Javalin Context
