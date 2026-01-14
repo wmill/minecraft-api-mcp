@@ -775,26 +775,32 @@ class MinecraftMCPServer:
                 ),
                 Tool(
                     name="add_build_task",
-                    description="Add a building task to a build queue (prefer the add_build_task_* tools for clearer inputs)",
+                    description="deprecated, use add_build_task_* tools for clearer inputs",
                     inputSchema={
                         "type": "object",
-                        "properties": {
-                            "build_id": {
-                                "type": "string",
-                                "description": "Build UUID"
-                            },
-                            "task_type": {
-                                "type": "string",
-                                "description": "Type of building task",
-                                "enum": ["BLOCK_SET", "BLOCK_FILL", "PREFAB_DOOR", "PREFAB_STAIRS", "PREFAB_WINDOW", "PREFAB_TORCH", "PREFAB_SIGN"]
-                            },
-                            "task_data": {
-                                "type": "object",
-                                "description": "Task-specific payload that mirrors the matching MCP build function input, but in snake_case. Use the schema for the task_type: BLOCK_SET -> set_blocks (start_x/start_y/start_z, blocks 3D array of block objects with block_name and optional block_states, optional world); BLOCK_FILL -> fill_box (x1/y1/z1/x2/y2/z2, block_type, optional world); PREFAB_DOOR -> place_door_line (start_x/start_y/start_z, facing, block_type, optional width/hinge/open/double_doors/world); PREFAB_STAIRS -> place_stairs (start_x/start_y/start_z/end_x/end_y/end_z, block_type, stair_type, staircase_direction, optional fill_support/world); PREFAB_WINDOW -> place_window_pane_wall (start_x/start_y/start_z/end_x/end_z, height, block_type, optional waterlogged/world); PREFAB_TORCH -> place_torch (x/y/z, block_type, optional facing/world); PREFAB_SIGN -> place_sign (x/y/z, block_type, optional front_lines/back_lines/facing/rotation/glowing/world)."
-                            }
-                        },
-                        "required": ["build_id", "task_type", "task_data"]
+                        "properties": {},
+                        "required": []
                     }
+                    # description="Add a building task to a build queue (prefer the add_build_task_* tools for clearer inputs)",
+                    # inputSchema={
+                    #     "type": "object",
+                    #     "properties": {
+                    #         "build_id": {
+                    #             "type": "string",
+                    #             "description": "Build UUID"
+                    #         },
+                    #         "task_type": {
+                    #             "type": "string",
+                    #             "description": "Type of building task",
+                    #             "enum": ["BLOCK_SET", "BLOCK_FILL", "PREFAB_DOOR", "PREFAB_STAIRS", "PREFAB_WINDOW", "PREFAB_TORCH", "PREFAB_SIGN"]
+                    #         },
+                    #         "task_data": {
+                    #             "type": "object",
+                    #             "description": "Task-specific payload that mirrors the matching MCP build function input, but in snake_case. Use the schema for the task_type: BLOCK_SET -> set_blocks (start_x/start_y/start_z, blocks 3D array of block objects with block_name and optional block_states, optional world); BLOCK_FILL -> fill_box (x1/y1/z1/x2/y2/z2, block_type, optional world); PREFAB_DOOR -> place_door_line (start_x/start_y/start_z, facing, block_type, optional width/hinge/open/double_doors/world); PREFAB_STAIRS -> place_stairs (start_x/start_y/start_z/end_x/end_y/end_z, block_type, stair_type, staircase_direction, optional fill_support/world); PREFAB_WINDOW -> place_window_pane_wall (start_x/start_y/start_z/end_x/end_z, height, block_type, optional waterlogged/world); PREFAB_TORCH -> place_torch (x/y/z, block_type, optional facing/world); PREFAB_SIGN -> place_sign (x/y/z, block_type, optional front_lines/back_lines/facing/rotation/glowing/world)."
+                    #         }
+                    #     },
+                    #     "required": ["build_id", "task_type", "task_data"]
+                    # }
                 ),
                 Tool(
                     name="add_build_task_block_set",
