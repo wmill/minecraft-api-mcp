@@ -775,7 +775,7 @@ class MinecraftMCPServer:
                 ),
                 Tool(
                     name="add_build_task",
-                    description="Add a building task to a build queue",
+                    description="Add a building task to a build queue (prefer the add_build_task_* tools for clearer inputs)",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -794,6 +794,400 @@ class MinecraftMCPServer:
                             }
                         },
                         "required": ["build_id", "task_type", "task_data"]
+                    }
+                ),
+                Tool(
+                    name="add_build_task_block_set",
+                    description="Add a BLOCK_SET task to a build queue",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            },
+                            "start_x": {
+                                "type": "integer",
+                                "description": "Starting X coordinate (east positive, west negative)"
+                            },
+                            "start_y": {
+                                "type": "integer",
+                                "description": "Starting Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "start_z": {
+                                "type": "integer",
+                                "description": "Starting Z coordinate (south positive, north negative)"
+                            },
+                            "blocks": {
+                                "type": "array",
+                                "description": "3D array of block objects (use null for no change). Each block object has block_name and optional block_states.",
+                                "items": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "array",
+                                        "items": {
+                                            "oneOf": [
+                                                {"type": "null"},
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "block_name": {
+                                                            "type": "string",
+                                                            "description": "Block identifier (e.g., 'minecraft:oak_door')"
+                                                        },
+                                                        "block_states": {
+                                                            "type": "object",
+                                                            "description": "Optional block state properties (e.g., {'facing': 'north', 'open': 'false'})",
+                                                            "additionalProperties": {"type": "string"}
+                                                        }
+                                                    },
+                                                    "required": ["block_name"]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["build_id", "start_x", "start_y", "start_z", "blocks"]
+                    }
+                ),
+                Tool(
+                    name="add_build_task_block_fill",
+                    description="Add a BLOCK_FILL task to a build queue",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            },
+                            "x1": {
+                                "type": "integer",
+                                "description": "First corner X coordinate (east positive, west negative)"
+                            },
+                            "y1": {
+                                "type": "integer",
+                                "description": "First corner Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z1": {
+                                "type": "integer",
+                                "description": "First corner Z coordinate (south positive, north negative)"
+                            },
+                            "x2": {
+                                "type": "integer",
+                                "description": "Second corner X coordinate (east positive, west negative)"
+                            },
+                            "y2": {
+                                "type": "integer",
+                                "description": "Second corner Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z2": {
+                                "type": "integer",
+                                "description": "Second corner Z coordinate (south positive, north negative)"
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Block type identifier (e.g., 'minecraft:stone', 'minecraft:oak_wood'). 'minecraft:air' can be used to clear an area."
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["build_id", "x1", "y1", "z1", "x2", "y2", "z2", "block_type"]
+                    }
+                ),
+                Tool(
+                    name="add_build_task_prefab_door",
+                    description="Add a PREFAB_DOOR task to a build queue",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            },
+                            "start_x": {
+                                "type": "integer",
+                                "description": "Starting X coordinate (east positive, west negative)"
+                            },
+                            "start_y": {
+                                "type": "integer",
+                                "description": "Starting Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "start_z": {
+                                "type": "integer",
+                                "description": "Starting Z coordinate (south positive, north negative)"
+                            },
+                            "width": {
+                                "type": "integer",
+                                "description": "Number of doors to place in a row (default: 1)",
+                                "default": 1,
+                                "minimum": 1
+                            },
+                            "facing": {
+                                "type": "string",
+                                "description": "Direction the doors should face",
+                                "enum": ["north", "south", "east", "west"]
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Door block type (e.g., 'minecraft:oak_door', 'minecraft:iron_door')",
+                                "default": "minecraft:oak_door"
+                            },
+                            "hinge": {
+                                "type": "string",
+                                "description": "Door hinge position",
+                                "enum": ["left", "right"],
+                                "default": "left"
+                            },
+                            "double_doors": {
+                                "type": "boolean",
+                                "description": "Whether to alternate door hinges so they pair up to double doors",
+                                "default": False
+                            },
+                            "open": {
+                                "type": "boolean",
+                                "description": "Whether doors start in open position",
+                                "default": False
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["build_id", "start_x", "start_y", "start_z", "facing", "block_type"]
+                    }
+                ),
+                Tool(
+                    name="add_build_task_prefab_stairs",
+                    description="Add a PREFAB_STAIRS task to a build queue",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            },
+                            "start_x": {
+                                "type": "integer",
+                                "description": "Starting X coordinate (east positive, west negative)"
+                            },
+                            "start_y": {
+                                "type": "integer",
+                                "description": "Starting Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "start_z": {
+                                "type": "integer",
+                                "description": "Starting Z coordinate (south positive, north negative)"
+                            },
+                            "end_x": {
+                                "type": "integer",
+                                "description": "Ending X coordinate (east positive, west negative)"
+                            },
+                            "end_y": {
+                                "type": "integer",
+                                "description": "Ending Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "end_z": {
+                                "type": "integer",
+                                "description": "Ending Z coordinate (south positive, north negative)"
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Base block type for solid sections (e.g., 'minecraft:oak_planks')",
+                                "default": "minecraft:stone"
+                            },
+                            "stair_type": {
+                                "type": "string",
+                                "description": "Stair block type (e.g., 'minecraft:oak_stairs')",
+                                "default": "minecraft:stone_stairs"
+                            },
+                            "staircase_direction": {
+                                "type": "string",
+                                "description": "Orientation of the staircase structure (determines width calculation)",
+                                "enum": ["north", "south", "east", "west"]
+                            },
+                            "fill_support": {
+                                "type": "boolean",
+                                "description": "Whether to fill underneath the staircase for support",
+                                "default": False
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["build_id", "start_x", "start_y", "start_z", "end_x", "end_y", "end_z", "block_type", "stair_type", "staircase_direction"]
+                    }
+                ),
+                Tool(
+                    name="add_build_task_prefab_window",
+                    description="Add a PREFAB_WINDOW task to a build queue",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            },
+                            "start_x": {
+                                "type": "integer",
+                                "description": "Starting X coordinate (east positive, west negative)"
+                            },
+                            "start_y": {
+                                "type": "integer",
+                                "description": "Starting Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "start_z": {
+                                "type": "integer",
+                                "description": "Starting Z coordinate (south positive, north negative)"
+                            },
+                            "end_x": {
+                                "type": "integer",
+                                "description": "Ending X coordinate (east positive, west negative)"
+                            },
+                            "end_z": {
+                                "type": "integer",
+                                "description": "Ending Z coordinate (south positive, north negative)"
+                            },
+                            "height": {
+                                "type": "integer",
+                                "description": "Height of the window pane wall in blocks",
+                                "minimum": 1
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Pane block type (e.g., 'minecraft:glass_pane', 'minecraft:iron_bars')",
+                                "default": "minecraft:glass_pane"
+                            },
+                            "waterlogged": {
+                                "type": "boolean",
+                                "description": "Whether the panes should be waterlogged",
+                                "default": False
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["build_id", "start_x", "start_y", "start_z", "end_x", "end_z", "height", "block_type"]
+                    }
+                ),
+                Tool(
+                    name="add_build_task_prefab_torch",
+                    description="Add a PREFAB_TORCH task to a build queue",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            },
+                            "x": {
+                                "type": "integer",
+                                "description": "X coordinate (east positive, west negative)"
+                            },
+                            "y": {
+                                "type": "integer",
+                                "description": "Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z": {
+                                "type": "integer",
+                                "description": "Z coordinate (south positive, north negative)"
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Torch type (e.g., 'minecraft:torch' for ground, 'minecraft:wall_torch' for wall-mounted, 'minecraft:soul_wall_torch', 'minecraft:redstone_wall_torch')",
+                                "default": "minecraft:wall_torch"
+                            },
+                            "facing": {
+                                "type": "string",
+                                "description": "For wall torches: direction the torch faces OUT from the wall (north/south/east/west). If not provided, auto-detects based on adjacent solid blocks.",
+                                "enum": ["north", "south", "east", "west"]
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["build_id", "x", "y", "z", "block_type"]
+                    }
+                ),
+                Tool(
+                    name="add_build_task_prefab_sign",
+                    description="Add a PREFAB_SIGN task to a build queue",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "build_id": {
+                                "type": "string",
+                                "description": "Build UUID"
+                            },
+                            "x": {
+                                "type": "integer",
+                                "description": "X coordinate (east positive, west negative)"
+                            },
+                            "y": {
+                                "type": "integer",
+                                "description": "Y coordinate (elevation: -64 to 320, sea level at 63)"
+                            },
+                            "z": {
+                                "type": "integer",
+                                "description": "Z coordinate (south positive, north negative)"
+                            },
+                            "block_type": {
+                                "type": "string",
+                                "description": "Sign type (e.g., 'minecraft:oak_wall_sign' for wall, 'minecraft:oak_sign' for standing, 'minecraft:birch_wall_sign', etc.)",
+                                "default": "minecraft:oak_wall_sign"
+                            },
+                            "front_lines": {
+                                "type": "array",
+                                "description": "Array of 0-4 text lines for the front of the sign",
+                                "items": {"type": "string"},
+                                "maxItems": 4
+                            },
+                            "back_lines": {
+                                "type": "array",
+                                "description": "Array of 0-4 text lines for the back of the sign (optional)",
+                                "items": {"type": "string"},
+                                "maxItems": 4
+                            },
+                            "facing": {
+                                "type": "string",
+                                "description": "For wall signs: direction the sign faces OUT from the wall (north/south/east/west). If not provided, auto-detects based on adjacent solid blocks.",
+                                "enum": ["north", "south", "east", "west"]
+                            },
+                            "rotation": {
+                                "type": "integer",
+                                "description": "For standing signs: rotation angle 0-15 (0=south, 4=west, 8=north, 12=east). Default: 0",
+                                "minimum": 0,
+                                "maximum": 15,
+                                "default": 0
+                            },
+                            "glowing": {
+                                "type": "boolean",
+                                "description": "Whether the sign text should glow (visible in darkness)",
+                                "default": False
+                            },
+                            "world": {
+                                "type": "string",
+                                "description": "World name (optional, defaults to minecraft:overworld)",
+                                "default": "minecraft:overworld"
+                            }
+                        },
+                        "required": ["build_id", "x", "y", "z", "block_type"]
                     }
                 ),
                 Tool(
@@ -934,6 +1328,27 @@ class MinecraftMCPServer:
                     return result.content
                 elif name == "add_build_task":
                     result = await self.add_build_task(**arguments)
+                    return result.content
+                elif name == "add_build_task_block_set":
+                    result = await self.add_build_task_block_set(**arguments)
+                    return result.content
+                elif name == "add_build_task_block_fill":
+                    result = await self.add_build_task_block_fill(**arguments)
+                    return result.content
+                elif name == "add_build_task_prefab_door":
+                    result = await self.add_build_task_prefab_door(**arguments)
+                    return result.content
+                elif name == "add_build_task_prefab_stairs":
+                    result = await self.add_build_task_prefab_stairs(**arguments)
+                    return result.content
+                elif name == "add_build_task_prefab_window":
+                    result = await self.add_build_task_prefab_window(**arguments)
+                    return result.content
+                elif name == "add_build_task_prefab_torch":
+                    result = await self.add_build_task_prefab_torch(**arguments)
+                    return result.content
+                elif name == "add_build_task_prefab_sign":
+                    result = await self.add_build_task_prefab_sign(**arguments)
                     return result.content
                 elif name == "execute_build":
                     result = await self.execute_build(**arguments)
@@ -1820,6 +2235,198 @@ class MinecraftMCPServer:
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Error connecting to Minecraft API: {str(e)}")]
             )
+
+    async def add_build_task_block_set(
+        self,
+        build_id: str,
+        start_x: int,
+        start_y: int,
+        start_z: int,
+        blocks: List[List[List[Optional[Dict[str, Any]]]]],
+        world: str = None,
+    ) -> CallToolResult:
+        """Add a BLOCK_SET task to a build queue."""
+        task_data = {
+            "start_x": start_x,
+            "start_y": start_y,
+            "start_z": start_z,
+            "blocks": blocks,
+        }
+        if world:
+            task_data["world"] = world
+        return await self.add_build_task(build_id=build_id, task_type="BLOCK_SET", task_data=task_data)
+
+    async def add_build_task_block_fill(
+        self,
+        build_id: str,
+        x1: int,
+        y1: int,
+        z1: int,
+        x2: int,
+        y2: int,
+        z2: int,
+        block_type: str,
+        world: str = None,
+    ) -> CallToolResult:
+        """Add a BLOCK_FILL task to a build queue."""
+        task_data = {
+            "x1": x1,
+            "y1": y1,
+            "z1": z1,
+            "x2": x2,
+            "y2": y2,
+            "z2": z2,
+            "block_type": block_type,
+        }
+        if world:
+            task_data["world"] = world
+        return await self.add_build_task(build_id=build_id, task_type="BLOCK_FILL", task_data=task_data)
+
+    async def add_build_task_prefab_door(
+        self,
+        build_id: str,
+        start_x: int,
+        start_y: int,
+        start_z: int,
+        facing: str,
+        block_type: str = "minecraft:oak_door",
+        width: int = 1,
+        hinge: str = "left",
+        double_doors: bool = False,
+        open: bool = False,
+        world: str = None,
+    ) -> CallToolResult:
+        """Add a PREFAB_DOOR task to a build queue."""
+        task_data = {
+            "start_x": start_x,
+            "start_y": start_y,
+            "start_z": start_z,
+            "facing": facing,
+            "block_type": block_type,
+            "width": width,
+            "hinge": hinge,
+            "double_doors": double_doors,
+            "open": open,
+        }
+        if world:
+            task_data["world"] = world
+        return await self.add_build_task(build_id=build_id, task_type="PREFAB_DOOR", task_data=task_data)
+
+    async def add_build_task_prefab_stairs(
+        self,
+        build_id: str,
+        start_x: int,
+        start_y: int,
+        start_z: int,
+        end_x: int,
+        end_y: int,
+        end_z: int,
+        staircase_direction: str,
+        block_type: str = "minecraft:stone",
+        stair_type: str = "minecraft:stone_stairs",
+        fill_support: bool = False,
+        world: str = None,
+    ) -> CallToolResult:
+        """Add a PREFAB_STAIRS task to a build queue."""
+        task_data = {
+            "start_x": start_x,
+            "start_y": start_y,
+            "start_z": start_z,
+            "end_x": end_x,
+            "end_y": end_y,
+            "end_z": end_z,
+            "block_type": block_type,
+            "stair_type": stair_type,
+            "staircase_direction": staircase_direction,
+            "fill_support": fill_support,
+        }
+        if world:
+            task_data["world"] = world
+        return await self.add_build_task(build_id=build_id, task_type="PREFAB_STAIRS", task_data=task_data)
+
+    async def add_build_task_prefab_window(
+        self,
+        build_id: str,
+        start_x: int,
+        start_y: int,
+        start_z: int,
+        end_x: int,
+        end_z: int,
+        height: int,
+        block_type: str = "minecraft:glass_pane",
+        waterlogged: bool = False,
+        world: str = None,
+    ) -> CallToolResult:
+        """Add a PREFAB_WINDOW task to a build queue."""
+        task_data = {
+            "start_x": start_x,
+            "start_y": start_y,
+            "start_z": start_z,
+            "end_x": end_x,
+            "end_z": end_z,
+            "height": height,
+            "block_type": block_type,
+            "waterlogged": waterlogged,
+        }
+        if world:
+            task_data["world"] = world
+        return await self.add_build_task(build_id=build_id, task_type="PREFAB_WINDOW", task_data=task_data)
+
+    async def add_build_task_prefab_torch(
+        self,
+        build_id: str,
+        x: int,
+        y: int,
+        z: int,
+        block_type: str = "minecraft:wall_torch",
+        facing: str = None,
+        world: str = None,
+    ) -> CallToolResult:
+        """Add a PREFAB_TORCH task to a build queue."""
+        task_data = {
+            "x": x,
+            "y": y,
+            "z": z,
+            "block_type": block_type,
+        }
+        if facing:
+            task_data["facing"] = facing
+        if world:
+            task_data["world"] = world
+        return await self.add_build_task(build_id=build_id, task_type="PREFAB_TORCH", task_data=task_data)
+
+    async def add_build_task_prefab_sign(
+        self,
+        build_id: str,
+        x: int,
+        y: int,
+        z: int,
+        block_type: str = "minecraft:oak_wall_sign",
+        front_lines: Optional[List[str]] = None,
+        back_lines: Optional[List[str]] = None,
+        facing: str = None,
+        rotation: int = 0,
+        glowing: bool = False,
+        world: str = None,
+    ) -> CallToolResult:
+        """Add a PREFAB_SIGN task to a build queue."""
+        task_data = {
+            "x": x,
+            "y": y,
+            "z": z,
+            "block_type": block_type,
+            "rotation": rotation,
+            "glowing": glowing,
+        }
+        if front_lines is not None:
+            task_data["front_lines"] = front_lines
+        if back_lines is not None:
+            task_data["back_lines"] = back_lines
+        if facing:
+            task_data["facing"] = facing
+        if world:
+            task_data["world"] = world
+        return await self.add_build_task(build_id=build_id, task_type="PREFAB_SIGN", task_data=task_data)
     
     async def add_build_task(self, build_id: str, task_type: str, task_data: Dict[str, Any]) -> CallToolResult:
         """Add a building task to a build queue."""
