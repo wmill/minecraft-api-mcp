@@ -37,7 +37,7 @@ public class PrefabEndpoint extends APIEndpoint{
                     ctx.json(Map.of(
                         "success", true,
                         "world", result.world(),
-                        "doors_placed", result.doorsPlaced(),
+                        "doors_placed", result.doors_placed(),
                         "facing", result.facing(),
                         "hinge", result.hinge(),
                         "open", result.open()
@@ -67,9 +67,9 @@ public class PrefabEndpoint extends APIEndpoint{
                     ctx.json(Map.of(
                         "success", true,
                         "world", result.world(),
-                        "blocks_placed", result.blocksPlaced(),
-                        "staircase_direction", result.staircaseDirection(),
-                        "fill_support", result.fillSupport()
+                        "blocks_placed", result.blocks_placed(),
+                        "staircase_direction", result.staircase_direction(),
+                        "fill_support", result.fill_support()
                     ));
                 }
             } catch (java.util.concurrent.TimeoutException e) {
@@ -96,7 +96,7 @@ public class PrefabEndpoint extends APIEndpoint{
                     ctx.json(Map.of(
                         "success", true,
                         "world", result.world(),
-                        "panes_placed", result.panesPlaced(),
+                        "panes_placed", result.panes_placed(),
                         "orientation", result.orientation(),
                         "waterlogged", result.waterlogged()
                     ));
@@ -126,12 +126,12 @@ public class PrefabEndpoint extends APIEndpoint{
                         "success", true,
                         "world", result.world(),
                         "position", result.position(),
-                        "block_type", result.blockType(),
-                        "wall_mounted", result.wallMounted()
+                        "block_type", result.block_type(),
+                        "wall_mounted", result.wall_mounted()
                     );
                     
                     // Add facing if it's a wall torch
-                    if (result.wallMounted() && result.facing() != null) {
+                    if (result.wall_mounted() && result.facing() != null) {
                         response = new java.util.HashMap<>(response);
                         response.put("facing", result.facing());
                     }
@@ -163,15 +163,15 @@ public class PrefabEndpoint extends APIEndpoint{
                         "success", true,
                         "world", result.world(),
                         "position", result.position(),
-                        "block_type", result.blockType(),
-                        "sign_type", result.signType(),
+                        "block_type", result.block_type(),
+                        "sign_type", result.sign_type(),
                         "glowing", result.glowing()
                     ));
                     
                     // Add facing or rotation based on sign type
-                    if ("wall".equals(result.signType()) && result.facing() != null) {
+                    if ("wall".equals(result.sign_type()) && result.facing() != null) {
                         response.put("facing", result.facing());
-                    } else if ("standing".equals(result.signType()) && result.rotation() != null) {
+                    } else if ("standing".equals(result.sign_type()) && result.rotation() != null) {
                         response.put("rotation", result.rotation());
                     }
                     

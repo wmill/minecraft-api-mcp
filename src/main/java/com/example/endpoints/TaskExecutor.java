@@ -1,9 +1,7 @@
 package com.example.endpoints;
 
 import com.example.buildtask.model.BuildTask;
-import com.example.buildtask.model.TaskType;
 import com.example.buildtask.service.TaskDataValidator;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
@@ -150,7 +148,7 @@ public class TaskExecutor {
                 .thenApply(result -> {
                     if (result.success()) {
                         return new TaskExecutionResult(true, null, 
-                            "Placed " + result.doorsPlaced() + " doors");
+                            "Placed " + result.doors_placed() + " doors");
                     } else {
                         return new TaskExecutionResult(false, result.error(), null);
                     }
@@ -172,7 +170,7 @@ public class TaskExecutor {
                 .thenApply(result -> {
                     if (result.success()) {
                         return new TaskExecutionResult(true, null, 
-                            "Placed " + result.blocksPlaced() + " stair blocks");
+                            "Placed " + result.blocks_placed() + " stair blocks");
                     } else {
                         return new TaskExecutionResult(false, result.error(), null);
                     }
@@ -194,7 +192,7 @@ public class TaskExecutor {
                 .thenApply(result -> {
                     if (result.success()) {
                         return new TaskExecutionResult(true, null, 
-                            "Placed " + result.panesPlaced() + " window panes");
+                            "Placed " + result.panes_placed() + " window panes");
                     } else {
                         return new TaskExecutionResult(false, result.error(), null);
                     }

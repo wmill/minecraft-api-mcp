@@ -357,7 +357,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 }
                 
                 // Validate coordinates
-                if (request.minX > request.maxX || request.minY > request.maxY || request.minZ > request.maxZ) {
+                if (request.min_x > request.max_x || request.min_y > request.max_y || request.min_z > request.max_z) {
                     ctx.status(400).json(Map.of("error", "Invalid coordinate range: min values must be <= max values"));
                     return;
                 }
@@ -378,7 +378,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
                             buildMap.put("completedAt", buildResult.build.getCompletedAt().toString());
                         }
 
-                        List<Map<String, Object>> taskMaps = buildResult.intersectingTasks.stream()
+                        List<Map<String, Object>> taskMaps = buildResult.intersecting_tasks.stream()
                             .map(task -> {
                                 Map<String, Object> taskMap = new LinkedHashMap<>();
                                 taskMap.put("id", task.getId().toString());
@@ -410,12 +410,12 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     "success", true,
                     "queryArea", Map.of(
                         "world", request.world,
-                        "minX", result.queryArea.getMinX(),
-                        "minY", result.queryArea.getMinY(),
-                        "minZ", result.queryArea.getMinZ(),
-                        "maxX", result.queryArea.getMaxX(),
-                        "maxY", result.queryArea.getMaxY(),
-                        "maxZ", result.queryArea.getMaxZ()
+                        "minX", result.query_area.getMinX(),
+                        "minY", result.query_area.getMinY(),
+                        "minZ", result.query_area.getMinZ(),
+                        "maxX", result.query_area.getMaxX(),
+                        "maxY", result.query_area.getMaxY(),
+                        "maxZ", result.query_area.getMaxZ()
                     ),
                     "build_count", result.getBuildCount(),
                     "total_task_count", result.getTotalTaskCount(),
@@ -423,8 +423,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 ));
                 
                 LOGGER.info("Location query returned {} builds in world {} for area ({},{},{}) to ({},{},{})", 
-                    result.getBuildCount(), request.world, request.minX, request.minY, request.minZ,
-                    request.maxX, request.maxY, request.maxZ);
+                    result.getBuildCount(), request.world, request.min_x, request.min_y, request.min_z,
+                    request.max_x, request.max_y, request.max_z);
                 
             } catch (IllegalArgumentException e) {
                 ctx.status(400).json(Map.of("error", e.getMessage()));

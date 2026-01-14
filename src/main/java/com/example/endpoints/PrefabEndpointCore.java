@@ -192,11 +192,11 @@ public class PrefabEndpointCore {
             default -> null;
         };
         if (staircaseDirection == null || !staircaseDirection.getAxis().isHorizontal()) {
-            future.complete(new StairResult(false, "staircaseDirection must be one of north, south, east, west", null, 0, null, false));
+            future.complete(new StairResult(false, "staircase_direction must be one of north, south, east, west", null, 0, null, false));
             return future;
         }
 
-        logger.info("Placing stair prefab in world {} from ({}, {}, {}) to ({}, {}, {}) staircaseDirection {}", 
+        logger.info("Placing stair prefab in world {} from ({}, {}, {}) to ({}, {}, {}) staircase_direction {}",
             worldKey.getValue(), request.start_x, request.start_y, request.start_z, request.end_x, request.end_y, request.end_z, staircaseDirection);
 
         // Execute on server thread
@@ -258,7 +258,7 @@ public class PrefabEndpointCore {
         }
 
         logger.info("Placing window pane wall in world {} from ({}, {}, {}) to ({}, {}, {}) height {}", 
-            worldKey.getValue(), request.start_x, request.start_y, request.start_z, request.end_x, request.start_y + request.height - 1, request.end_z);
+            worldKey.getValue(), request.start_x, request.start_y, request.start_z, request.end_x, request.start_y + request.height - 1, request.end_z, request.height);
 
         // Execute on server thread
         server.execute(() -> {
@@ -728,8 +728,8 @@ public class PrefabEndpointCore {
 }
 
 // Result classes for core operations
-record DoorResult(boolean success, String error, String world, int doorsPlaced, String facing, String hinge, boolean open) {}
-record StairResult(boolean success, String error, String world, int blocksPlaced, String staircaseDirection, boolean fillSupport) {}
-record WindowPaneResult(boolean success, String error, String world, int panesPlaced, String orientation, boolean waterlogged) {}
-record TorchResult(boolean success, String error, String world, String blockType, Map<String, Integer> position, boolean wallMounted, String facing) {}
-record SignResult(boolean success, String error, String world, Map<String, Integer> position, String blockType, String signType, String facing, Integer rotation, boolean glowing) {}
+record DoorResult(boolean success, String error, String world, int doors_placed, String facing, String hinge, boolean open) {}
+record StairResult(boolean success, String error, String world, int blocks_placed, String staircase_direction, boolean fill_support) {}
+record WindowPaneResult(boolean success, String error, String world, int panes_placed, String orientation, boolean waterlogged) {}
+record TorchResult(boolean success, String error, String world, String block_type, Map<String, Integer> position, boolean wall_mounted, String facing) {}
+record SignResult(boolean success, String error, String world, Map<String, Integer> position, String block_type, String sign_type, String facing, Integer rotation, boolean glowing) {}

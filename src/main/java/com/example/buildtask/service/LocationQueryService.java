@@ -39,20 +39,20 @@ public class LocationQueryService {
         }
 
         logger.info("Querying builds in world {} for area ({},{},{}) to ({},{},{})", 
-            request.world, request.minX, request.minY, request.minZ, 
-            request.maxX, request.maxY, request.maxZ);
+            request.world, request.min_x, request.min_y, request.min_z,
+            request.max_x, request.max_y, request.max_z);
 
         // Create bounding box for the query
         BoundingBox queryBox = new BoundingBox(
-            request.minX, request.minY, request.minZ,
-            request.maxX, request.maxY, request.maxZ
+            request.min_x, request.min_y, request.min_z,
+            request.max_x, request.max_y, request.max_z
         );
 
         // Find builds that intersect with the query area
         List<Build> intersectingBuilds = buildRepository.findByLocationIntersection(request.world, queryBox);
 
         // Filter by status if needed
-        if (!request.includeInProgress) {
+        if (!request.include_in_progress) {
             intersectingBuilds = intersectingBuilds.stream()
                 .filter(build -> build.getStatus() == com.example.buildtask.model.BuildStatus.COMPLETED)
                 .collect(Collectors.toList());
@@ -90,26 +90,26 @@ public class LocationQueryService {
      */
     public static class LocationQueryRequest {
         public String world = "minecraft:overworld";
-        public int minX, minY, minZ;
-        public int maxX, maxY, maxZ;
-        public boolean includeInProgress = false;
+        public int min_x, min_y, min_z;
+        public int max_x, max_y, max_z;
+        public boolean include_in_progress = false;
 
         public LocationQueryRequest() {}
 
-        public LocationQueryRequest(String world, int minX, int minY, int minZ, 
-                                  int maxX, int maxY, int maxZ, boolean includeInProgress) {
+        public LocationQueryRequest(String world, int min_x, int min_y, int min_z,
+                                    int max_x, int max_y, int max_z, boolean include_in_progress) {
             this.world = world;
-            this.minX = minX;
-            this.minY = minY;
-            this.minZ = minZ;
-            this.maxX = maxX;
-            this.maxY = maxY;
-            this.maxZ = maxZ;
-            this.includeInProgress = includeInProgress;
+            this.min_x = min_x;
+            this.min_y = min_y;
+            this.min_z = min_z;
+            this.max_x = max_x;
+            this.max_y = max_y;
+            this.max_z = max_z;
+            this.include_in_progress = include_in_progress;
         }
 
-        public LocationQueryRequest(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
-            this("minecraft:overworld", minX, minY, minZ, maxX, maxY, maxZ, false);
+        public LocationQueryRequest(int min_x, int min_y, int min_z, int max_x, int max_y, int max_z) {
+            this("minecraft:overworld", min_x, min_y, min_z, max_x, max_y, max_z, false);
         }
     }
 
@@ -118,11 +118,11 @@ public class LocationQueryService {
      */
     public static class BuildLocationResult {
         public final Build build;
-        public final List<BuildTask> intersectingTasks;
+        public final List<BuildTask> intersecting_tasks;
 
-        public BuildLocationResult(Build build, List<BuildTask> intersectingTasks) {
+        public BuildLocationResult(Build build, List<BuildTask> intersecting_tasks) {
             this.build = build;
-            this.intersectingTasks = intersectingTasks;
+            this.intersecting_tasks = intersecting_tasks;
         }
     }
 
@@ -131,11 +131,11 @@ public class LocationQueryService {
      */
     public static class LocationQueryResult {
         public final List<BuildLocationResult> builds;
-        public final BoundingBox queryArea;
+        public final BoundingBox query_area;
 
-        public LocationQueryResult(List<BuildLocationResult> builds, BoundingBox queryArea) {
+        public LocationQueryResult(List<BuildLocationResult> builds, BoundingBox query_area) {
             this.builds = builds;
-            this.queryArea = queryArea;
+            this.query_area = query_area;
         }
 
         public int getBuildCount() {
@@ -144,7 +144,7 @@ public class LocationQueryService {
 
         public int getTotalTaskCount() {
             return builds.stream()
-                .mapToInt(result -> result.intersectingTasks.size())
+                .mapToInt(result -> result.intersecting_tasks.size())
                 .sum();
         }
     }
