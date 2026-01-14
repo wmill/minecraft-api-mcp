@@ -33,6 +33,7 @@ from .prefabs import (
 
 from .builds import (
     handle_create_build,
+    handle_add_build_task,
     handle_add_build_task_block_set,
     handle_add_build_task_block_fill,
     handle_add_build_task_prefab_door,
@@ -73,6 +74,7 @@ __all__ = [
     "handle_place_sign",
     # Build handlers
     "handle_create_build",
+    "handle_add_build_task",
     "handle_add_build_task_block_set",
     "handle_add_build_task_block_fill",
     "handle_add_build_task_prefab_door",

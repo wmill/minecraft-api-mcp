@@ -14,6 +14,37 @@ from ..utils.formatting import (
 )
 
 
+async def handle_add_build_task(
+    api_client: MinecraftAPIClient,
+    **arguments
+) -> CallToolResult:
+    """
+    Deprecated handler for add_build_task tool.
+    
+    This tool is deprecated. Users should use the specific add_build_task_* tools instead.
+    
+    Args:
+        api_client: The Minecraft API client
+        **arguments: Any arguments (ignored)
+        
+    Returns:
+        CallToolResult with deprecation message
+    """
+    return CallToolResult(
+        content=[TextContent(
+            type="text",
+            text="❌ This tool is deprecated. Please use one of the following specific tools instead:\n"
+                 "- add_build_task_block_set: For setting blocks\n"
+                 "- add_build_task_block_fill: For filling areas\n"
+                 "- add_build_task_prefab_door: For placing doors\n"
+                 "- add_build_task_prefab_stairs: For placing stairs\n"
+                 "- add_build_task_prefab_window: For placing windows\n"
+                 "- add_build_task_prefab_torch: For placing torches\n"
+                 "- add_build_task_prefab_sign: For placing signs"
+        )]
+    )
+
+
 async def handle_create_build(
     api_client: MinecraftAPIClient,
     name: str,

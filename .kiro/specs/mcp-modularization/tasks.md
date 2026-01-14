@@ -143,15 +143,15 @@ This plan transforms the monolithic `minecraft_mcp.py` (2700+ lines) into a well
     - Use formatting utilities for responses
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.2_
 
-- [ ] 7. Create tool registry
-  - [ ] 7.1 Create `minecraft_mcp/tools/registry.py`
+- [x] 7. Create tool registry
+  - [x] 7.1 Create `minecraft_mcp/tools/registry.py`
     - Import all handler modules
     - Create TOOL_HANDLERS dictionary mapping tool names to handler functions
     - Implement `get_handler(tool_name)` function
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
-- [ ] 8. Create main server class
-  - [ ] 8.1 Create `minecraft_mcp/server.py`
+- [x] 8. Create main server class
+  - [x] 8.1 Create `minecraft_mcp/server.py`
     - Create MinecraftMCPServer class
     - Initialize with api_base, create API client
     - Implement `setup_handlers()` to register list_tools and call_tool
@@ -159,7 +159,7 @@ This plan transforms the monolithic `minecraft_mcp.py` (2700+ lines) into a well
     - Implement call_tool handler using tool registry
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 10.2_
   
-  - [ ] 8.2 Add transport methods to server
+  - [x] 8.2 Add transport methods to server
     - Implement `run_stdio()` method
     - Implement `create_sse_app()` method
     - Implement `run()` method (defaults to stdio)
