@@ -98,7 +98,7 @@ public class BuildService {
         int taskOrder = taskRepository.getNextTaskOrder(buildId);
         
         // Create task
-        BuildTask task = new BuildTask(buildId, taskOrder, request.taskType, request.taskData);
+        BuildTask task = new BuildTask(buildId, taskOrder, request.task_type, request.task_data);
         
         logger.info("Adding task {} of type {} to build {}", task.getId(), task.getTaskType(), buildId);
         
@@ -284,15 +284,15 @@ public class BuildService {
      * Request object for adding a task to a build.
      */
     public static class AddTaskRequest {
-        public com.example.buildtask.model.TaskType taskType;
-        public com.fasterxml.jackson.databind.JsonNode taskData;
+        public com.example.buildtask.model.TaskType task_type;
+        public com.fasterxml.jackson.databind.JsonNode task_data;
 
         public AddTaskRequest() {}
 
-        public AddTaskRequest(com.example.buildtask.model.TaskType taskType, 
-                             com.fasterxml.jackson.databind.JsonNode taskData) {
-            this.taskType = taskType;
-            this.taskData = taskData;
+        public AddTaskRequest(com.example.buildtask.model.TaskType task_type,
+                             com.fasterxml.jackson.databind.JsonNode task_data) {
+            this.task_type = task_type;
+            this.task_data = task_data;
         }
     }
 

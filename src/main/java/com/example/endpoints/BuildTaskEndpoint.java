@@ -50,7 +50,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
                         "description", build.getDescription() != null ? build.getDescription() : "",
                         "world", build.getWorld(),
                         "status", build.getStatus().toString(),
-                        "createdAt", build.getCreatedAt().toString()
+                        "created_at", build.getCreatedAt().toString()
                     )
                 ));
                 
@@ -95,9 +95,9 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 buildJson.put("description", Objects.toString(build.getDescription(), ""));
                 buildJson.put("world", build.getWorld());
                 buildJson.put("status", build.getStatus().toString());
-                buildJson.put("createdAt", build.getCreatedAt().toString());
+                buildJson.put("created_at", build.getCreatedAt().toString());
                 if (build.getCompletedAt() != null) {
-                    buildJson.put("completedAt", build.getCompletedAt().toString());
+                    buildJson.put("completed_at", build.getCompletedAt().toString());
                 }
 
                 // Also fetch tasks for this build
@@ -106,16 +106,16 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     .map(task -> {
                         Map<String, Object> taskMap = new LinkedHashMap<>();
                         taskMap.put("id", task.getId().toString());
-                        taskMap.put("buildId", task.getBuildId().toString());
-                        taskMap.put("taskOrder", task.getTaskOrder());
-                        taskMap.put("taskType", task.getTaskType().toString());
+                        taskMap.put("build_id", task.getBuildId().toString());
+                        taskMap.put("task_order", task.getTaskOrder());
+                        taskMap.put("task_type", task.getTaskType().toString());
                         taskMap.put("status", task.getStatus().toString());
-                        taskMap.put("taskData", task.getTaskData());
+                        taskMap.put("task_data", task.getTaskData());
                         if (task.getExecutedAt() != null) {
-                            taskMap.put("executedAt", task.getExecutedAt().toString());
+                            taskMap.put("executed_at", task.getExecutedAt().toString());
                         }
                         if (task.getErrorMessage() != null) {
-                            taskMap.put("errorMessage", task.getErrorMessage());
+                            taskMap.put("error_message", task.getErrorMessage());
                         }
                         return taskMap;
                     })
@@ -152,11 +152,11 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 BuildService.AddTaskRequest request = ctx.bodyAsClass(BuildService.AddTaskRequest.class);
                 
                 // Validate request
-                if (request.taskType == null) {
+                if (request.task_type == null) {
                     ctx.status(400).json(Map.of("error", "Task type is required"));
                     return;
                 }
-                if (request.taskData == null) {
+                if (request.task_data == null) {
                     ctx.status(400).json(Map.of("error", "Task data is required"));
                     return;
                 }
@@ -209,16 +209,16 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     .map(task -> {
                         Map<String, Object> taskMap = new LinkedHashMap<>();
                         taskMap.put("id", task.getId().toString());
-                        taskMap.put("buildId", task.getBuildId().toString());
-                        taskMap.put("taskOrder", task.getTaskOrder());
-                        taskMap.put("taskType", task.getTaskType().toString());
+                        taskMap.put("build_id", task.getBuildId().toString());
+                        taskMap.put("task_order", task.getTaskOrder());
+                        taskMap.put("task_type", task.getTaskType().toString());
                         taskMap.put("status", task.getStatus().toString());
-                        taskMap.put("taskData", task.getTaskData());
+                        taskMap.put("task_data", task.getTaskData());
                         if (task.getExecutedAt() != null) {
-                            taskMap.put("executedAt", task.getExecutedAt().toString());
+                            taskMap.put("executed_at", task.getExecutedAt().toString());
                         }
                         if (task.getErrorMessage() != null) {
-                            taskMap.put("errorMessage", task.getErrorMessage());
+                            taskMap.put("error_message", task.getErrorMessage());
                         }
                         return taskMap;
                     })
@@ -382,17 +382,17 @@ public class BuildTaskEndpoint extends APIEndpoint {
                             .map(task -> {
                                 Map<String, Object> taskMap = new LinkedHashMap<>();
                                 taskMap.put("id", task.getId().toString());
-                                taskMap.put("taskOrder", task.getTaskOrder());
-                                taskMap.put("taskType", task.getTaskType().toString());
+                                taskMap.put("task_order", task.getTaskOrder());
+                                taskMap.put("task_type", task.getTaskType().toString());
                                 taskMap.put("status", task.getStatus().toString());
                                 if (task.getCoordinates() != null) {
                                     taskMap.put("coordinates", Map.of(
-                                        "minX", task.getCoordinates().getMinX(),
-                                        "minY", task.getCoordinates().getMinY(),
-                                        "minZ", task.getCoordinates().getMinZ(),
-                                        "maxX", task.getCoordinates().getMaxX(),
-                                        "maxY", task.getCoordinates().getMaxY(),
-                                        "maxZ", task.getCoordinates().getMaxZ()
+                                        "min_x", task.getCoordinates().getMinX(),
+                                        "min_y", task.getCoordinates().getMinY(),
+                                        "min_z", task.getCoordinates().getMinZ(),
+                                        "max_x", task.getCoordinates().getMaxX(),
+                                        "max_y", task.getCoordinates().getMaxY(),
+                                        "max_z", task.getCoordinates().getMaxZ()
                                     ));
                                 }
                                 return taskMap;
@@ -408,14 +408,14 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 
                 ctx.json(Map.of(
                     "success", true,
-                    "queryArea", Map.of(
+                    "query_area", Map.of(
                         "world", request.world,
-                        "minX", result.query_area.getMinX(),
-                        "minY", result.query_area.getMinY(),
-                        "minZ", result.query_area.getMinZ(),
-                        "maxX", result.query_area.getMaxX(),
-                        "maxY", result.query_area.getMaxY(),
-                        "maxZ", result.query_area.getMaxZ()
+                        "min_x", result.query_area.getMinX(),
+                        "min_y", result.query_area.getMinY(),
+                        "min_z", result.query_area.getMinZ(),
+                        "max_x", result.query_area.getMaxX(),
+                        "max_y", result.query_area.getMaxY(),
+                        "max_z", result.query_area.getMaxZ()
                     ),
                     "build_count", result.getBuildCount(),
                     "total_task_count", result.getTotalTaskCount(),

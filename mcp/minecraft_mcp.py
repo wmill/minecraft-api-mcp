@@ -1808,7 +1808,7 @@ class MinecraftMCPServer:
                                  f"Description: {build.get('description', 'No description')}\n"
                                  f"World: {build['world']}\n"
                                  f"Status: {build['status']}\n"
-                                 f"Created: {build['createdAt']}"
+                                 f"Created: {build['created_at']}"
                         )]
                     )
                 else:
@@ -1845,7 +1845,7 @@ class MinecraftMCPServer:
                             text=f"✅ Successfully added {task_type} task to build\n"
                                  f"Task ID: {task['id']}\n"
                                  f"Build ID: {build_id}\n"
-                                 f"Task Order: {task.get('taskOrder', 'N/A')}\n"
+                                 f"Task Order: {task.get('task_order', 'N/A')}\n"
                                  f"Status: {task['status']}"
                         )]
                     )
@@ -1896,12 +1896,12 @@ class MinecraftMCPServer:
         """Find builds that intersect with a specified area."""
         try:
             payload = {
-                "minX": min_x,
-                "minY": min_y,
-                "minZ": min_z,
-                "maxX": max_x,
-                "maxY": max_y,
-                "maxZ": max_z,
+                "min_x": min_x,
+                "min_y": min_y,
+                "min_z": min_z,
+                "max_x": max_x,
+                "max_y": max_y,
+                "max_z": max_z,
                 "include_in_progress": include_in_progress
             }
             if world:
@@ -1935,9 +1935,9 @@ class MinecraftMCPServer:
                         result_text += f"**{build['name']}** (ID: {build['id']})\n"
                         result_text += f"- Status: {build['status']}\n"
                         result_text += f"- Description: {build.get('description', 'No description')}\n"
-                        result_text += f"- Created: {build.get('createdAt', 'N/A')}\n"
-                        if build.get('completedAt'):
-                            result_text += f"- Completed: {build['completedAt']}\n"
+                        result_text += f"- Created: {build.get('created_at', 'N/A')}\n"
+                        if build.get('completed_at'):
+                            result_text += f"- Completed: {build['completed_at']}\n"
                         result_text += f"- Intersecting Tasks: {len(intersecting_tasks)}\n"
                         result_text += f"- World: {build['world']}\n\n"
 
@@ -1975,9 +1975,9 @@ class MinecraftMCPServer:
                     result_text += f"- Description: {build.get('description', 'No description')}\n"
                     result_text += f"- Status: {build['status']}\n"
                     result_text += f"- World: {build['world']}\n"
-                    result_text += f"- Created: {build.get('createdAt', 'N/A')}\n"
-                    if build.get('completedAt'):
-                        result_text += f"- Completed: {build['completedAt']}\n"
+                    result_text += f"- Created: {build.get('created_at', 'N/A')}\n"
+                    if build.get('completed_at'):
+                        result_text += f"- Completed: {build['completed_at']}\n"
 
                     result_text += f"\n**Task Queue ({len(tasks)} tasks):**\n"
                     if not tasks:
@@ -1985,9 +1985,9 @@ class MinecraftMCPServer:
                     else:
                         for task in tasks:
                             status_icon = "✅" if task['status'] == 'completed' else "❌" if task['status'] == 'failed' else "⏳"
-                            result_text += f"{status_icon} Task {task.get('taskOrder', 'N/A')}: {task.get('taskType', 'unknown')} - {task['status']}\n"
-                            if task.get('errorMessage'):
-                                result_text += f"   Error: {task['errorMessage']}\n"
+                            result_text += f"{status_icon} Task {task.get('task_order', 'N/A')}: {task.get('task_type', 'unknown')} - {task['status']}\n"
+                            if task.get('error_message'):
+                                result_text += f"   Error: {task['error_message']}\n"
 
                     return CallToolResult(
                         content=[TextContent(type="text", text=result_text)]
