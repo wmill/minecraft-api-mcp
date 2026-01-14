@@ -2480,11 +2480,10 @@ class MinecraftMCPServer:
                     return CallToolResult(
                         content=[TextContent(
                             type="text",
-                            text=f"✅ Successfully executed build {build_id}\n"
-                                 f"Tasks executed: {result['tasks_executed']}\n"
-                                 f"Tasks failed: {result['tasks_failed']}\n"
-                                 f"Build status: {result.get('build_status', 'completed')}\n"
-                                 f"Execution time: {result.get('execution_time', 'N/A')}"
+                            text=f"Executed build {build_id}\n"
+                                 f"Success: {result['success']}\n"
+                                 f"Message: {result['message']}\n"
+                                 f"Build status: {result['status']}\n"
                         )]
                     )
                 else:
