@@ -1874,10 +1874,10 @@ class MinecraftMCPServer:
                         content=[TextContent(
                             type="text",
                             text=f"✅ Successfully executed build {build_id}\n"
-                                 f"Tasks executed: {result['tasksExecuted']}\n"
-                                 f"Tasks failed: {result['tasksFailed']}\n"
-                                 f"Build status: {result.get('buildStatus', 'completed')}\n"
-                                 f"Execution time: {result.get('executionTime', 'N/A')}"
+                                 f"Tasks executed: {result['tasks_executed']}\n"
+                                 f"Tasks failed: {result['tasks_failed']}\n"
+                                 f"Build status: {result.get('build_status', 'completed')}\n"
+                                 f"Execution time: {result.get('execution_time', 'N/A')}"
                         )]
                     )
                 else:

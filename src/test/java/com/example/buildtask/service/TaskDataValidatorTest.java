@@ -45,14 +45,14 @@ class TaskDataValidatorTest {
     void testValidBlockSetData() throws Exception {
         String validData = """
             {
-                "startX": 0,
-                "startY": 64,
-                "startZ": 0,
+                "start_x": 0,
+                "start_y": 64,
+                "start_z": 0,
                 "blocks": [
                     [
                         [
                             {
-                                "blockName": "minecraft:stone"
+                                "block_name": "minecraft:stone"
                             }
                         ]
                     ]
@@ -75,7 +75,7 @@ class TaskDataValidatorTest {
                     [
                         [
                             {
-                                "blockName": "minecraft:stone"
+                                "block_name": "minecraft:stone"
                             }
                         ]
                     ]
@@ -87,9 +87,9 @@ class TaskDataValidatorTest {
         TaskDataValidator.ValidationResult result = validator.validateTaskData(TaskType.BLOCK_SET, data);
         
         assertFalse(result.isValid());
-        assertTrue(result.getErrorMessage().contains("startX is required"));
-        assertTrue(result.getErrorMessage().contains("startY is required"));
-        assertTrue(result.getErrorMessage().contains("startZ is required"));
+        assertTrue(result.getErrorMessage().contains("start_x is required"));
+        assertTrue(result.getErrorMessage().contains("start_y is required"));
+        assertTrue(result.getErrorMessage().contains("start_z is required"));
     }
 
     @Test
@@ -102,7 +102,7 @@ class TaskDataValidatorTest {
                 "x2": 10,
                 "y2": 74,
                 "z2": 10,
-                "blockType": "minecraft:stone"
+                "block_type": "minecraft:stone"
             }
             """;
         JsonNode data = objectMapper.readTree(validData);
@@ -129,7 +129,7 @@ class TaskDataValidatorTest {
         TaskDataValidator.ValidationResult result = validator.validateTaskData(TaskType.BLOCK_FILL, data);
         
         assertFalse(result.isValid());
-        assertTrue(result.getErrorMessage().contains("blockType is required"));
+        assertTrue(result.getErrorMessage().contains("block_type is required"));
     }
 
     @Test
@@ -140,7 +140,7 @@ class TaskDataValidatorTest {
                 "startY": 64,
                 "startZ": 0,
                 "facing": "north",
-                "blockType": "minecraft:oak_door"
+                "block_type": "minecraft:oak_door"
             }
             """;
         JsonNode data = objectMapper.readTree(validData);
@@ -154,11 +154,11 @@ class TaskDataValidatorTest {
     void testInvalidDoorDataBadFacing() throws Exception {
         String invalidData = """
             {
-                "startX": 0,
-                "startY": 64,
-                "startZ": 0,
+                "start_x": 0,
+                "start_y": 64,
+                "start_z": 0,
                 "facing": "invalid",
-                "blockType": "minecraft:oak_door"
+                "block_type": "minecraft:oak_door"
             }
             """;
         JsonNode data = objectMapper.readTree(invalidData);
@@ -176,7 +176,7 @@ class TaskDataValidatorTest {
                 "x": 0,
                 "y": 64,
                 "z": 0,
-                "blockType": "minecraft:torch"
+                "block_type": "minecraft:torch"
             }
             """;
         JsonNode data = objectMapper.readTree(validData);
@@ -193,8 +193,8 @@ class TaskDataValidatorTest {
                 "x": 0,
                 "y": 64,
                 "z": 0,
-                "blockType": "minecraft:oak_sign",
-                "frontLines": ["Hello", "World"],
+                "block_type": "minecraft:oak_sign",
+                "front_lines": ["Hello", "World"],
                 "rotation": 8
             }
             """;
@@ -212,8 +212,8 @@ class TaskDataValidatorTest {
                 "x": 0,
                 "y": 64,
                 "z": 0,
-                "blockType": "minecraft:oak_sign",
-                "frontLines": ["Line1", "Line2", "Line3", "Line4", "Line5"]
+                "block_type": "minecraft:oak_sign",
+                "front_lines": ["Line1", "Line2", "Line3", "Line4", "Line5"]
             }
             """;
         JsonNode data = objectMapper.readTree(invalidData);
@@ -234,7 +234,7 @@ class TaskDataValidatorTest {
                 "x2": 10,
                 "y2": 74,
                 "z2": 10,
-                "blockType": "invalid_identifier"
+                "block_type": "invalid_identifier"
             }
             """;
         JsonNode data = objectMapper.readTree(invalidData);
@@ -242,7 +242,7 @@ class TaskDataValidatorTest {
         TaskDataValidator.ValidationResult result = validator.validateTaskData(TaskType.BLOCK_FILL, data);
         
         assertFalse(result.isValid());
-        assertTrue(result.getErrorMessage().contains("blockType must be a valid block identifier"));
+        assertTrue(result.getErrorMessage().contains("block_type must be a valid block identifier"));
     }
 
     @Test

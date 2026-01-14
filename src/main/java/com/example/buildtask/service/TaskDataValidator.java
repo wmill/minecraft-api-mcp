@@ -56,14 +56,14 @@ public class TaskDataValidator {
         List<String> errors = new ArrayList<>();
 
         // Check required fields
-        if (!data.has("startX") || !data.get("startX").isInt()) {
-            errors.add("startX is required and must be an integer");
+        if (!data.has("start_x") || !data.get("start_x").isInt()) {
+            errors.add("start_x is required and must be an integer");
         }
-        if (!data.has("startY") || !data.get("startY").isInt()) {
-            errors.add("startY is required and must be an integer");
+        if (!data.has("start_y") || !data.get("start_y").isInt()) {
+            errors.add("start_y is required and must be an integer");
         }
-        if (!data.has("startZ") || !data.get("startZ").isInt()) {
-            errors.add("startZ is required and must be an integer");
+        if (!data.has("start_z") || !data.get("start_z").isInt()) {
+            errors.add("start_z is required and must be an integer");
         }
         if (!data.has("blocks") || !data.get("blocks").isArray()) {
             errors.add("blocks is required and must be a 3D array");
@@ -111,13 +111,13 @@ public class TaskDataValidator {
             errors.add("z2 is required and must be an integer");
         }
 
-        // Check required blockType field
-        if (!data.has("blockType") || !data.get("blockType").isTextual() || data.get("blockType").asText().trim().isEmpty()) {
-            errors.add("blockType is required and must be a non-empty string");
+        // Check required block_type field
+        if (!data.has("block_type") || !data.get("block_type").isTextual() || data.get("block_type").asText().trim().isEmpty()) {
+            errors.add("block_type is required and must be a non-empty string");
         } else {
-            String blockType = data.get("blockType").asText();
-            if (!isValidBlockIdentifier(blockType)) {
-                errors.add("blockType must be a valid block identifier (e.g., 'minecraft:stone')");
+            String block_type = data.get("block_type").asText();
+            if (!isValidBlockIdentifier(block_type)) {
+                errors.add("block_type must be a valid block identifier (e.g., 'minecraft:stone')");
             }
         }
 
@@ -136,14 +136,14 @@ public class TaskDataValidator {
         List<String> errors = new ArrayList<>();
 
         // Check required coordinate fields
-        if (!data.has("startX") || !data.get("startX").isInt()) {
-            errors.add("startX is required and must be an integer");
+        if (!data.has("start_x") || !data.get("start_x").isInt()) {
+            errors.add("start_x is required and must be an integer");
         }
-        if (!data.has("startY") || !data.get("startY").isInt()) {
-            errors.add("startY is required and must be an integer");
+        if (!data.has("start_y") || !data.get("start_y").isInt()) {
+            errors.add("start_y is required and must be an integer");
         }
-        if (!data.has("startZ") || !data.get("startZ").isInt()) {
-            errors.add("startZ is required and must be an integer");
+        if (!data.has("start_z") || !data.get("start_z").isInt()) {
+            errors.add("start_z is required and must be an integer");
         }
 
         // Check required facing field
@@ -156,13 +156,13 @@ public class TaskDataValidator {
             }
         }
 
-        // Check required blockType field
-        if (!data.has("blockType") || !data.get("blockType").isTextual() || data.get("blockType").asText().trim().isEmpty()) {
-            errors.add("blockType is required and must be a non-empty string");
+        // Check required block_type field
+        if (!data.has("block_type") || !data.get("block_type").isTextual() || data.get("block_type").asText().trim().isEmpty()) {
+            errors.add("block_type is required and must be a non-empty string");
         } else {
-            String blockType = data.get("blockType").asText();
-            if (!isValidBlockIdentifier(blockType)) {
-                errors.add("blockType must be a valid block identifier (e.g., 'minecraft:oak_door')");
+            String block_type = data.get("block_type").asText();
+            if (!isValidBlockIdentifier(block_type)) {
+                errors.add("block_type must be a valid block identifier (e.g., 'minecraft:oak_door')");
             }
         }
 
@@ -176,8 +176,8 @@ public class TaskDataValidator {
         if (data.has("open") && !data.get("open").isBoolean()) {
             errors.add("open must be a boolean if provided");
         }
-        if (data.has("doubleDoors") && !data.get("doubleDoors").isBoolean()) {
-            errors.add("doubleDoors must be a boolean if provided");
+        if (data.has("double_doors") && !data.get("double_doors").isBoolean()) {
+            errors.add("double_doors must be a boolean if provided");
         }
 
         return errors.isEmpty() ? ValidationResult.success() : ValidationResult.failure(String.join("; ", errors));
@@ -190,36 +190,36 @@ public class TaskDataValidator {
         List<String> errors = new ArrayList<>();
 
         // Check required coordinate fields
-        String[] requiredCoords = {"startX", "startY", "startZ", "endX", "endY", "endZ"};
+        String[] requiredCoords = {"start_x", "start_y", "start_z", "end_x", "end_y", "end_z"};
         for (String coord : requiredCoords) {
             if (!data.has(coord) || !data.get(coord).isInt()) {
                 errors.add(coord + " is required and must be an integer");
             }
         }
 
-        // Check required blockType field
-        if (!data.has("blockType") || !data.get("blockType").isTextual() || data.get("blockType").asText().trim().isEmpty()) {
-            errors.add("blockType is required and must be a non-empty string");
+        // Check required block_type field
+        if (!data.has("block_type") || !data.get("block_type").isTextual() || data.get("block_type").asText().trim().isEmpty()) {
+            errors.add("block_type is required and must be a non-empty string");
         }
 
-        // Check required stairType field
-        if (!data.has("stairType") || !data.get("stairType").isTextual() || data.get("stairType").asText().trim().isEmpty()) {
-            errors.add("stairType is required and must be a non-empty string");
+        // Check required stair_type field
+        if (!data.has("stair_type") || !data.get("stair_type").isTextual() || data.get("stair_type").asText().trim().isEmpty()) {
+            errors.add("stair_type is required and must be a non-empty string");
         }
 
-        // Check required staircaseDirection field
-        if (!data.has("staircaseDirection") || !data.get("staircaseDirection").isTextual()) {
-            errors.add("staircaseDirection is required and must be a string");
+        // Check required staircase_direction field
+        if (!data.has("staircase_direction") || !data.get("staircase_direction").isTextual()) {
+            errors.add("staircase_direction is required and must be a string");
         } else {
-            String direction = data.get("staircaseDirection").asText().toLowerCase();
+            String direction = data.get("staircase_direction").asText().toLowerCase();
             if (!List.of("north", "south", "east", "west").contains(direction)) {
-                errors.add("staircaseDirection must be one of: north, south, east, west");
+                errors.add("staircase_direction must be one of: north, south, east, west");
             }
         }
 
-        // Validate optional fillSupport field
-        if (data.has("fillSupport") && !data.get("fillSupport").isBoolean()) {
-            errors.add("fillSupport must be a boolean if provided");
+        // Validate optional fill_support field
+        if (data.has("fill_support") && !data.get("fill_support").isBoolean()) {
+            errors.add("fill_support must be a boolean if provided");
         }
 
         return errors.isEmpty() ? ValidationResult.success() : ValidationResult.failure(String.join("; ", errors));
@@ -232,7 +232,7 @@ public class TaskDataValidator {
         List<String> errors = new ArrayList<>();
 
         // Check required coordinate fields
-        String[] requiredCoords = {"startX", "startY", "startZ", "endX", "endZ"};
+        String[] requiredCoords = {"start_x", "start_y", "start_z", "end_x", "end_z"};
         for (String coord : requiredCoords) {
             if (!data.has(coord) || !data.get(coord).isInt()) {
                 errors.add(coord + " is required and must be an integer");
@@ -244,20 +244,20 @@ public class TaskDataValidator {
             errors.add("height is required and must be a positive integer");
         }
 
-        // Check required blockType field
-        if (!data.has("blockType") || !data.get("blockType").isTextual() || data.get("blockType").asText().trim().isEmpty()) {
-            errors.add("blockType is required and must be a non-empty string");
+        // Check required block_type field
+        if (!data.has("block_type") || !data.get("block_type").isTextual() || data.get("block_type").asText().trim().isEmpty()) {
+            errors.add("block_type is required and must be a non-empty string");
         }
 
         // Validate wall alignment (must be north-south or east-west)
-        if (data.has("startX") && data.has("startZ") && data.has("endX") && data.has("endZ")) {
-            int startX = data.get("startX").asInt();
-            int startZ = data.get("startZ").asInt();
-            int endX = data.get("endX").asInt();
-            int endZ = data.get("endZ").asInt();
+        if (data.has("start_x") && data.has("start_z") && data.has("end_x") && data.has("end_z")) {
+            int start_x = data.get("start_x").asInt();
+            int start_z = data.get("start_z").asInt();
+            int end_x = data.get("end_x").asInt();
+            int end_z = data.get("end_z").asInt();
 
-            boolean isEastWest = startZ == endZ;
-            boolean isNorthSouth = startX == endX;
+            boolean isEastWest = start_z == end_z;
+            boolean isNorthSouth = start_x == end_x;
 
             if (!isEastWest && !isNorthSouth) {
                 errors.add("Window pane wall must be aligned north-south or east-west");
@@ -289,9 +289,9 @@ public class TaskDataValidator {
             errors.add("z is required and must be an integer");
         }
 
-        // Check required blockType field
-        if (!data.has("blockType") || !data.get("blockType").isTextual() || data.get("blockType").asText().trim().isEmpty()) {
-            errors.add("blockType is required and must be a non-empty string");
+        // Check required block_type field
+        if (!data.has("block_type") || !data.get("block_type").isTextual() || data.get("block_type").asText().trim().isEmpty()) {
+            errors.add("block_type is required and must be a non-empty string");
         }
 
         // Validate optional facing field for wall torches
@@ -326,24 +326,24 @@ public class TaskDataValidator {
             errors.add("z is required and must be an integer");
         }
 
-        // Check required blockType field
-        if (!data.has("blockType") || !data.get("blockType").isTextual() || data.get("blockType").asText().trim().isEmpty()) {
-            errors.add("blockType is required and must be a non-empty string");
+        // Check required block_type field
+        if (!data.has("block_type") || !data.get("block_type").isTextual() || data.get("block_type").asText().trim().isEmpty()) {
+            errors.add("block_type is required and must be a non-empty string");
         }
 
         // Validate optional text fields
-        if (data.has("frontLines")) {
-            if (!data.get("frontLines").isArray()) {
-                errors.add("frontLines must be an array if provided");
-            } else if (data.get("frontLines").size() > 4) {
-                errors.add("frontLines can have maximum 4 lines");
+        if (data.has("front_lines")) {
+            if (!data.get("front_lines").isArray()) {
+                errors.add("front_lines must be an array if provided");
+            } else if (data.get("front_lines").size() > 4) {
+                errors.add("front_lines can have maximum 4 lines");
             }
         }
-        if (data.has("backLines")) {
-            if (!data.get("backLines").isArray()) {
-                errors.add("backLines must be an array if provided");
-            } else if (data.get("backLines").size() > 4) {
-                errors.add("backLines can have maximum 4 lines");
+        if (data.has("back_lines")) {
+            if (!data.get("back_lines").isArray()) {
+                errors.add("back_lines must be an array if provided");
+            } else if (data.get("back_lines").size() > 4) {
+                errors.add("back_lines can have maximum 4 lines");
             }
         }
 
@@ -417,12 +417,12 @@ public class TaskDataValidator {
     private void validateBlockData(JsonNode blockData, int x, int y, int z, List<String> errors) {
         String position = "[" + x + "][" + y + "][" + z + "]";
         
-        if (!blockData.has("blockName") || !blockData.get("blockName").isTextual()) {
-            errors.add("blocks" + position + ".blockName is required and must be a string");
+        if (!blockData.has("block_name") || !blockData.get("block_name").isTextual()) {
+            errors.add("blocks" + position + ".block_name is required and must be a string");
         } else {
-            String blockName = blockData.get("blockName").asText();
-            if (!isValidBlockIdentifier(blockName)) {
-                errors.add("blocks" + position + ".blockName must be a valid block identifier");
+            String block_name = blockData.get("block_name").asText();
+            if (!isValidBlockIdentifier(block_name)) {
+                errors.add("blocks" + position + ".block_name must be a valid block identifier");
             }
         }
         
