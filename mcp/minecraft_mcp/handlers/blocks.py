@@ -1,0 +1,247 @@
+"""
+Block-related tool handlers for the Minecraft MCP server.
+
+Handles tools for block manipulation, querying, and heightmaps.
+"""
+
+from typing import Any, Dict, List, Optional
+from mcp.types import CallToolResult, TextContent
+
+from ..client.minecraft_api import MinecraftAPIClient
+from ..utils.formatting import (
+    format_success_response,
+    format_error_response,
+    format_list_with_limit,
+    format_entity_info,
+    format_block_counts,
+    format_coordinate_range
+)
+
+
+async def handle_get_blocks(api_client: MinecraftAPIClient, **arguments) -> CallToolResult:
+    """
+    Get list of all available block types.
+    
+    Args:
+        api_client: The Minecraft API client
+        **arguments: Tool arguments (none for this tool)
+        
+    Returns:
+        CallToolResult with formatted block list
+    """
+    try:
+        result = await api_client.get_blocks()
+        
+        response_text = f"**Available Block Types ({len(result)} total):**\n"
+        response_text += format_list_with_limit(result, limit=20, item_formatter=format_entity_info)
+        
+        return format_success_response(response_text)
+    except Exception as e:
+        return format_error_response(e, "getting blocks")
+
+
+async def handle_set_blocks(
+    api_client: MinecraftAPIClient,
+    start_x: int,
+    start_y: int,
+    start_z: int,
+    blocks: List[List[List[Optional[Dict[str, Any]]]]],
+    world: str = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Set blocks in the world using a 3D array.
+    
+    Args:
+        api_client: The Minecraft API client
+        start_x: Starting X coordinate
+        start_y: Starting Y coordinate
+        start_z: Starting Z coordinate
+        blocks: 3D array of block objects
+        world: World name (optional)
+        **arguments: Additional arguments (ignored)
+        
+    Returns:
+        CallToolResult with set blocks result
+    """
+    try:
+        result = await api_client.set_blocks(start_x, start_y, start_z, blocks, world)
+        
+        if result.get("success"):
+            response_text = f"✅ Successfully set {result['blocks_set']} blocks (skipped {result['blocks_skipped']}) in world {result['world']}"
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to set blocks: {result}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "setting blocks")
+
+
+async def handle_get_blocks_chunk(
+    api_client: MinecraftAPIClient,
+    start_x: int,
+    start_y: int,
+    start_z: int,
+    size_x: int,
+    size_y: int,
+    size_z: int,
+    world: str = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Get a chunk of blocks from the world.
+    
+    Args:
+        api_client: The Minecraft API client
+        start_x: Starting X coordinate
+        start_y: Starting Y coordinate
+        start_z: Starting Z coordinate
+        size_x: Size in X dimension
+        size_y: Size in Y dimension
+        size_z: Size in Z dimension
+        world: World name (optional)
+        **arguments: Additional arguments (ignored)
+        
+    Returns:
+        CallToolResult with chunk data and block composition
+    """
+    try:
+        result = await api_client.get_blocks_chunk(
+            start_x, start_y, start_z,
+            size_x, size_y, size_z,
+            world
+        )
+        
+        if result.get("success"):
+            blocks = result["blocks"]
+            block_counts = {}
+            
+            # Count block types
+            for x in range(len(blocks)):
+                for y in range(len(blocks[x])):
+                    for z in range(len(blocks[x][y])):
+                        block_data = blocks[x][y][z]
+                        if isinstance(block_data, dict):
+                            block_id = block_data.get("blockName", "unknown")
+                        else:
+                            block_id = str(block_data)
+                        block_counts[block_id] = block_counts.get(block_id, 0) + 1
+            
+            total_blocks = size_x * size_y * size_z
+            response_text = f"**Chunk Data ({size_x}x{size_y}x{size_z} blocks):**\n"
+            response_text += f"World: {result['world']}\n"
+            response_text += f"Start Position: ({start_x}, {start_y}, {start_z})\n\n"
+            response_text += "**Block Composition:**\n"
+            response_text += format_block_counts(block_counts, total_blocks)
+            
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to get blocks: {result}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "getting block chunk")
+
+
+async def handle_fill_box(
+    api_client: MinecraftAPIClient,
+    x1: int,
+    y1: int,
+    z1: int,
+    x2: int,
+    y2: int,
+    z2: int,
+    block_type: str,
+    world: str = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Fill a cuboid/box with a specific block type between two coordinates.
+    
+    Args:
+        api_client: The Minecraft API client
+        x1: First corner X coordinate
+        y1: First corner Y coordinate
+        z1: First corner Z coordinate
+        x2: Second corner X coordinate
+        y2: Second corner Y coordinate
+        z2: Second corner Z coordinate
+        block_type: Block type identifier
+        world: World name (optional)
+        **arguments: Additional arguments (ignored)
+        
+    Returns:
+        CallToolResult with fill result
+    """
+    try:
+        result = await api_client.fill_box(x1, y1, z1, x2, y2, z2, block_type, world)
+        
+        if result.get("success"):
+            range_str = format_coordinate_range(x1, y1, z1, x2, y2, z2)
+            response_text = f"✅ Successfully filled {result['blocks_filled']} blocks with {block_type} {range_str} in world {result['world']}"
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to fill box: {result}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "filling box")
+
+
+async def handle_get_heightmap(
+    api_client: MinecraftAPIClient,
+    x1: int,
+    z1: int,
+    x2: int,
+    z2: int,
+    heightmap_type: str = "WORLD_SURFACE",
+    world: str = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Get topographical heightmap for a rectangular area.
+    
+    Args:
+        api_client: The Minecraft API client
+        x1: First corner X coordinate
+        z1: First corner Z coordinate
+        x2: Second corner X coordinate
+        z2: Second corner Z coordinate
+        heightmap_type: Type of heightmap
+        world: World name (optional)
+        **arguments: Additional arguments (ignored)
+        
+    Returns:
+        CallToolResult with heightmap data
+    """
+    try:
+        result = await api_client.get_heightmap(x1, z1, x2, z2, heightmap_type, world)
+        
+        if result.get("success"):
+            heightmap = result["heightmap"]
+            width = len(heightmap)
+            length = len(heightmap[0]) if width > 0 else 0
+            
+            # Calculate statistics
+            all_heights = [h for row in heightmap for h in row]
+            min_height = min(all_heights) if all_heights else 0
+            max_height = max(all_heights) if all_heights else 0
+            avg_height = sum(all_heights) / len(all_heights) if all_heights else 0
+            
+            response_text = f"**Heightmap Data ({width}x{length}):**\n"
+            response_text += f"World: {result['world']}\n"
+            response_text += f"Type: {heightmap_type}\n"
+            response_text += f"Area: from ({x1}, {z1}) to ({x2}, {z2})\n\n"
+            response_text += "**Height Statistics:**\n"
+            response_text += f"- Minimum: {min_height}\n"
+            response_text += f"- Maximum: {max_height}\n"
+            response_text += f"- Average: {avg_height:.1f}\n"
+            
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to get heightmap: {result}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "getting heightmap")

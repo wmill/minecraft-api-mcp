@@ -89,15 +89,15 @@ This plan transforms the monolithic `minecraft_mcp.py` (2700+ lines) into a well
     - Export TOOL_SCHEMAS list
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 6. Implement tool handlers by domain
-  - [ ] 6.1 Create `minecraft_mcp/handlers/world.py`
+- [x] 6. Implement tool handlers by domain
+  - [x] 6.1 Create `minecraft_mcp/handlers/world.py`
     - Implement `handle_get_players` using API client
     - Implement `handle_get_entities` using API client
     - Implement `handle_spawn_entity` using API client
     - Use formatting utilities for responses
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.2_
   
-  - [ ] 6.2 Create `minecraft_mcp/handlers/blocks.py`
+  - [x] 6.2 Create `minecraft_mcp/handlers/blocks.py`
     - Implement `handle_get_blocks` using API client
     - Implement `handle_set_blocks` using API client
     - Implement `handle_get_blocks_chunk` using API client
@@ -106,13 +106,13 @@ This plan transforms the monolithic `minecraft_mcp.py` (2700+ lines) into a well
     - Use formatting utilities for responses
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.2_
   
-  - [ ] 6.3 Create `minecraft_mcp/handlers/messages.py`
+  - [x] 6.3 Create `minecraft_mcp/handlers/messages.py`
     - Implement `handle_broadcast_message` using API client
     - Implement `handle_send_message_to_player` using API client
     - Use formatting utilities for responses
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.2_
   
-  - [ ] 6.4 Create `minecraft_mcp/handlers/prefabs.py`
+  - [x] 6.4 Create `minecraft_mcp/handlers/prefabs.py`
     - Implement `handle_place_nbt_structure` using API client
     - Implement `handle_place_door_line` using API client
     - Implement `handle_place_stairs` using API client
@@ -122,7 +122,7 @@ This plan transforms the monolithic `minecraft_mcp.py` (2700+ lines) into a well
     - Use formatting utilities for responses
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.2_
   
-  - [ ] 6.5 Create `minecraft_mcp/handlers/builds.py`
+  - [x] 6.5 Create `minecraft_mcp/handlers/builds.py`
     - Implement `handle_create_build` using API client
     - Implement `handle_add_build_task_block_set` using API client
     - Implement `handle_add_build_task_block_fill` using API client
@@ -137,7 +137,7 @@ This plan transforms the monolithic `minecraft_mcp.py` (2700+ lines) into a well
     - Use formatting utilities for responses
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.2_
   
-  - [ ] 6.6 Create `minecraft_mcp/handlers/system.py`
+  - [x] 6.6 Create `minecraft_mcp/handlers/system.py`
     - Implement `handle_teleport_player` using API client
     - Implement `handle_test_server_connection` using API client
     - Use formatting utilities for responses
