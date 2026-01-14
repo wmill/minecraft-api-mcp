@@ -166,22 +166,22 @@ record BlockInfo(String id, String display_name) {
 }
 
 class BlockData {
-    public String blockName;
-    public Map<String, String> blockStates; // optional, uses default states if not provided
+    public String block_name;
+    public Map<String, String> block_states; // optional, uses default states if not provided
     
     // Helper method to create BlockState from this data
     public BlockState toBlockState() {
-        Identifier blockId = Identifier.tryParse(blockName);
+        Identifier blockId = Identifier.tryParse(block_name);
         if (blockId == null) return null;
-        
+
         Block block = Registries.BLOCK.get(blockId);
         if (block == null) return null;
-        
+
         BlockState state = block.getDefaultState();
-        
+
         // Apply block states if provided
-        if (blockStates != null) {
-            for (Map.Entry<String, String> entry : blockStates.entrySet()) {
+        if (block_states != null) {
+            for (Map.Entry<String, String> entry : block_states.entrySet()) {
                 String propertyName = entry.getKey();
                 String value = entry.getValue();
                 
@@ -208,14 +208,14 @@ class BlockData {
     // Helper method to create BlockData from BlockState
     public static BlockData fromBlockState(BlockState blockState) {
         BlockData data = new BlockData();
-        data.blockName = Registries.BLOCK.getId(blockState.getBlock()).toString();
-        data.blockStates = new HashMap<>();
-        
+        data.block_name = Registries.BLOCK.getId(blockState.getBlock()).toString();
+        data.block_states = new HashMap<>();
+
         // Extract all block state properties
         for (Property<?> property : blockState.getProperties()) {
-            data.blockStates.put(property.getName(), blockState.get(property).toString());
+            data.block_states.put(property.getName(), blockState.get(property).toString());
         }
-        
+
         return data;
     }
     
@@ -228,33 +228,33 @@ class BlockData {
 
 class BlockSetRequest {
     public String world; // optional, defaults to overworld
-    public int startX;
-    public int startY;
-    public int startZ;
+    public int start_x;
+    public int start_y;
+    public int start_z;
     public BlockData[][][] blocks; // 3D array of block data objects, null means no change
 }
 
 class ChunkRequest {
     public String world; // optional, defaults to overworld
-    public int startX;
-    public int startY;
-    public int startZ;
-    public int sizeX;
-    public int sizeY;
-    public int sizeZ;
+    public int start_x;
+    public int start_y;
+    public int start_z;
+    public int size_x;
+    public int size_y;
+    public int size_z;
 }
 
 class FillBoxRequest {
     public String world; // optional, defaults to overworld
     public int x1, y1, z1; // first corner coordinate
     public int x2, y2, z2; // second corner coordinate
-    public String blockType; // block identifier (e.g., "minecraft:stone")
+    public String block_type; // block identifier (e.g., "minecraft:stone")
 }
 
 class HeightmapRequest {
     public String world; // optional, defaults to overworld
     public int x1, z1; // first corner coordinate (only X and Z needed for heightmap)
     public int x2, z2; // second corner coordinate (only X and Z needed for heightmap)
-    public String heightmapType; // optional, defaults to WORLD_SURFACE
+    public String heightmap_type; // optional, defaults to WORLD_SURFACE
     // Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR
 }

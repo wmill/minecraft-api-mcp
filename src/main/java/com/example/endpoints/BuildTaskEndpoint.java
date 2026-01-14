@@ -226,8 +226,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 
                 ctx.json(Map.of(
                     "success", true,
-                    "buildId", buildId.toString(),
-                    "taskCount", tasks.size(),
+                    "build_id", buildId.toString(),
+                    "task_count", tasks.size(),
                     "tasks", taskMaps
                 ));
                 
@@ -285,8 +285,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 
                 ctx.json(Map.of(
                     "success", true,
-                    "buildId", buildId.toString(),
-                    "taskCount", tasks.size(),
+                    "build_id", buildId.toString(),
+                    "task_count", tasks.size(),
                     "message", "Task queue updated successfully"
                 ));
                 
@@ -332,7 +332,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 // Return immediate response that execution has started
                 ctx.status(202).json(Map.of(
                     "success", true,
-                    "buildId", buildId.toString(),
+                    "build_id", buildId.toString(),
                     "message", "Build execution started",
                     "status", "accepted"
                 ));
@@ -417,8 +417,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
                         "maxY", result.queryArea.getMaxY(),
                         "maxZ", result.queryArea.getMaxZ()
                     ),
-                    "buildCount", result.getBuildCount(),
-                    "totalTaskCount", result.getTotalTaskCount(),
+                    "build_count", result.getBuildCount(),
+                    "total_task_count", result.getTotalTaskCount(),
                     "builds", buildResults
                 ));
                 

@@ -30,12 +30,12 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 try {
                     // Find the player by name
-                    ServerPlayerEntity player = server.getPlayerManager().getPlayer(request.playerName());
+                    ServerPlayerEntity player = server.getPlayerManager().getPlayer(request.player_name());
                     if (player == null) {
-                        ctx.status(404).json(new ErrorResponse("Player not found: " + request.playerName()));
+                        ctx.status(404).json(new ErrorResponse("Player not found: " + request.player_name()));
                         return;
                     }
-                    
+
                     // Get the target dimension
                     RegistryKey<World> dimensionKey = RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.dimension()));
                     ServerWorld targetWorld = server.getWorld(dimensionKey);
@@ -43,15 +43,15 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
                         ctx.status(400).json(new ErrorResponse("Invalid dimension: " + request.dimension()));
                         return;
                     }
-                    
+
                     // Teleport the player
                     player.teleport(targetWorld, request.x(), request.y(), request.z(), Set.of(), request.yaw(), request.pitch(), false);
-                    
+
                     // Create response
                     TeleportResponse response = new TeleportResponse(
                         "success",
-                        "Player " + request.playerName() + " teleported successfully",
-                        request.playerName(),
+                        "Player " + request.player_name() + " teleported successfully",
+                        request.player_name(),
                         request.x(),
                         request.y(),
                         request.z(),
@@ -59,10 +59,10 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
                         request.yaw(),
                         request.pitch()
                     );
-                    
+
                     ctx.json(response);
-                    LOGGER.info("Teleported player {} to ({}, {}, {}) in {}", 
-                        request.playerName(), request.x(), request.y(), request.z(), request.dimension());
+                    LOGGER.info("Teleported player {} to ({}, {}, {}) in {}",
+                        request.player_name(), request.x(), request.y(), request.z(), request.dimension());
                     
                 } catch (Exception e) {
                     LOGGER.error("Error teleporting player: ", e);
@@ -86,7 +86,7 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
     public record TeleportResponse(
         String status,
         String message,
-        String playerName,
+        String player_name,
         double x,
         double y,
         double z,
@@ -94,11 +94,11 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
         float yaw,
         float pitch
     ) {}
-    
+
     public record ErrorResponse(String error) {}
 
     public record TeleportRequest(
-        String playerName,
+        String player_name,
         double x,
         double y,
         double z,
@@ -107,20 +107,20 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
         float pitch
     ) {
         public TeleportRequest {
-            if (playerName == null || playerName.trim().isEmpty()) {
+            if (player_name == null || player_name.trim().isEmpty()) {
                 throw new IllegalArgumentException("Player name cannot be null or empty");
             }
             if (dimension == null || dimension.trim().isEmpty()) {
                 dimension = "minecraft:overworld";
             }
         }
-        
-        public TeleportRequest(String playerName, double x, double y, double z) {
-            this(playerName, x, y, z, "minecraft:overworld", 0.0f, 0.0f);
+
+        public TeleportRequest(String player_name, double x, double y, double z) {
+            this(player_name, x, y, z, "minecraft:overworld", 0.0f, 0.0f);
         }
-        
-        public TeleportRequest(String playerName, double x, double y, double z, String dimension) {
-            this(playerName, x, y, z, dimension, 0.0f, 0.0f);
+
+        public TeleportRequest(String player_name, double x, double y, double z, String dimension) {
+            this(player_name, x, y, z, dimension, 0.0f, 0.0f);
         }
 }
 }

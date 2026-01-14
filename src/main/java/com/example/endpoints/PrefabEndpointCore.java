@@ -64,7 +64,7 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        Identifier blockId = Identifier.tryParse(request.blockType);
+        Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
             future.complete(new DoorResult(false, "Invalid block identifier", null, 0, null, null, false));
             return future;
@@ -72,7 +72,7 @@ public class PrefabEndpointCore {
 
         Block block = Registries.BLOCK.get(blockId);
         if (!(block instanceof DoorBlock)) {
-            future.complete(new DoorResult(false, "Block is not a door: " + request.blockType, null, 0, null, null, false));
+            future.complete(new DoorResult(false, "Block is not a door: " + request.block_type, null, 0, null, null, false));
             return future;
         }
 
@@ -92,7 +92,7 @@ public class PrefabEndpointCore {
         boolean open = Boolean.TRUE.equals(request.open);
 
         logger.info("Placing door prefab in world {} at ({}, {}, {}) facing {} width {}", 
-            worldKey.getValue(), request.startX, request.startY, request.startZ, facing, request.width);
+            worldKey.getValue(), request.start_x, request.start_y, request.start_z, facing, request.width);
 
         // Execute on server thread
         server.execute(() -> {
@@ -102,13 +102,13 @@ public class PrefabEndpointCore {
 
                 for (int i = 0; i < request.width; i++) {
                     BlockPos basePos = new BlockPos(
-                        request.startX + lateral.getOffsetX() * i,
-                        request.startY,
-                        request.startZ + lateral.getOffsetZ() * i
+                        request.start_x + lateral.getOffsetX() * i,
+                        request.start_y,
+                        request.start_z + lateral.getOffsetZ() * i
                     );
                     BlockPos upperPos = basePos.up();
                     DoorHinge currentHinge = hinge;
-                    if (request.doubleDoors && i % 2 == 1) {
+                    if (request.double_doors && i % 2 == 1) {
                         if (hinge == DoorHinge.RIGHT) {
                             currentHinge = DoorHinge.LEFT;
                         } else {
@@ -166,12 +166,12 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        Identifier blockId = Identifier.tryParse(request.blockType);
+        Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
             future.complete(new StairResult(false, "Invalid block identifier", null, 0, null, false));
             return future;
         }
-        Identifier stairId = Identifier.tryParse(request.stairType);
+        Identifier stairId = Identifier.tryParse(request.stair_type);
         if (stairId == null) {
             future.complete(new StairResult(false, "Invalid stair block identifier", null, 0, null, false));
             return future;
@@ -180,11 +180,11 @@ public class PrefabEndpointCore {
         Block baseBlock = Registries.BLOCK.get(blockId);
         Block stairBlock = Registries.BLOCK.get(stairId);
         if (!(stairBlock instanceof StairsBlock)) {
-            future.complete(new StairResult(false, "Block is not a stair: " + request.stairType, null, 0, null, false));
+            future.complete(new StairResult(false, "Block is not a stair: " + request.stair_type, null, 0, null, false));
             return future;
         }
 
-        Direction staircaseDirection = switch(request.staircaseDirection.toLowerCase()) {
+        Direction staircaseDirection = switch(request.staircase_direction.toLowerCase()) {
             case "north" -> Direction.NORTH;
             case "south" -> Direction.SOUTH;
             case "east" -> Direction.EAST;
@@ -197,14 +197,14 @@ public class PrefabEndpointCore {
         }
 
         logger.info("Placing stair prefab in world {} from ({}, {}, {}) to ({}, {}, {}) staircaseDirection {}", 
-            worldKey.getValue(), request.startX, request.startY, request.startZ, request.endX, request.endY, request.endZ, staircaseDirection);
+            worldKey.getValue(), request.start_x, request.start_y, request.start_z, request.end_x, request.end_y, request.end_z, staircaseDirection);
 
         // Execute on server thread
         server.execute(() -> {
             try {
                 int blocksPlaced = buildStaircase(world, request, baseBlock, stairBlock, staircaseDirection);
                 
-                future.complete(new StairResult(true, null, worldKey.getValue().toString(), blocksPlaced, staircaseDirection.asString(), request.fillSupport));
+                future.complete(new StairResult(true, null, worldKey.getValue().toString(), blocksPlaced, staircaseDirection.asString(), request.fill_support));
             } catch (Exception e) {
                 logger.error("Error placing stair prefab", e);
                 future.complete(new StairResult(false, "Exception during stair placement: " + e.getMessage(), null, 0, null, false));
@@ -236,7 +236,7 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        Identifier blockId = Identifier.tryParse(request.blockType);
+        Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
             future.complete(new WindowPaneResult(false, "Invalid block identifier", null, 0, null, false));
             return future;
@@ -244,13 +244,13 @@ public class PrefabEndpointCore {
 
         Block block = Registries.BLOCK.get(blockId);
         if (!(block instanceof PaneBlock)) {
-            future.complete(new WindowPaneResult(false, "Block is not a pane block: " + request.blockType, null, 0, null, false));
+            future.complete(new WindowPaneResult(false, "Block is not a pane block: " + request.block_type, null, 0, null, false));
             return future;
         }
 
         // Determine wall orientation
-        boolean isEastWest = request.startZ == request.endZ;
-        boolean isNorthSouth = request.startX == request.endX;
+        boolean isEastWest = request.start_z == request.end_z;
+        boolean isNorthSouth = request.start_x == request.end_x;
         
         if (!isEastWest && !isNorthSouth) {
             future.complete(new WindowPaneResult(false, "Window pane wall must be aligned north-south or east-west", null, 0, null, false));
@@ -258,7 +258,7 @@ public class PrefabEndpointCore {
         }
 
         logger.info("Placing window pane wall in world {} from ({}, {}, {}) to ({}, {}, {}) height {}", 
-            worldKey.getValue(), request.startX, request.startY, request.startZ, request.endX, request.startY + request.height - 1, request.endZ);
+            worldKey.getValue(), request.start_x, request.start_y, request.start_z, request.end_x, request.start_y + request.height - 1, request.end_z);
 
         // Execute on server thread
         server.execute(() -> {
@@ -292,7 +292,7 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        Identifier blockId = Identifier.tryParse(request.blockType);
+        Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
             future.complete(new TorchResult(false, "Invalid block identifier", null, null, null, false, null));
             return future;
@@ -303,7 +303,7 @@ public class PrefabEndpointCore {
         boolean isWallTorch = blockName.contains("wall_torch");
 
         logger.info("Placing torch in world {} at ({}, {}, {}) type {}",
-            worldKey.getValue(), request.x, request.y, request.z, request.blockType);
+            worldKey.getValue(), request.x, request.y, request.z, request.block_type);
 
         // Execute on server thread
         server.execute(() -> {
@@ -361,14 +361,14 @@ public class PrefabEndpointCore {
                     world.setBlockState(pos, torchState);
 
                     Map<String, Integer> position = Map.of("x", request.x, "y", request.y, "z", request.z);
-                    future.complete(new TorchResult(true, null, worldKey.getValue().toString(), request.blockType, position, true, facing.asString()));
+                    future.complete(new TorchResult(true, null, worldKey.getValue().toString(), request.block_type, position, true, facing.asString()));
                 } else {
                     // Regular ground torch - no facing needed
                     torchState = block.getDefaultState();
                     world.setBlockState(pos, torchState);
 
                     Map<String, Integer> position = Map.of("x", request.x, "y", request.y, "z", request.z);
-                    future.complete(new TorchResult(true, null, worldKey.getValue().toString(), request.blockType, position, false, null));
+                    future.complete(new TorchResult(true, null, worldKey.getValue().toString(), request.block_type, position, false, null));
                 }
             } catch (Exception e) {
                 logger.error("Error placing torch", e);
@@ -396,7 +396,7 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        Identifier blockId = Identifier.tryParse(request.blockType);
+        Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
             future.complete(new SignResult(false, "Invalid block identifier", null, null, null, null, null, null, false));
             return future;
@@ -407,22 +407,22 @@ public class PrefabEndpointCore {
         boolean isStandingSign = block instanceof SignBlock && !isWallSign;
 
         if (!isWallSign && !isStandingSign) {
-            future.complete(new SignResult(false, "Block is not a sign: " + request.blockType, null, null, null, null, null, null, false));
+            future.complete(new SignResult(false, "Block is not a sign: " + request.block_type, null, null, null, null, null, null, false));
             return future;
         }
 
         // Validate lines (max 4 for front, max 4 for back)
-        if (request.frontLines != null && request.frontLines.length > 4) {
+        if (request.front_lines != null && request.front_lines.length > 4) {
             future.complete(new SignResult(false, "Front text can have maximum 4 lines", null, null, null, null, null, null, false));
             return future;
         }
-        if (request.backLines != null && request.backLines.length > 4) {
+        if (request.back_lines != null && request.back_lines.length > 4) {
             future.complete(new SignResult(false, "Back text can have maximum 4 lines", null, null, null, null, null, null, false));
             return future;
         }
 
         logger.info("Placing sign in world {} at ({}, {}, {}) type {}",
-            worldKey.getValue(), request.x, request.y, request.z, request.blockType);
+            worldKey.getValue(), request.x, request.y, request.z, request.block_type);
 
         // Execute on server thread
         server.execute(() -> {
@@ -475,14 +475,14 @@ public class PrefabEndpointCore {
                     BlockEntity blockEntity = world.getBlockEntity(pos);
                     if (blockEntity instanceof SignBlockEntity signBlockEntity) {
                         // Set front text
-                        if (request.frontLines != null && request.frontLines.length > 0) {
-                            SignText frontText = createSignText(request.frontLines, request.glowing);
+                        if (request.front_lines != null && request.front_lines.length > 0) {
+                            SignText frontText = createSignText(request.front_lines, request.glowing);
                             signBlockEntity.setText(frontText, true);
                         }
 
                         // Set back text
-                        if (request.backLines != null && request.backLines.length > 0) {
-                            SignText backText = createSignText(request.backLines, request.glowing);
+                        if (request.back_lines != null && request.back_lines.length > 0) {
+                            SignText backText = createSignText(request.back_lines, request.glowing);
                             signBlockEntity.setText(backText, false);
                         }
 
@@ -490,7 +490,7 @@ public class PrefabEndpointCore {
                     }
 
                     Map<String, Integer> position = Map.of("x", request.x, "y", request.y, "z", request.z);
-                    future.complete(new SignResult(true, null, worldKey.getValue().toString(), position, request.blockType, "wall", facing.asString(), null, request.glowing != null ? request.glowing : false));
+                    future.complete(new SignResult(true, null, worldKey.getValue().toString(), position, request.block_type, "wall", facing.asString(), null, request.glowing != null ? request.glowing : false));
                 } else {
                     // Standing sign - use rotation
                     int rotation = request.rotation != null ? request.rotation : 0;
@@ -507,14 +507,14 @@ public class PrefabEndpointCore {
                     BlockEntity blockEntity = world.getBlockEntity(pos);
                     if (blockEntity instanceof SignBlockEntity signBlockEntity) {
                         // Set front text
-                        if (request.frontLines != null && request.frontLines.length > 0) {
-                            SignText frontText = createSignText(request.frontLines, request.glowing);
+                        if (request.front_lines != null && request.front_lines.length > 0) {
+                            SignText frontText = createSignText(request.front_lines, request.glowing);
                             signBlockEntity.setText(frontText, true);
                         }
 
                         // Set back text
-                        if (request.backLines != null && request.backLines.length > 0) {
-                            SignText backText = createSignText(request.backLines, request.glowing);
+                        if (request.back_lines != null && request.back_lines.length > 0) {
+                            SignText backText = createSignText(request.back_lines, request.glowing);
                             signBlockEntity.setText(backText, false);
                         }
 
@@ -522,7 +522,7 @@ public class PrefabEndpointCore {
                     }
 
                     Map<String, Integer> position = Map.of("x", request.x, "y", request.y, "z", request.z);
-                    future.complete(new SignResult(true, null, worldKey.getValue().toString(), position, request.blockType, "standing", null, rotation, request.glowing != null ? request.glowing : false));
+                    future.complete(new SignResult(true, null, worldKey.getValue().toString(), position, request.block_type, "standing", null, rotation, request.glowing != null ? request.glowing : false));
                 }
             } catch (Exception e) {
                 logger.error("Error placing sign", e);
@@ -538,14 +538,14 @@ public class PrefabEndpointCore {
         int blocksPlaced = 0;
         
         // Calculate 3D line from start to end
-        int dx = Math.abs(req.endX - req.startX);
-        int dy = Math.abs(req.endY - req.startY);
-        int dz = Math.abs(req.endZ - req.startZ);
+        int dx = Math.abs(req.end_x - req.start_x);
+        int dy = Math.abs(req.end_y - req.start_y);
+        int dz = Math.abs(req.end_z - req.start_z);
         
         
         // Auto-calculate stair block facing direction from travel vector
         Direction stairBlockFacing;
-        boolean isAscending = req.endY > req.startY;
+        boolean isAscending = req.end_y > req.start_y;
         
         
         if (isAscending) {
@@ -568,7 +568,7 @@ public class PrefabEndpointCore {
         }
         
         // Use 3D Bresenham-like algorithm
-        int x = req.startX, y = req.startY, z = req.startZ;
+        int x = req.start_x, y = req.start_y, z = req.start_z;
         int maxSteps = Math.max(Math.max(dx, dy), dz);
         
         int prevY = y;
@@ -579,16 +579,16 @@ public class PrefabEndpointCore {
             int nextZ = z;
             if (i < maxSteps) {
                 double progress = (double)(i + 1) / maxSteps;
-                nextX = req.startX + (int)Math.round((req.endX - req.startX) * progress);
-                nextY = req.startY + (int)Math.round((req.endY - req.startY) * progress);
-                nextZ = req.startZ + (int)Math.round((req.endZ - req.startZ) * progress);
+                nextX = req.start_x + (int)Math.round((req.end_x - req.start_x) * progress);
+                nextY = req.start_y + (int)Math.round((req.end_y - req.start_y) * progress);
+                nextZ = req.start_z + (int)Math.round((req.end_z - req.start_z) * progress);
             }
             
             // Place a line of blocks across the width
             for (int w = 0; w < width; w++) {
                 // Calculate offset from start position along the lateral axis
-                int offsetX = lateralDirection == Direction.EAST ? (req.startX + w - x) : 0;
-                int offsetZ = lateralDirection == Direction.SOUTH ? (req.startZ + w - z) : 0;
+                int offsetX = lateralDirection == Direction.EAST ? (req.start_x + w - x) : 0;
+                int offsetZ = lateralDirection == Direction.SOUTH ? (req.start_z + w - z) : 0;
                 BlockPos currentPos = centerPos.add(offsetX, 0, offsetZ);
                 
                 // Clear space above for walking (4 blocks)
@@ -615,9 +615,9 @@ public class PrefabEndpointCore {
                 blocksPlaced++;
                 
                 // Fill support if requested
-                if (req.fillSupport) {
+                if (req.fill_support) {
                     BlockPos fillPos = currentPos.down();
-                    int minY = Math.min(req.startY, req.endY) - 1;
+                    int minY = Math.min(req.start_y, req.end_y) - 1;
                     while (fillPos.getY() >= minY && world.getBlockState(fillPos).isAir()) {
                         world.setBlockState(fillPos, baseBlock.getDefaultState());
                         blocksPlaced++;
@@ -640,8 +640,8 @@ public class PrefabEndpointCore {
         int panesPlaced = 0;
         
         // Calculate wall dimensions
-        int wallWidth = Math.abs(req.endX - req.startX) + Math.abs(req.endZ - req.startZ) + 1;
-        boolean isEastWest = req.startZ == req.endZ;
+        int wallWidth = Math.abs(req.end_x - req.start_x) + Math.abs(req.end_z - req.start_z) + 1;
+        boolean isEastWest = req.start_z == req.end_z;
         
         // Place panes in a rectangular area
         for (int y = 0; y < req.height; y++) {
@@ -649,12 +649,12 @@ public class PrefabEndpointCore {
                 BlockPos pos;
                 if (isEastWest) {
                     // East-West wall: varies along X axis
-                    int x = Math.min(req.startX, req.endX) + i;
-                    pos = new BlockPos(x, req.startY + y, req.startZ);
+                    int x = Math.min(req.start_x, req.end_x) + i;
+                    pos = new BlockPos(x, req.start_y + y, req.start_z);
                 } else {
                     // North-South wall: varies along Z axis
-                    int z = Math.min(req.startZ, req.endZ) + i;
-                    pos = new BlockPos(req.startX, req.startY + y, z);
+                    int z = Math.min(req.start_z, req.end_z) + i;
+                    pos = new BlockPos(req.start_x, req.start_y + y, z);
                 }
                 
                 // Calculate connection states

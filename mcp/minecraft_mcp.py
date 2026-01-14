@@ -790,7 +790,7 @@ class MinecraftMCPServer:
                             },
                             "task_data": {
                                 "type": "object",
-                                "description": "Task-specific parameters matching the corresponding endpoint schema, camelCase like the equivalent function calls in this MCP server."
+                                "description": "Task-specific parameters matching the corresponding endpoint schema, snake_case like the equivalent function calls in this MCP server."
                             }
                         },
                         "required": ["build_id", "task_type", "task_data"]
@@ -1071,9 +1071,9 @@ class MinecraftMCPServer:
         """Set blocks in the world."""
         try:
             payload = {
-                "startX": start_x,
-                "startY": start_y,
-                "startZ": start_z,
+                "start_x": start_x,
+                "start_y": start_y,
+                "start_z": start_z,
                 "blocks": blocks
             }
             if world:
@@ -1108,12 +1108,12 @@ class MinecraftMCPServer:
         """Get a chunk of blocks from the world."""
         try:
             payload = {
-                "startX": start_x,
-                "startY": start_y,
-                "startZ": start_z,
-                "sizeX": size_x,
-                "sizeY": size_y,
-                "sizeZ": size_z
+                "start_x": start_x,
+                "start_y": start_y,
+                "start_z": start_z,
+                "size_x": size_x,
+                "size_y": size_y,
+                "size_z": size_z
             }
             if world:
                 payload["world"] = world
@@ -1173,7 +1173,7 @@ class MinecraftMCPServer:
                 "x2": x2,
                 "y2": y2,
                 "z2": z2,
-                "blockType": block_type
+                "block_type": block_type
             }
             if world:
                 payload["world"] = world
@@ -1213,7 +1213,7 @@ class MinecraftMCPServer:
         try:
             payload = {
                 "message": message,
-                "actionBar": action_bar
+                "action_bar": action_bar
             }
             
             async with httpx.AsyncClient() as client:
@@ -1229,7 +1229,7 @@ class MinecraftMCPServer:
                     return CallToolResult(
                         content=[TextContent(
                             type="text",
-                            text=f"✅ Message sent to {result['playerCount']} players in {location}\n"
+                            text=f"✅ Message sent to {result['player_count']} players in {location}\n"
                                  f"Message: \"{message}\""
                         )]
                     )
@@ -1253,7 +1253,7 @@ class MinecraftMCPServer:
             
             payload = {
                 "message": message,
-                "actionBar": action_bar
+                "action_bar": action_bar
             }
             if player_uuid:
                 payload["uuid"] = player_uuid
@@ -1296,7 +1296,7 @@ class MinecraftMCPServer:
                 "z1": z1,
                 "x2": x2,
                 "z2": z2,
-                "heightmapType": heightmap_type
+                "heightmap_type": heightmap_type
             }
             if world:
                 payload["world"] = world
@@ -1462,15 +1462,15 @@ class MinecraftMCPServer:
         """Place a line of doors at specified coordinates."""
         try:
             payload = {
-                "startX": start_x,
-                "startY": start_y,
-                "startZ": start_z,
+                "start_x": start_x,
+                "start_y": start_y,
+                "start_z": start_z,
                 "width": width,
                 "facing": facing,
-                "blockType": block_type,
+                "block_type": block_type,
                 "hinge": hinge,
                 "open": open,
-                "doubleDoors": double_doors
+                "double_doors": double_doors
             }
             if world:
                 payload["world"] = world
@@ -1508,13 +1508,13 @@ class MinecraftMCPServer:
         """Create a vertical wall of window panes between two points."""
         try:
             payload = {
-                "startX": start_x,
-                "startY": start_y,
-                "startZ": start_z,
-                "endX": end_x,
-                "endZ": end_z,
+                "start_x": start_x,
+                "start_y": start_y,
+                "start_z": start_z,
+                "end_x": end_x,
+                "end_z": end_z,
                 "height": height,
-                "blockType": block_type,
+                "block_type": block_type,
                 "waterlogged": waterlogged
             }
             if world:
@@ -1558,7 +1558,7 @@ class MinecraftMCPServer:
                 "x": x,
                 "y": y,
                 "z": z,
-                "blockType": block_type
+                "block_type": block_type
             }
             if facing:
                 payload["facing"] = facing
@@ -1582,7 +1582,7 @@ class MinecraftMCPServer:
                             content=[TextContent(
                                 type="text",
                                 text=f"✅ Successfully placed wall torch at ({position['x']}, {position['y']}, {position['z']})\n"
-                                     f"Block Type: {result['blockType']}\n"
+                                     f"Block Type: {result['block_type']}\n"
                                      f"Facing: {result['facing']}\n"
                                      f"World: {result['world']}"
                             )]
@@ -1592,7 +1592,7 @@ class MinecraftMCPServer:
                             content=[TextContent(
                                 type="text",
                                 text=f"✅ Successfully placed ground torch at ({position['x']}, {position['y']}, {position['z']})\n"
-                                     f"Block Type: {result['blockType']}\n"
+                                     f"Block Type: {result['block_type']}\n"
                                      f"World: {result['world']}"
                             )]
                         )
@@ -1616,7 +1616,7 @@ class MinecraftMCPServer:
                 "x": x,
                 "y": y,
                 "z": z,
-                "blockType": block_type
+                "block_type": block_type
             }
             if front_lines:
                 payload["frontLines"] = front_lines
@@ -1645,7 +1645,7 @@ class MinecraftMCPServer:
                     is_glowing = result.get("glowing", False)
 
                     response_text = f"✅ Successfully placed {sign_type} sign at ({position['x']}, {position['y']}, {position['z']})\n"
-                    response_text += f"Block Type: {result['blockType']}\n"
+                    response_text += f"Block Type: {result['block_type']}\n"
 
                     if sign_type == "wall":
                         response_text += f"Facing: {result.get('facing', 'unknown')}\n"
@@ -1675,7 +1675,7 @@ class MinecraftMCPServer:
         """Teleport a player to specified coordinates."""
         try:
             payload = {
-                "playerName": player_name,
+                "player_name": player_name,
                 "x": x,
                 "y": y,
                 "z": z,
@@ -1732,16 +1732,16 @@ class MinecraftMCPServer:
         """Build a wide staircase between two points."""
         try:
             payload = {
-                "startX": start_x,
-                "startY": start_y,
-                "startZ": start_z,
-                "endX": end_x,
+                "start_x": start_x,
+                "start_y": start_y,
+                "start_z": start_z,
+                "end_x": end_x,
                 "endY": end_y,
-                "endZ": end_z,
-                "blockType": block_type,
-                "stairType": stair_type,
-                "staircaseDirection": staircase_direction,
-                "fillSupport": fill_support
+                "end_z": end_z,
+                "block_type": block_type,
+                "stair_type": stair_type,
+                "staircase_direction": staircase_direction,
+                "fill_support": fill_support
             }
             if world:
                 payload["world"] = world
@@ -1760,7 +1760,7 @@ class MinecraftMCPServer:
                             type="text",
                             text=f"✅ Successfully built staircase with {result['blocks_placed']} blocks\n"
                                  f"From: ({start_x}, {start_y}, {start_z}) to ({end_x}, {end_y}, {end_z})\n"
-                                 f"Staircase Direction: {result['staircaseDirection']}\n"
+                                 f"Staircase Direction: {result['staircase_direction']}\n"
                                  f"Block Type: {block_type}, Stair Type: {stair_type}\n"
                                  f"Fill Support: {result['fill_support']}\n"
                                  f"World: {result['world']}"
@@ -1825,8 +1825,8 @@ class MinecraftMCPServer:
         """Add a building task to a build queue."""
         try:
             payload = {
-                "taskType": task_type,
-                "taskData": task_data
+                "task_type": task_type,
+                "task_data": task_data
             }
             
             async with httpx.AsyncClient() as client:
@@ -1902,7 +1902,7 @@ class MinecraftMCPServer:
                 "maxX": max_x,
                 "maxY": max_y,
                 "maxZ": max_z,
-                "includeInProgress": include_in_progress
+                "include_in_progress": include_in_progress
             }
             if world:
                 payload["world"] = world

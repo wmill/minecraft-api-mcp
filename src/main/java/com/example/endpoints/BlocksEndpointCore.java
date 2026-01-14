@@ -60,7 +60,7 @@ public class BlocksEndpointCore {
         }
         
         logger.info("Setting blocks in world {} starting at ({}, {}, {})", 
-            worldKey.getValue(), request.startX, request.startY, request.startZ);
+            worldKey.getValue(), request.start_x, request.start_y, request.start_z);
         
         // Execute on server thread
         server.execute(() -> {
@@ -83,19 +83,19 @@ public class BlocksEndpointCore {
                             // Convert BlockData to BlockState
                             BlockState blockState = blockData.toBlockState();
                             if (blockState == null) {
-                                logger.warn("Invalid block data: {}", blockData.blockName);
+                                logger.warn("Invalid block data: {}", blockData.block_name);
                                 blocksSkipped++;
                                 continue;
                             }
                             
                             // Calculate world position
-                            BlockPos pos = new BlockPos(request.startX + x, request.startY + y, request.startZ + z);
+                            BlockPos pos = new BlockPos(request.start_x + x, request.start_y + y, request.start_z + z);
                             
                             // Set block in world
                             if (world.setBlockState(pos, blockState)) {
                                 blocksSet++;
                             } else {
-                                logger.warn("Failed to set block {} at {}", blockData.blockName, pos);
+                                logger.warn("Failed to set block {} at {}", blockData.block_name, pos);
                                 blocksSkipped++;
                             }
                         }
@@ -135,26 +135,26 @@ public class BlocksEndpointCore {
         
         // Validate chunk size limits (prevent huge requests)
         int maxChunkSize = 64; // Maximum 64x64x64 chunk
-        if (request.sizeX > maxChunkSize || request.sizeY > maxChunkSize || request.sizeZ > maxChunkSize) {
+        if (request.size_x > maxChunkSize || request.size_y > maxChunkSize || request.size_z > maxChunkSize) {
             future.complete(new ChunkResult(false, "Chunk size too large. Maximum size is " + maxChunkSize + " per dimension", null, null, null, null));
             return future;
         }
         
         logger.info("Getting chunk from world {} at ({}, {}, {}) with size {}x{}x{}", 
-            worldKey.getValue(), request.startX, request.startY, request.startZ, request.sizeX, request.sizeY, request.sizeZ);
+            worldKey.getValue(), request.start_x, request.start_y, request.start_z, request.size_x, request.size_y, request.size_z);
         
         // Execute on server thread
         server.execute(() -> {
             try {
                 // Create 3D array to hold block data
-                BlockData[][][] blocks = new BlockData[request.sizeX][request.sizeY][request.sizeZ];
+                BlockData[][][] blocks = new BlockData[request.size_x][request.size_y][request.size_z];
                 
                 // Iterate through the requested chunk area
-                for (int x = 0; x < request.sizeX; x++) {
-                    for (int y = 0; y < request.sizeY; y++) {
-                        for (int z = 0; z < request.sizeZ; z++) {
+                for (int x = 0; x < request.size_x; x++) {
+                    for (int y = 0; y < request.size_y; y++) {
+                        for (int z = 0; z < request.size_z; z++) {
                             // Calculate world position
-                            BlockPos pos = new BlockPos(request.startX + x, request.startY + y, request.startZ + z);
+                            BlockPos pos = new BlockPos(request.start_x + x, request.start_y + y, request.start_z + z);
                             
                             // Get block state at position
                             BlockState blockState = world.getBlockState(pos);
@@ -166,10 +166,10 @@ public class BlocksEndpointCore {
                 }
                 
                 logger.info("Successfully retrieved chunk data: {}x{}x{} blocks", 
-                    request.sizeX, request.sizeY, request.sizeZ);
+                    request.size_x, request.size_y, request.size_z);
                 
-                Map<String, Integer> startPosition = Map.of("x", request.startX, "y", request.startY, "z", request.startZ);
-                Map<String, Integer> size = Map.of("x", request.sizeX, "y", request.sizeY, "z", request.sizeZ);
+                Map<String, Integer> startPosition = Map.of("x", request.start_x, "y", request.start_y, "z", request.start_z);
+                Map<String, Integer> size = Map.of("x", request.size_x, "y", request.size_y, "z", request.size_z);
                 
                 future.complete(new ChunkResult(true, null, worldKey.getValue().toString(), startPosition, size, blocks));
                 
@@ -221,22 +221,22 @@ public class BlocksEndpointCore {
         }
         
         logger.info("Filling box in world {} from ({}, {}, {}) to ({}, {}, {}) with {} blocks of type {}", 
-            worldKey.getValue(), minX, minY, minZ, maxX, maxY, maxZ, totalBlocks, request.blockType);
+            worldKey.getValue(), minX, minY, minZ, maxX, maxY, maxZ, totalBlocks, request.block_type);
         
         // Execute on server thread
         server.execute(() -> {
             try {
                 // Parse block identifier
-                Identifier blockIdentifier = Identifier.tryParse(request.blockType);
+                Identifier blockIdentifier = Identifier.tryParse(request.block_type);
                 if (blockIdentifier == null) {
-                    future.complete(new FillResult(false, "Invalid block identifier: " + request.blockType, 0, 0, 0, null, null));
+                    future.complete(new FillResult(false, "Invalid block identifier: " + request.block_type, 0, 0, 0, null, null));
                     return;
                 }
                 
                 // Get block from registry
                 Block block = Registries.BLOCK.get(blockIdentifier);
                 if (block == null) {
-                    future.complete(new FillResult(false, "Unknown block: " + request.blockType, 0, 0, 0, null, null));
+                    future.complete(new FillResult(false, "Unknown block: " + request.block_type, 0, 0, 0, null, null));
                     return;
                 }
                 
@@ -316,11 +316,11 @@ public class BlocksEndpointCore {
         // Parse heightmap type
         Heightmap.Type heightmapType;
         try {
-            heightmapType = request.heightmapType != null 
-                ? Heightmap.Type.valueOf(request.heightmapType.toUpperCase())
+            heightmapType = request.heightmap_type != null 
+                ? Heightmap.Type.valueOf(request.heightmap_type.toUpperCase())
                 : Heightmap.Type.WORLD_SURFACE;
         } catch (IllegalArgumentException e) {
-            future.complete(new HeightmapResult(false, "Invalid heightmap type: " + request.heightmapType + 
+            future.complete(new HeightmapResult(false, "Invalid heightmap type: " + request.heightmap_type + 
                 ". Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR", null, null, null, null, null, null));
             return future;
         }

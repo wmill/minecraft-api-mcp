@@ -34,7 +34,7 @@ public class MessageEndpoint extends APIEndpoint {
                     
                     // Send to all players
                     for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                        player.sendMessage(messageText, req.actionBar());
+                        player.sendMessage(messageText, req.action_bar());
                     }
                     
                     future.complete(null);
@@ -48,7 +48,7 @@ public class MessageEndpoint extends APIEndpoint {
                 ctx.json(Map.of(
                     "success", true,
                     "message", "Message sent to all players",
-                    "playerCount", server.getPlayerManager().getPlayerList().size()
+                    "player_count", server.getPlayerManager().getPlayerList().size()
                 ));
             } catch (Exception e) {
                 LOGGER.error("Error broadcasting message", e);
@@ -80,7 +80,7 @@ public class MessageEndpoint extends APIEndpoint {
                     }
                     
                     Text messageText = Text.literal(req.message());
-                    player.sendMessage(messageText, req.actionBar());
+                    player.sendMessage(messageText, req.action_bar());
                     
                     future.complete(null);
                 } catch (Exception e) {
@@ -102,6 +102,6 @@ public class MessageEndpoint extends APIEndpoint {
     }
 }
 
-record BroadcastMessageRequest(String message, boolean actionBar) {}
+record BroadcastMessageRequest(String message, boolean action_bar) {}
 
-record PlayerMessageRequest(String message, String uuid, String name, boolean actionBar) {}
+record PlayerMessageRequest(String message, String uuid, String name, boolean action_bar) {}

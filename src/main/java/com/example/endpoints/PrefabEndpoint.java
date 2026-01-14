@@ -68,7 +68,7 @@ public class PrefabEndpoint extends APIEndpoint{
                         "success", true,
                         "world", result.world(),
                         "blocks_placed", result.blocksPlaced(),
-                        "staircaseDirection", result.staircaseDirection(),
+                        "staircase_direction", result.staircaseDirection(),
                         "fill_support", result.fillSupport()
                     ));
                 }
@@ -126,7 +126,7 @@ public class PrefabEndpoint extends APIEndpoint{
                         "success", true,
                         "world", result.world(),
                         "position", result.position(),
-                        "blockType", result.blockType(),
+                        "block_type", result.blockType(),
                         "wall_mounted", result.wallMounted()
                     );
                     
@@ -163,7 +163,7 @@ public class PrefabEndpoint extends APIEndpoint{
                         "success", true,
                         "world", result.world(),
                         "position", result.position(),
-                        "blockType", result.blockType(),
+                        "block_type", result.blockType(),
                         "sign_type", result.signType(),
                         "glowing", result.glowing()
                     ));
@@ -195,40 +195,40 @@ public class PrefabEndpoint extends APIEndpoint{
 
 class DoorRequest {
     public String world; // optional, defaults to overworld
-    public int startX;
-    public int startY;
-    public int startZ;
+    public int start_x;
+    public int start_y;
+    public int start_z;
     public int width = 1; // number of doors to place in a row
     public String facing; // direction door faces (e.g. "north")
-    public String blockType; // block identifier (e.g., "minecraft:oak_door")
+    public String block_type; // block identifier (e.g., "minecraft:oak_door")
     public String hinge = "left"; // "left" or "right"
     public Boolean open = false; // whether the door starts open
-    public Boolean doubleDoors = false; // pair up the doors by reversing hinges
+    public Boolean double_doors = false; // pair up the doors by reversing hinges
 }
 
 class StairRequest {
     public String world; // optional, defaults to overworld
-    public int startX;
-    public int startY;
-    public int startZ;
-    public int endX;
-    public int endY;
-    public int endZ;
-    public String blockType; // block identifier (e.g., "minecraft:oak_block")
-    public String stairType; // block identifier (e.g., "minecraft:oak_stairs")
-    public String staircaseDirection; // orientation of the staircase structure (e.g. "north")
-    public boolean fillSupport = false; // fill underneath the staircase
+    public int start_x;
+    public int start_y;
+    public int start_z;
+    public int end_x;
+    public int end_y;
+    public int end_z;
+    public String block_type; // block identifier (e.g., "minecraft:oak_block")
+    public String stair_type; // block identifier (e.g., "minecraft:oak_stairs")
+    public String staircase_direction; // orientation of the staircase structure (e.g. "north")
+    public boolean fill_support = false; // fill underneath the staircase
 }
 
 class WindowPaneRequest {
     public String world; // optional, defaults to overworld
-    public int startX;
-    public int startY;
-    public int startZ;
-    public int endX;   // defines the wall endpoint
-    public int endZ;   // defines the wall endpoint
+    public int start_x;
+    public int start_y;
+    public int start_z;
+    public int end_x;   // defines the wall endpoint
+    public int end_z;   // defines the wall endpoint
     public int height; // Y dimension (how tall the wall is)
-    public String blockType; // e.g., "minecraft:glass_pane", "minecraft:iron_bars"
+    public String block_type; // e.g., "minecraft:glass_pane", "minecraft:iron_bars"
     public boolean waterlogged = false;
 }
 
@@ -237,7 +237,7 @@ class TorchRequest {
     public int x;
     public int y;
     public int z;
-    public String blockType; // e.g., "minecraft:torch", "minecraft:wall_torch", "minecraft:soul_wall_torch"
+    public String block_type; // e.g., "minecraft:torch", "minecraft:wall_torch", "minecraft:soul_wall_torch"
     public String facing; // optional for wall torches - "north", "south", "east", "west" - auto-detects if not provided
 }
 
@@ -246,9 +246,9 @@ class SignRequest {
     public int x;
     public int y;
     public int z;
-    public String blockType; // e.g., "minecraft:oak_wall_sign", "minecraft:oak_sign", "minecraft:birch_wall_sign"
-    public String[] frontLines; // 0-4 lines of text for front of sign
-    public String[] backLines; // 0-4 lines of text for back of sign (optional)
+    public String block_type; // e.g., "minecraft:oak_wall_sign", "minecraft:oak_sign", "minecraft:birch_wall_sign"
+    public String[] front_lines; // 0-4 lines of text for front of sign
+    public String[] back_lines; // 0-4 lines of text for back of sign (optional)
     public String facing; // optional for wall signs - "north", "south", "east", "west" - auto-detects if not provided
     public Integer rotation; // for standing signs - 0-15 (optional, defaults to 0)
     public Boolean glowing; // whether text glows (optional, defaults to false)
