@@ -259,7 +259,7 @@ class MinecraftMCPServer:
                 ),
                 Tool(
                     name="fill_box",
-                    description="Fill a cuboid/box with a specific block type between two coordinates.",
+                    description="Fill a cuboid/box with a specific block type between two coordinates. Can also be used to clear space by filling with minecraft:air.",
                     inputSchema={
                         "type": "object",
                         "properties": {
