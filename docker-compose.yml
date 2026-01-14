@@ -28,6 +28,10 @@ services:
         - linux/arm64
     image: ghcr.io/wmill/minecraft-api-nginx:latest  # Add this
     container_name: minecraft-nginx-gateway
+    environment:
+      # Escape $ as $$ so docker-compose does not interpolate.
+      # This is changed on deploy
+      - BASIC_AUTH_HTPASSWD=""
     ports:
       - "80:80"
     restart: unless-stopped
