@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: minecraft
       POSTGRES_PASSWORD: minecraft_password
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -30,9 +30,6 @@ services:
     container_name: minecraft-nginx-gateway
     ports:
       - "80:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: unless-stopped
 
   minecraft:
