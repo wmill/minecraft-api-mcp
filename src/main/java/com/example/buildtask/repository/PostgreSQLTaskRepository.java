@@ -36,8 +36,8 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     public BuildTask create(BuildTask task) throws SQLException {
         String sql = """
             INSERT INTO build_tasks (id, build_id, task_order, task_type, task_data, status, 
-                                   executed_at, error_message, min_x, min_y, min_z, max_x, max_y, max_z)
-            VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   executed_at, error_message, min_x, min_y, min_z, max_x, max_y, max_z, description)
+            VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
         
         try (Connection conn = databaseConfig.getConnection();
@@ -70,6 +70,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
                 stmt.setNull(13, Types.INTEGER);
                 stmt.setNull(14, Types.INTEGER);
             }
+            stmt.setString(15, task.getDescription());
             
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected == 0) {
