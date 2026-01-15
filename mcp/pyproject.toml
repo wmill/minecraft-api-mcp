@@ -1,28 +1,33 @@
 [project]
-name = "minecraft-api"
+name = "minecraft-mcp"
 version = "1.0.0"
-description = "MCP Server for Minecraft Fabric Mod API"
-requires-python = "==3.13.*"
+description = "MCP Server for Minecraft Fabric Mod API - Modular Package"
+readme = "README.md"
+requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.11.0",
     "httpx>=0.25.0",
-    "dotenv>=0.9.9",
+    "python-dotenv>=0.9.9",
     "starlette>=0.27.0",
     "uvicorn>=0.23.0",
+    "debugpy>=1.8.19",
 ]
 
 [build-system]
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["minecraft_mcp", "minecraft_mcp.client", "minecraft_mcp.handlers", "minecraft_mcp.tools", "minecraft_mcp.utils"]
+
 [tool.uv]
 package = true
 
 [project.scripts]
-minecraft-api = "minecraft_mcp:main"
+minecraft-mcp = "minecraft_mcp.__main__:main"
 
 [project.entry-points."mcp.servers"]
-minecraft-api = "minecraft_mcp:main"
+minecraft-mcp = "minecraft_mcp.__main__:main"
 
 [tool.pyright]
 venvPath = "."

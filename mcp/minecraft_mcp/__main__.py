@@ -1,33 +1,7 @@
 #!/usr/bin/env python3
 """
-MCP Server for Minecraft Fabric Mod API
-Provides tools to interact with the Minecraft server through HTTP endpoints.
-
-Coordinate System:
-World coordinates are based on a grid where three lines or axes intersect at the origin point.
-
-- The x-axis indicates the player's distance east (positive) or west (negative) of the origin point—i.e., the longitude
-- The z-axis indicates the player's distance south (positive) or north (negative) of the origin point—i.e., the latitude  
-- The y-axis indicates how high or low (from 0 to 255 (pre 1.18) or -64 to 320 (from 1.18), with 63 being sea level) the player is—i.e., the elevation
-
-The unit length of the three axes equals the side of one block. And, in terms of real-world measurement, one block equals 1 cubic meter.
-
-Rotation System (Yaw and Pitch):
-Player and entity rotations are defined by yaw (horizontal) and pitch (vertical) angles:
-
-Yaw (horizontal rotation):
-- Yaw = 0° → facing south (positive Z direction)
-- Yaw = 90° → facing west (negative X direction)  
-- Yaw = 180° or -180° → facing north (negative Z direction)
-- Yaw = -90° → facing east (positive X direction)
-
-Pitch (vertical rotation):
-- Pitch = 0° → looking straight ahead (horizontal)
-- Pitch = 90° → looking straight down
-- Pitch = -90° → looking straight up
-
-Warning! Pay attention to the fact that Minecraft coordinates have 0 yaw as south. In most engines it is east or north so don't let that trip you up.
-Similarly positive Z is south. 
+Entry point for running minecraft_mcp as a module or via console script.
+This allows both: python -m minecraft_mcp and the minecraft-mcp command.
 """
 
 import asyncio
@@ -35,8 +9,7 @@ import argparse
 import sys
 import uvicorn
 
-# Import from the modular package
-from minecraft_mcp import MinecraftMCPServer, config
+from . import MinecraftMCPServer, config
 
 # Set up debug mode if enabled
 config.setup_debug_mode()
@@ -48,8 +21,8 @@ BASE_URL = config.BASE_URL
 print("Starting Minecraft MCP Server...", file=sys.stderr)
 
 
-async def main():
-    """Main entry point."""
+async def async_main():
+    """Async main entry point."""
     parser = argparse.ArgumentParser(description="Minecraft MCP Server")
     parser.add_argument(
         "--transport",
@@ -96,6 +69,11 @@ async def main():
         raise
 
 
-if __name__ == "__main__":
+def main():
+    """Synchronous entry point wrapper for console scripts."""
     print("Script starting...", file=sys.stderr)
-    asyncio.run(main())
+    asyncio.run(async_main())
+
+
+if __name__ == "__main__":
+    main()

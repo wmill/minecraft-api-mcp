@@ -1,4 +1,5 @@
 # Repository Guidelines
+- Python code needs to be run with `uv run` to have the correct environment
 
 ## Project Structure & Module Organization
 - `src/main/java/com/example`: Core mod and Javalin API server (`APIServer`, `endpoints/*`), plus mixins.
@@ -16,7 +17,7 @@
 - `./gradlew shadowJar` then `./gradlew remapJar`: Build the fat jar and remap it for distribution.
 - `./gradlew runServer` (Loom): Start the dev server with hot reloading; `./gradlew runClient` for client-side checks.
 - Docker path: `./gradlew dockerBuild`, `dockerRun`, `dockerLogs`, `dockerStop`; or `docker-compose up -d` to boot a server exposing 25565/7070.
-- MCP server: `cd mcp && pip install -r requirements.txt` (or `uv sync`), then `python minecraft_mcp.py`; runs an MCP stdio server pointing at `http://localhost:7070`.
+- MCP server: `uv sync`, then `uv run minecraft_mcp.py`; runs an MCP stdio server pointing at `http://localhost:7070`.
 
 ## Coding Style & Naming Conventions
 - Java 21; 4-space indentation; keep files ASCII.
@@ -25,7 +26,7 @@
 - JSON payloads follow existing REST schema (see `endpoints/*`); prefer descriptive path segments (`/api/world/...`).
 
 ## Testing Guidelines
-- Integration: start the server, then run `python3 test_api.py` to hit player/entity endpoints; update `API_BASE` if the port changes.
+- Integration: start the server, then run `uv run test_api.py` to hit player/entity endpoints; update `API_BASE` if the port changes.
 - Add focused unit tests under `src/test/java` (none exist yet) when adding logic; mirror package structure and name tests `*Test`.
 - For manual checks, document the world seed and commands used (e.g., `curl http://localhost:7070/api/world/players`).
 
