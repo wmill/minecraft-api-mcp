@@ -690,10 +690,25 @@ async def handle_get_build_status(
                 response_text += "No tasks in queue\n"
             else:
                 for task in tasks:
-                    status_icon = "✅" if task['status'] == 'completed' else "❌" if task['status'] == 'failed' else "⏳"
-                    response_text += f"{status_icon} Task {task.get('task_order', 'N/A')}: {task.get('task_type', 'unknown')} - {task['status']}\n"
+                    status_icon = "✅" if task['status'] == 'COMPLETED' else "❌" if task['status'] == 'FAILED' else "⏳"
+                    response_text += f"\n{status_icon} **Task {task.get('task_order', 'N/A')}: {task.get('task_type', 'unknown')}**\n"
+                    response_text += f"   - ID: {task.get('id', 'N/A')}\n"
+                    response_text += f"   - Status: {task['status']}\n"
+
+                    # Include description if available
+                    description = task.get('description', '')
+                    if description:
+                        response_text += f"   - Description: {description}\n"
+
+                    # Include task_data with formatting
+                    task_data = task.get('task_data', {})
+                    if task_data:
+                        response_text += f"   - Task Data:\n"
+                        for key, value in task_data.items():
+                            response_text += f"      - {key}: {value}\n"
+
                     if task.get('error_message'):
-                        response_text += f"   Error: {task['error_message']}\n"
+                        response_text += f"   - Error: {task['error_message']}\n"
             
             return format_success_response(response_text)
         else:

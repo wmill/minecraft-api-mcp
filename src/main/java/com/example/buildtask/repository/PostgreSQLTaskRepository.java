@@ -180,7 +180,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     public List<BuildTask> findByBuildIdOrdered(UUID buildId) throws SQLException {
         String sql = """
             SELECT id, build_id, task_order, task_type, task_data, status, executed_at, error_message,
-                   min_x, min_y, min_z, max_x, max_y, max_z
+                   min_x, min_y, min_z, max_x, max_y, max_z, description
             FROM build_tasks
             WHERE build_id = ?
             ORDER BY task_order ASC
@@ -434,7 +434,8 @@ public class PostgreSQLTaskRepository implements TaskRepository {
         task.setTaskOrder(rs.getInt("task_order"));
         task.setTaskType(TaskType.valueOf(rs.getString("task_type")));
         task.setStatus(TaskStatus.valueOf(rs.getString("status")));
-        
+        task.setDescription(rs.getString("description"));
+
         // Parse JSON task data
         String taskDataJson = rs.getString("task_data");
         if (taskDataJson != null) {
