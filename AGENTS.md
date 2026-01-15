@@ -1,4 +1,5 @@
 # Repository Guidelines
+- Python code needs to be run with `uv run` to have the correct environment
 
 ## Project Structure & Module Organization
 - `src/main/java/com/example`: Core mod and Javalin API server (`APIServer`, `endpoints/*`), plus mixins.

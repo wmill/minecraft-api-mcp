@@ -166,15 +166,15 @@ This plan transforms the monolithic `minecraft_mcp.py` (2700+ lines) into a well
     - Preserve logging to stderr
     - _Requirements: 5.3, 9.1, 9.2, 9.3, 9.4_
 
-- [ ] 9. Update package exports
-  - [ ] 9.1 Update `minecraft_mcp/__init__.py`
+- [x] 9. Update package exports
+  - [x] 9.1 Update `minecraft_mcp/__init__.py`
     - Export MinecraftMCPServer class
     - Export config module
     - Export API client class
     - _Requirements: 7.3_
 
-- [ ] 10. Update entry point for backward compatibility
-  - [ ] 10.1 Update `minecraft_mcp.py` entry point
+- [x] 10. Update entry point for backward compatibility
+  - [x] 10.1 Update `minecraft_mcp.py` entry point
     - Import MinecraftMCPServer from package
     - Import config from package
     - Keep command-line argument parsing
@@ -182,19 +182,19 @@ This plan transforms the monolithic `minecraft_mcp.py` (2700+ lines) into a well
     - Preserve all print statements to stderr
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 7.4, 9.1_
 
-- [ ] 11. Checkpoint - Verify backward compatibility
+- [x] 11. Checkpoint - Verify backward compatibility
   - Test that `python minecraft_mcp.py` works with stdio transport
   - Test that all tool names are preserved
   - Test that response formats match original
   - Ensure all tests pass, ask the user if questions arise
 
-- [ ] 12. Update package metadata
-  - [ ] 12.1 Update `pyproject.toml`
+- [x] 12. Update package metadata
+  - [x] 12.1 Update `pyproject.toml`
     - Update package structure references
     - Ensure entry point still works
     - _Requirements: 7.4_
 
-- [ ] 13. Final checkpoint - Complete verification
+- [x] 13. Final checkpoint - Complete verification
   - Run integration tests with actual Minecraft API
   - Verify SSE transport still works
   - Verify DEBUG mode and debugpy work
