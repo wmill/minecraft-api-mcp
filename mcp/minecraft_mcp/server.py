@@ -15,7 +15,6 @@ from mcp.server.sse import SseServerTransport
 from mcp.server.lowlevel import NotificationOptions
 from starlette.applications import Starlette
 from starlette.routing import Route
-from starlette.responses import Response
 from mcp.types import (
     CallToolResult,
     TextContent,
@@ -131,36 +130,41 @@ class MinecraftMCPServer:
         """
         sse = SseServerTransport("/messages")
 
-        async def handle_sse(request):
-            """Handle SSE connection requests."""
-            async with sse.connect_sse(
-                request.scope,
-                request.receive,
-                request._send
-            ) as streams:
-                await self.server.run(
-                    streams[0],
-                    streams[1],
-                    InitializationOptions(
-                        server_name="minecraft-api",
-                        server_version="1.0.0",
-                        capabilities=self.server.get_capabilities(
-                            notification_options=NotificationOptions(),
-                            experimental_capabilities={}
+        class SseConnectApp:
+            """ASGI app that keeps the SSE stream open for the MCP server."""
+
+            def __init__(self, server):
+                self._server = server
+
+            async def __call__(self, scope, receive, send):
+                async with sse.connect_sse(scope, receive, send) as streams:
+                    await self._server.run(
+                        streams[0],
+                        streams[1],
+                        InitializationOptions(
+                            server_name="minecraft-api",
+                            server_version="1.0.0",
+                            capabilities=self._server.get_capabilities(
+                                notification_options=NotificationOptions(),
+                                experimental_capabilities={}
+                            )
                         )
                     )
-                )
 
-        async def handle_messages(request):
-            """Handle POST messages for SSE transport."""
-            await sse.handle_post_message(request.scope, request.receive, request._send)
-            return Response()
+        class SseMessagesApp:
+            """ASGI app that delegates POSTs to the SSE transport handler."""
+
+            def __init__(self, sse_transport):
+                self._sse_transport = sse_transport
+
+            async def __call__(self, scope, receive, send):
+                await self._sse_transport.handle_post_message(scope, receive, send)
 
         return Starlette(
             debug=True,
             routes=[
-                Route("/sse", endpoint=handle_sse),
-                Route("/messages", endpoint=handle_messages, methods=["POST"]),
+                Route("/sse", endpoint=SseConnectApp(self.server)),
+                Route("/messages", endpoint=SseMessagesApp(sse), methods=["POST"]),
             ],
         )
     
