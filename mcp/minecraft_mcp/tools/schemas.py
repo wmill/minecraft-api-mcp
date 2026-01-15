@@ -718,9 +718,55 @@ TOOL_ADD_BUILD_TASK = Tool(
     }
 )
 
+TOOL_ADD_BUILD_TASK_SINGLE_BLOCK_SET = Tool(
+    name="add_build_task_single_block_set",
+    description="Add a task to place a single block with optional block states to a build queue. This is a simpler alternative to add_build_task_block_set when you only need to place one block.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {
+                "type": "string",
+                "description": "Build UUID"
+            },
+            "x": {
+                "type": "integer",
+                "description": "X coordinate (east positive, west negative)"
+            },
+            "y": {
+                "type": "integer",
+                "description": "Y coordinate (elevation: -64 to 320, sea level at 63)"
+            },
+            "z": {
+                "type": "integer",
+                "description": "Z coordinate (south positive, north negative)"
+            },
+            "block_name": {
+                "type": "string",
+                "description": "Block identifier (e.g., 'minecraft:stone', 'minecraft:oak_door')"
+            },
+            "block_states": {
+                "type": "string",
+                "description": "Optional JSON string of block state properties (e.g., '{\"facing\": \"south\", \"open\": \"false\"}'). Leave empty or omit for default block states.",
+                "default": "{}"
+            },
+            "world": {
+                "type": "string",
+                "description": "World name (optional, defaults to minecraft:overworld)",
+                "default": "minecraft:overworld"
+            },
+            "description": {
+                "type": "string",
+                "description": "Description of task (optional)",
+                "default": ""
+            }
+        },
+        "required": ["build_id", "x", "y", "z", "block_name"]
+    }
+)
+
 TOOL_ADD_BUILD_TASK_BLOCK_SET = Tool(
     name="add_build_task_block_set",
-    description="Add a BLOCK_SET task to a build queue",
+    description="Add a BLOCK_SET task to a build queue for placing multiple blocks in a 3D array. For single blocks, use add_build_task_single_block_set instead.",
     inputSchema={
         "type": "object",
         "properties": {
@@ -778,7 +824,7 @@ TOOL_ADD_BUILD_TASK_BLOCK_SET = Tool(
             "description": {
                 "type": "string",
                 "description": "Description of task (optional)",
-                "default": ""               
+                "default": ""
             }
         },
         "required": ["build_id", "start_x", "start_y", "start_z", "blocks"]
@@ -1258,6 +1304,7 @@ TOOL_SCHEMAS = [
     # Build management tools
     TOOL_CREATE_BUILD,
     TOOL_ADD_BUILD_TASK,
+    TOOL_ADD_BUILD_TASK_SINGLE_BLOCK_SET,
     TOOL_ADD_BUILD_TASK_BLOCK_SET,
     TOOL_ADD_BUILD_TASK_BLOCK_FILL,
     TOOL_ADD_BUILD_TASK_PREFAB_DOOR,

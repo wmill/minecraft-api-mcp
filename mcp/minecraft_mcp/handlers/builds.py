@@ -85,6 +85,89 @@ async def handle_create_build(
         return format_error_response(e, "creating build")
 
 
+async def handle_add_build_task_single_block_set(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    x: int,
+    y: int,
+    z: int,
+    block_name: str,
+    block_states: str = "{}",
+    world: Optional[str] = None,
+    description: Optional[str] = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Add a task to place a single block with optional block states to a build queue.
+
+    This is a simplified version of handle_add_build_task_block_set for placing
+    a single block. It converts the single block into a 1x1x1 3D array.
+
+    Args:
+        api_client: The Minecraft API client
+        build_id: Build UUID
+        x: X coordinate
+        y: Y coordinate
+        z: Z coordinate
+        block_name: Block identifier (e.g., 'minecraft:stone')
+        block_states: JSON string of block states (e.g., '{"facing": "south"}')
+        world: World name (optional)
+        description: Description of the task
+        **arguments: Additional arguments (ignored)
+
+    Returns:
+        CallToolResult with task addition result
+    """
+    try:
+        import json
+
+        # Parse block_states JSON string
+        try:
+            block_states_dict = json.loads(block_states) if block_states else {}
+        except json.JSONDecodeError as e:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Invalid block_states JSON: {str(e)}")]
+            )
+
+        # Build the block object
+        block_obj = {"block_name": block_name}
+        if block_states_dict:
+            block_obj["block_states"] = block_states_dict
+
+        # Create a 1x1x1 3D array with the single block
+        blocks = [[[block_obj]]]
+
+        # Prepare task data
+        task_data = {
+            "start_x": x,
+            "start_y": y,
+            "start_z": z,
+            "blocks": blocks,
+        }
+        if world:
+            task_data["world"] = world
+
+        result = await api_client.add_build_task(build_id, "BLOCK_SET", task_data, description)
+
+        if result.get("success"):
+            task = result["task"]
+            response_text = f"✅ Successfully added single block task to build\n"
+            response_text += f"Task ID: {task['id']}\n"
+            response_text += f"Build ID: {build_id}\n"
+            response_text += f"Block: {block_name} at ({x}, {y}, {z})\n"
+            if block_states_dict:
+                response_text += f"Block States: {block_states_dict}\n"
+            response_text += f"Task Order: {task.get('task_order', 'N/A')}\n"
+            response_text += f"Status: {task['status']}"
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "adding single block build task")
+
+
 async def handle_add_build_task_block_set(
     api_client: MinecraftAPIClient,
     build_id: str,

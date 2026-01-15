@@ -48,6 +48,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     # Build management tools
     "create_build": builds.handle_create_build,
     "add_build_task": builds.handle_add_build_task,  # Deprecated
+    "add_build_task_single_block_set": builds.handle_add_build_task_single_block_set,
     "add_build_task_block_set": builds.handle_add_build_task_block_set,
     "add_build_task_block_fill": builds.handle_add_build_task_block_fill,
     "add_build_task_prefab_door": builds.handle_add_build_task_prefab_door,
