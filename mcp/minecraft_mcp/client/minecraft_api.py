@@ -719,7 +719,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/build/create",
+                f"{self.base_url}/api/builds",
                 json=payload
             )
             response.raise_for_status()
@@ -748,7 +748,6 @@ class MinecraftAPIClient:
             httpx.HTTPError: If the request fails
         """
         payload = {
-            "build_id": build_id,
             "task_type": task_type,
             "task_data": task_data,
             "description": description
@@ -756,7 +755,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/build/task",
+                f"{self.base_url}/api/builds/{build_id}/tasks",
                 json=payload
             )
             response.raise_for_status()
@@ -778,14 +777,11 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        payload = {
-            "build_id": build_id
-        }
+
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/build/execute",
-                json=payload
+                f"{self.base_url}/api/builds/{build_id}/execute"
             )
             response.raise_for_status()
             return response.json()
@@ -834,7 +830,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/build/query",
+                f"{self.base_url}/api/builds/query-location",
                 json=payload
             )
             response.raise_for_status()
@@ -858,7 +854,7 @@ class MinecraftAPIClient:
         """
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.base_url}/api/build/status/{build_id}"
+                f"{self.base_url}/api/builds/{build_id}"
             )
             response.raise_for_status()
             return response.json()
