@@ -98,7 +98,7 @@ public class BuildService {
         int taskOrder = taskRepository.getNextTaskOrder(buildId);
         
         // Create task
-        BuildTask task = new BuildTask(buildId, taskOrder, request.task_type, request.task_data);
+        BuildTask task = new BuildTask(buildId, taskOrder, request.task_type, request.task_data, request.description);
         
         logger.info("Adding task {} of type {} to build {}", task.getId(), task.getTaskType(), buildId);
         
@@ -286,13 +286,15 @@ public class BuildService {
     public static class AddTaskRequest {
         public com.example.buildtask.model.TaskType task_type;
         public com.fasterxml.jackson.databind.JsonNode task_data;
+        public String description = "";
 
         public AddTaskRequest() {}
 
         public AddTaskRequest(com.example.buildtask.model.TaskType task_type,
-                             com.fasterxml.jackson.databind.JsonNode task_data) {
+                             com.fasterxml.jackson.databind.JsonNode task_data, String description) {
             this.task_type = task_type;
             this.task_data = task_data;
+            this.description = description;
         }
     }
 

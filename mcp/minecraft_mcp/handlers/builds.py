@@ -93,6 +93,7 @@ async def handle_add_build_task_block_set(
     start_z: int,
     blocks: List[List[List[Optional[Dict[str, Any]]]]],
     world: Optional[str] = None,
+    description: Optional[str] = None,
     **arguments
 ) -> CallToolResult:
     """
@@ -106,6 +107,7 @@ async def handle_add_build_task_block_set(
         start_z: Starting Z coordinate
         blocks: 3D array of block objects
         world: World name (optional)
+        description: Description of the task
         **arguments: Additional arguments (ignored)
         
     Returns:
@@ -121,7 +123,7 @@ async def handle_add_build_task_block_set(
         if world:
             task_data["world"] = world
         
-        result = await api_client.add_build_task(build_id, "BLOCK_SET", task_data)
+        result = await api_client.add_build_task(build_id, "BLOCK_SET", task_data, description)
         
         if result.get("success"):
             task = result["task"]
@@ -150,6 +152,7 @@ async def handle_add_build_task_block_fill(
     z2: int,
     block_type: str,
     world: Optional[str] = None,
+    description: Optional[str] = None,
     **arguments
 ) -> CallToolResult:
     """
@@ -166,6 +169,7 @@ async def handle_add_build_task_block_fill(
         z2: Second corner Z coordinate
         block_type: Block type identifier
         world: World name (optional)
+        description: description of the task (optional)
         **arguments: Additional arguments (ignored)
         
     Returns:
@@ -184,7 +188,7 @@ async def handle_add_build_task_block_fill(
         if world:
             task_data["world"] = world
         
-        result = await api_client.add_build_task(build_id, "BLOCK_FILL", task_data)
+        result = await api_client.add_build_task(build_id, "BLOCK_FILL", task_data, description)
         
         if result.get("success"):
             task = result["task"]
@@ -215,6 +219,7 @@ async def handle_add_build_task_prefab_door(
     double_doors: bool = False,
     open: bool = False,
     world: Optional[str] = None,
+    description: Optional[str] = None,
     **arguments
 ) -> CallToolResult:
     """
@@ -233,6 +238,7 @@ async def handle_add_build_task_prefab_door(
         double_doors: Whether to alternate hinges
         open: Whether doors start open
         world: World name (optional)
+        description: Description of task (optional)
         **arguments: Additional arguments (ignored)
         
     Returns:
@@ -253,7 +259,7 @@ async def handle_add_build_task_prefab_door(
         if world:
             task_data["world"] = world
         
-        result = await api_client.add_build_task(build_id, "PREFAB_DOOR", task_data)
+        result = await api_client.add_build_task(build_id, "PREFAB_DOOR", task_data, description)
         
         if result.get("success"):
             task = result["task"]
@@ -285,6 +291,7 @@ async def handle_add_build_task_prefab_stairs(
     stair_type: str = "minecraft:stone_stairs",
     fill_support: bool = False,
     world: Optional[str] = None,
+    description: Optional[str] = None,
     **arguments
 ) -> CallToolResult:
     """
@@ -304,6 +311,7 @@ async def handle_add_build_task_prefab_stairs(
         stair_type: Stair block type
         fill_support: Whether to fill underneath
         world: World name (optional)
+        description: Description of the task (optional)
         **arguments: Additional arguments (ignored)
         
     Returns:
@@ -325,7 +333,7 @@ async def handle_add_build_task_prefab_stairs(
         if world:
             task_data["world"] = world
         
-        result = await api_client.add_build_task(build_id, "PREFAB_STAIRS", task_data)
+        result = await api_client.add_build_task(build_id, "PREFAB_STAIRS", task_data, description)
         
         if result.get("success"):
             task = result["task"]
@@ -355,6 +363,7 @@ async def handle_add_build_task_prefab_window(
     block_type: str = "minecraft:glass_pane",
     waterlogged: bool = False,
     world: Optional[str] = None,
+    description: Optional[str] = None,
     **arguments
 ) -> CallToolResult:
     """
@@ -372,6 +381,7 @@ async def handle_add_build_task_prefab_window(
         block_type: Pane block type
         waterlogged: Whether panes should be waterlogged
         world: World name (optional)
+        description: description of the task (optional)
         **arguments: Additional arguments (ignored)
         
     Returns:
@@ -391,7 +401,7 @@ async def handle_add_build_task_prefab_window(
         if world:
             task_data["world"] = world
         
-        result = await api_client.add_build_task(build_id, "PREFAB_WINDOW", task_data)
+        result = await api_client.add_build_task(build_id, "PREFAB_WINDOW", task_data, description)
         
         if result.get("success"):
             task = result["task"]
@@ -418,6 +428,7 @@ async def handle_add_build_task_prefab_torch(
     block_type: str = "minecraft:wall_torch",
     facing: Optional[str] = None,
     world: Optional[str] = None,
+    description: Optional[str] = None,
     **arguments
 ) -> CallToolResult:
     """
@@ -432,6 +443,7 @@ async def handle_add_build_task_prefab_torch(
         block_type: Torch type
         facing: For wall torches, direction the torch faces
         world: World name (optional)
+        description: description of the task (optional)
         **arguments: Additional arguments (ignored)
         
     Returns:
@@ -449,7 +461,7 @@ async def handle_add_build_task_prefab_torch(
         if world:
             task_data["world"] = world
         
-        result = await api_client.add_build_task(build_id, "PREFAB_TORCH", task_data)
+        result = await api_client.add_build_task(build_id, "PREFAB_TORCH", task_data, description)
         
         if result.get("success"):
             task = result["task"]
@@ -480,6 +492,7 @@ async def handle_add_build_task_prefab_sign(
     rotation: int = 0,
     glowing: bool = False,
     world: Optional[str] = None,
+    description: Optional[str] = None,
     **arguments
 ) -> CallToolResult:
     """
@@ -498,6 +511,7 @@ async def handle_add_build_task_prefab_sign(
         rotation: For standing signs, rotation angle
         glowing: Whether the sign text should glow
         world: World name (optional)
+        description: description of the task (optional)
         **arguments: Additional arguments (ignored)
         
     Returns:
@@ -521,7 +535,7 @@ async def handle_add_build_task_prefab_sign(
         if world:
             task_data["world"] = world
         
-        result = await api_client.add_build_task(build_id, "PREFAB_SIGN", task_data)
+        result = await api_client.add_build_task(build_id, "PREFAB_SIGN", task_data, description)
         
         if result.get("success"):
             task = result["task"]

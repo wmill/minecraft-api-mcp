@@ -75,6 +75,7 @@ public class DatabaseSchema {
                 task_data JSONB NOT NULL,
                 status VARCHAR(50) NOT NULL DEFAULT 'queued',
                 executed_at TIMESTAMP WITH TIME ZONE,
+                description TEXT,
                 error_message TEXT,
                 
                 -- Coordinate tracking for location queries

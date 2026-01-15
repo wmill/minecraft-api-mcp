@@ -19,19 +19,21 @@ public class BuildTask {
     private Instant executedAt;
     private String errorMessage;
     private BoundingBox coordinates;
+    private String description;
 
     public BuildTask() {
         this.id = UUID.randomUUID();
         this.status = TaskStatus.QUEUED;
     }
 
-    public BuildTask(UUID buildId, int taskOrder, TaskType taskType, JsonNode taskData) {
+    public BuildTask(UUID buildId, int taskOrder, TaskType taskType, JsonNode taskData, String description) {
         this();
         this.buildId = buildId;
         this.taskOrder = taskOrder;
         this.taskType = taskType;
         this.taskData = taskData;
         this.coordinates = BoundingBox.fromTaskData(taskType, taskData);
+        this.description = description;
     }
 
     /**
@@ -147,6 +149,13 @@ public class BuildTask {
         this.coordinates = coordinates;
     }
 
+    public String getDescription() {
+        return description;
+    }
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
@@ -171,6 +180,7 @@ public class BuildTask {
                 ", executedAt=" + executedAt +
                 ", errorMessage='" + errorMessage + '\'' +
                 ", coordinates=" + coordinates +
+                ", description='" + description + '\'' +
                 '}';
     }
 }

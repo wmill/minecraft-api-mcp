@@ -729,7 +729,8 @@ class MinecraftAPIClient:
         self,
         build_id: str,
         task_type: str,
-        task_data: Dict[str, Any]
+        task_data: Dict[str, Any],
+        description: str
     ) -> dict:
         """
         Add a building task to a build queue.
@@ -738,6 +739,7 @@ class MinecraftAPIClient:
             build_id: Build UUID
             task_type: Type of building task (BLOCK_SET, BLOCK_FILL, PREFAB_*, etc.)
             task_data: Task-specific payload data
+            description: Description of the task
             
         Returns:
             dict: Response containing task addition result
@@ -748,7 +750,8 @@ class MinecraftAPIClient:
         payload = {
             "build_id": build_id,
             "task_type": task_type,
-            "task_data": task_data
+            "task_data": task_data,
+            "description": description
         }
         
         async with httpx.AsyncClient() as client:

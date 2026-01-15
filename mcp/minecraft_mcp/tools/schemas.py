@@ -774,6 +774,11 @@ TOOL_ADD_BUILD_TASK_BLOCK_SET = Tool(
                 "type": "string",
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
+            },
+            "description": {
+                "type": "string",
+                "description": "Description of task (optional)",
+                "default": ""               
             }
         },
         "required": ["build_id", "start_x", "start_y", "start_z", "blocks"]
@@ -822,6 +827,11 @@ TOOL_ADD_BUILD_TASK_BLOCK_FILL = Tool(
                 "type": "string",
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
+            },
+            "description": {
+                "type": "string",
+                "description": "Description of task (optional)",
+                "default": ""               
             }
         },
         "required": ["build_id", "x1", "y1", "z1", "x2", "y2", "z2", "block_type"]
@@ -886,6 +896,11 @@ TOOL_ADD_BUILD_TASK_PREFAB_DOOR = Tool(
                 "type": "string",
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
+            },
+            "description": {
+                "type": "string",
+                "description": "Description of task (optional)",
+                "default": ""               
             }
         },
         "required": ["build_id", "start_x", "start_y", "start_z", "facing", "block_type"]
@@ -950,6 +965,11 @@ TOOL_ADD_BUILD_TASK_PREFAB_STAIRS = Tool(
                 "type": "string",
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
+            },
+            "description": {
+                "type": "string",
+                "description": "Description of task (optional)",
+                "default": ""               
             }
         },
         "required": ["build_id", "start_x", "start_y", "start_z", "end_x", "end_y", "end_z", "block_type", "stair_type", "staircase_direction"]
@@ -1005,6 +1025,11 @@ TOOL_ADD_BUILD_TASK_PREFAB_WINDOW = Tool(
                 "type": "string",
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
+            },
+            "description": {
+                "type": "string",
+                "description": "Description of task (optional)",
+                "default": ""               
             }
         },
         "required": ["build_id", "start_x", "start_y", "start_z", "end_x", "end_z", "height", "block_type"]
@@ -1047,6 +1072,11 @@ TOOL_ADD_BUILD_TASK_PREFAB_TORCH = Tool(
                 "type": "string",
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
+            },
+            "description": {
+                "type": "string",
+                "description": "Description of task (optional)",
+                "default": ""               
             }
         },
         "required": ["build_id", "x", "y", "z", "block_type"]
@@ -1113,6 +1143,11 @@ TOOL_ADD_BUILD_TASK_PREFAB_SIGN = Tool(
                 "type": "string",
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
+            },
+            "description": {
+                "type": "string",
+                "description": "Description of task (optional)",
+                "default": ""               
             }
         },
         "required": ["build_id", "x", "y", "z", "block_type"]

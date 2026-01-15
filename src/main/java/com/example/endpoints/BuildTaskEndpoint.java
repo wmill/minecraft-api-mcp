@@ -111,6 +111,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
                         taskMap.put("task_type", task.getTaskType().toString());
                         taskMap.put("status", task.getStatus().toString());
                         taskMap.put("task_data", task.getTaskData());
+                        taskMap.put("description", task.getDescription() != null ? task.getDescription() : "");
                         if (task.getExecutedAt() != null) {
                             taskMap.put("executed_at", task.getExecutedAt().toString());
                         }
