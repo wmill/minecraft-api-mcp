@@ -155,6 +155,112 @@ public class BoundingBox {
     }
 
     /**
+     * Creates a bounding box from door prefab request data.
+     */
+    public static BoundingBox fromPrefabDoorRequest(JsonNode taskData) {
+        if (taskData == null) {
+            return null;
+        }
+
+        if (!(taskData.has("start_x") && taskData.has("start_y") && taskData.has("start_z"))) {
+            return null;
+        }
+
+        if (!taskData.has("facing")) {
+            return null;
+        }
+
+        String facing = taskData.get("facing").asText("").toLowerCase();
+        int lateralX;
+        int lateralZ;
+        switch (facing) {
+            case "north":
+                lateralX = 1;
+                lateralZ = 0;
+                break;
+            case "south":
+                lateralX = -1;
+                lateralZ = 0;
+                break;
+            case "east":
+                lateralX = 0;
+                lateralZ = 1;
+                break;
+            case "west":
+                lateralX = 0;
+                lateralZ = -1;
+                break;
+            default:
+                return null;
+        }
+
+        int startX = taskData.get("start_x").asInt();
+        int startY = taskData.get("start_y").asInt();
+        int startZ = taskData.get("start_z").asInt();
+        int width = taskData.has("width") ? taskData.get("width").asInt() : 1;
+        if (width <= 0) {
+            return null;
+        }
+
+        int endX = startX + lateralX * (width - 1);
+        int endZ = startZ + lateralZ * (width - 1);
+        int endY = startY + 1;
+
+        return new BoundingBox(startX, startY, startZ, endX, endY, endZ);
+    }
+
+    /**
+     * Creates a bounding box from stairs prefab request data.
+     */
+    public static BoundingBox fromPrefabStairsRequest(JsonNode taskData) {
+        if (taskData == null) {
+            return null;
+        }
+
+        if (taskData.has("start_x") && taskData.has("start_y") && taskData.has("start_z") &&
+            taskData.has("end_x") && taskData.has("end_y") && taskData.has("end_z")) {
+            int startX = taskData.get("start_x").asInt();
+            int startY = taskData.get("start_y").asInt();
+            int startZ = taskData.get("start_z").asInt();
+            int endX = taskData.get("end_x").asInt();
+            int endY = taskData.get("end_y").asInt();
+            int endZ = taskData.get("end_z").asInt();
+
+            return new BoundingBox(startX, startY, startZ, endX, endY, endZ);
+        }
+
+        return null;
+    }
+
+    /**
+     * Creates a bounding box from window pane prefab request data.
+     */
+    public static BoundingBox fromPrefabWindowRequest(JsonNode taskData) {
+        if (taskData == null) {
+            return null;
+        }
+
+        if (!(taskData.has("start_x") && taskData.has("start_y") && taskData.has("start_z") &&
+              taskData.has("end_x") && taskData.has("end_z") && taskData.has("height"))) {
+            return null;
+        }
+
+        int height = taskData.get("height").asInt();
+        if (height <= 0) {
+            return null;
+        }
+
+        int startX = taskData.get("start_x").asInt();
+        int startY = taskData.get("start_y").asInt();
+        int startZ = taskData.get("start_z").asInt();
+        int endX = taskData.get("end_x").asInt();
+        int endZ = taskData.get("end_z").asInt();
+        int endY = startY + height - 1;
+
+        return new BoundingBox(startX, startY, startZ, endX, endY, endZ);
+    }
+
+    /**
      * Creates a bounding box from task data based on task type.
      */
     public static BoundingBox fromTaskData(TaskType taskType, JsonNode taskData) {
@@ -168,8 +274,11 @@ public class BoundingBox {
             case BLOCK_FILL:
                 return fromFillBoxRequest(taskData);
             case PREFAB_DOOR:
+                return fromPrefabDoorRequest(taskData);
             case PREFAB_STAIRS:
+                return fromPrefabStairsRequest(taskData);
             case PREFAB_WINDOW:
+                return fromPrefabWindowRequest(taskData);
             case PREFAB_TORCH:
             case PREFAB_SIGN:
                 return fromPrefabRequest(taskData);
