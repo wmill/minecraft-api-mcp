@@ -25,18 +25,21 @@ public class BuildTaskEndpointIntegrationTest {
         // Then: Should not throw an exception, should gracefully handle database unavailability
         assertDoesNotThrow(() -> {
             System.setProperty("api.port", "0");
-            APIServer.start(mockServer, logger);
-            
-            // Verify the app was created
-            assertNotNull(APIServer.app);
-            assertNotNull(APIServer.minecraftServer);
-            assertNotNull(APIServer.logger);
-            
-            // Clean up
-            if (APIServer.app != null) {
-                APIServer.app.stop();
+            try {
+                APIServer.start(mockServer, logger);
+                
+                // Verify the app was created
+                assertNotNull(APIServer.app);
+                assertNotNull(APIServer.minecraftServer);
+                assertNotNull(APIServer.logger);
+                
+                // Clean up
+                if (APIServer.app != null) {
+                    APIServer.app.stop();
+                }
+            } finally {
+                System.clearProperty("api.port");
             }
-            System.clearProperty("api.port");
         });
     }
 }

@@ -47,7 +47,7 @@ public class APIServer {
         // Initialize build task management system
         try {
             initializeBuildTaskSystem(app, server, logger);
-        } catch (SQLException e) {
+        } catch (SQLException | RuntimeException e) {
             logger.error("Failed to initialize build task system", e);
             // Continue without build task system if database is not available
             logger.warn("Build task management endpoints will not be available");
