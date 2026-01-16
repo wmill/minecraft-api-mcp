@@ -81,14 +81,14 @@ class TaskExecutorTest {
         // Create valid task data structure
         String validTaskData = """
             {
-                "startX": 0,
-                "startY": 64,
-                "startZ": 0,
+                "start_x": 0,
+                "start_y": 64,
+                "start_z": 0,
                 "blocks": [
                     [
                         [
                             {
-                                "blockName": "minecraft:stone"
+                                "block_name": "minecraft:stone"
                             }
                         ]
                     ]

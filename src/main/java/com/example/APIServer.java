@@ -22,7 +22,16 @@ public class APIServer {
     public static void start(MinecraftServer server, org.slf4j.Logger logger) {
         minecraftServer = server;
         APIServer.logger = logger;
-        app = Javalin.create().start(7070);
+        int port = 7070;
+        String portOverride = System.getProperty("api.port");
+        if (portOverride != null && !portOverride.isBlank()) {
+            try {
+                port = Integer.parseInt(portOverride);
+            } catch (NumberFormatException ignored) {
+                port = 7070;
+            }
+        }
+        app = Javalin.create().start(port);
 
         app.get("/", ctx -> ctx.result("Hello World"));
 

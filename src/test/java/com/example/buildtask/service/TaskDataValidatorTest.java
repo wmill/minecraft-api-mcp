@@ -136,9 +136,9 @@ class TaskDataValidatorTest {
     void testValidDoorData() throws Exception {
         String validData = """
             {
-                "startX": 0,
-                "startY": 64,
-                "startZ": 0,
+                "start_x": 0,
+                "start_y": 64,
+                "start_z": 0,
                 "facing": "north",
                 "block_type": "minecraft:oak_door"
             }
@@ -221,7 +221,7 @@ class TaskDataValidatorTest {
         TaskDataValidator.ValidationResult result = validator.validateTaskData(TaskType.PREFAB_SIGN, data);
         
         assertFalse(result.isValid());
-        assertTrue(result.getErrorMessage().contains("frontLines can have maximum 4 lines"));
+        assertTrue(result.getErrorMessage().contains("front_lines can have maximum 4 lines"));
     }
 
     @Test

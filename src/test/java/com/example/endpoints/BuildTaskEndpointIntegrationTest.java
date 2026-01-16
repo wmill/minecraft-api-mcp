@@ -24,6 +24,7 @@ public class BuildTaskEndpointIntegrationTest {
         // When: Starting the API server (database will be unavailable in test environment)
         // Then: Should not throw an exception, should gracefully handle database unavailability
         assertDoesNotThrow(() -> {
+            System.setProperty("api.port", "0");
             APIServer.start(mockServer, logger);
             
             // Verify the app was created
@@ -35,6 +36,7 @@ public class BuildTaskEndpointIntegrationTest {
             if (APIServer.app != null) {
                 APIServer.app.stop();
             }
+            System.clearProperty("api.port");
         });
     }
 }
