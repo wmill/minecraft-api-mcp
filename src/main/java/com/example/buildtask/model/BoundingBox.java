@@ -47,6 +47,14 @@ public class BoundingBox {
             return null;
         }
 
+        if (!(taskData.has("start_x") && taskData.has("start_y") && taskData.has("start_z"))) {
+            return null;
+        }
+
+        int startX = taskData.get("start_x").asInt();
+        int startY = taskData.get("start_y").asInt();
+        int startZ = taskData.get("start_z").asInt();
+
         JsonNode blocks = taskData.get("blocks");
         if (!blocks.isArray() || blocks.size() == 0) {
             return null;
@@ -58,23 +66,40 @@ public class BoundingBox {
         int maxX = Integer.MIN_VALUE;
         int maxY = Integer.MIN_VALUE;
         int maxZ = Integer.MIN_VALUE;
+        boolean foundBlock = false;
 
-        for (JsonNode block : blocks) {
-            if (block.has("x") && block.has("y") && block.has("z")) {
-                int x = block.get("x").asInt();
-                int y = block.get("y").asInt();
-                int z = block.get("z").asInt();
+        for (int xIndex = 0; xIndex < blocks.size(); xIndex++) {
+            JsonNode blocksX = blocks.get(xIndex);
+            if (blocksX == null || !blocksX.isArray()) {
+                continue;
+            }
+            for (int yIndex = 0; yIndex < blocksX.size(); yIndex++) {
+                JsonNode blocksY = blocksX.get(yIndex);
+                if (blocksY == null || !blocksY.isArray()) {
+                    continue;
+                }
+                for (int zIndex = 0; zIndex < blocksY.size(); zIndex++) {
+                    JsonNode block = blocksY.get(zIndex);
+                    if (block == null || block.isNull()) {
+                        continue;
+                    }
 
-                minX = Math.min(minX, x);
-                minY = Math.min(minY, y);
-                minZ = Math.min(minZ, z);
-                maxX = Math.max(maxX, x);
-                maxY = Math.max(maxY, y);
-                maxZ = Math.max(maxZ, z);
+                    int x = startX + xIndex;
+                    int y = startY + yIndex;
+                    int z = startZ + zIndex;
+
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    minZ = Math.min(minZ, z);
+                    maxX = Math.max(maxX, x);
+                    maxY = Math.max(maxY, y);
+                    maxZ = Math.max(maxZ, z);
+                    foundBlock = true;
+                }
             }
         }
 
-        if (minX == Integer.MAX_VALUE) {
+        if (!foundBlock) {
             return null;
         }
 
