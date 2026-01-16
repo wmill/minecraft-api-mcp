@@ -33,7 +33,7 @@ public class APIServer {
         }
         app = Javalin.create().start(port);
 
-        app.get("/", ctx -> ctx.result("Hello World"));
+        app.get("/api/test", ctx -> ctx.result("Server is running"));
 
         // Initialize existing endpoints
         new EntitiesEndpoint(app, server, logger);

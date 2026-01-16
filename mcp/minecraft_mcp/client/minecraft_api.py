@@ -919,4 +919,4 @@ class MinecraftAPIClient:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{self.base_url}/api/test")
             response.raise_for_status()
-            return response.json()
+            return {"message": response.text.strip()}

@@ -219,24 +219,39 @@ async def handle_get_heightmap(
         result = await api_client.get_heightmap(x1, z1, x2, z2, heightmap_type, world)
         
         if result.get("success"):
-            heightmap = result["heightmap"]
-            width = len(heightmap)
-            length = len(heightmap[0]) if width > 0 else 0
-            
+            heightmap = result.get("heights") or result.get("heightmap") or []
+            size = result.get("size") or {}
+            width = size.get("x", len(heightmap))
+            length = size.get("z", len(heightmap[0]) if heightmap else 0)
+
             # Calculate statistics
             all_heights = [h for row in heightmap for h in row]
-            min_height = min(all_heights) if all_heights else 0
-            max_height = max(all_heights) if all_heights else 0
-            avg_height = sum(all_heights) / len(all_heights) if all_heights else 0
-            
+            min_height = min(all_heights) if all_heights else None
+            max_height = max(all_heights) if all_heights else None
+            avg_height = (sum(all_heights) / len(all_heights)) if all_heights else None
+
             response_text = f"**Heightmap Data ({width}x{length}):**\n"
-            response_text += f"World: {result['world']}\n"
-            response_text += f"Type: {heightmap_type}\n"
-            response_text += f"Area: from ({x1}, {z1}) to ({x2}, {z2})\n\n"
+            response_text += f"World: {result.get('world', world)}\n"
+            response_text += f"Type: {result.get('heightmap_type', heightmap_type)}\n"
+
+            area_bounds = result.get("area_bounds")
+            if area_bounds:
+                min_bounds = area_bounds.get("min", {})
+                max_bounds = area_bounds.get("max", {})
+                response_text += (
+                    f"Area: from ({min_bounds.get('x')}, {min_bounds.get('z')}) "
+                    f"to ({max_bounds.get('x')}, {max_bounds.get('z')})\n\n"
+                )
+            else:
+                response_text += f"Area: from ({x1}, {z1}) to ({x2}, {z2})\n\n"
+
             response_text += "**Height Statistics:**\n"
-            response_text += f"- Minimum: {min_height}\n"
-            response_text += f"- Maximum: {max_height}\n"
-            response_text += f"- Average: {avg_height:.1f}\n"
+            height_range = result.get("height_range") or {}
+            range_min = height_range.get("min", min_height)
+            range_max = height_range.get("max", max_height)
+            response_text += f"- Minimum: {range_min if range_min is not None else 'n/a'}\n"
+            response_text += f"- Maximum: {range_max if range_max is not None else 'n/a'}\n"
+            response_text += f"- Average: {avg_height:.1f}\n" if avg_height is not None else "- Average: n/a\n"
             
             return format_success_response(response_text)
         else:
