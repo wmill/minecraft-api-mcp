@@ -24,6 +24,7 @@
 - Packages stay under `com.example...`; classes PascalCase, methods/fields camelCase, constants UPPER_SNAKE.
 - Favor Fabric logging via `ExampleMod.LOGGER`; keep endpoint handlers small and side-effect limited.
 - JSON payloads follow existing REST schema (see `endpoints/*`); prefer descriptive path segments (`/api/world/...`).
+- Payloads should follow snake_case in both the http api and the mcp server.
 
 ## Testing Guidelines
 - Integration: start the server, then run `uv run test_api.py` to hit player/entity endpoints; update `API_BASE` if the port changes.
