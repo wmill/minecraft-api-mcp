@@ -89,15 +89,15 @@ public class BoundingBox {
             return null;
         }
 
-        if (taskData.has("startX") && taskData.has("startY") && taskData.has("startZ") &&
-            taskData.has("endX") && taskData.has("endY") && taskData.has("endZ")) {
+        if (taskData.has("x1") && taskData.has("y1") && taskData.has("z1") &&
+            taskData.has("x2") && taskData.has("y2") && taskData.has("z2")) {
             
-            int startX = taskData.get("startX").asInt();
-            int startY = taskData.get("startY").asInt();
-            int startZ = taskData.get("startZ").asInt();
-            int endX = taskData.get("endX").asInt();
-            int endY = taskData.get("endY").asInt();
-            int endZ = taskData.get("endZ").asInt();
+            int startX = taskData.get("x1").asInt();
+            int startY = taskData.get("y1").asInt();
+            int startZ = taskData.get("z1").asInt();
+            int endX = taskData.get("x2").asInt();
+            int endY = taskData.get("y2").asInt();
+            int endZ = taskData.get("z2").asInt();
 
             return new BoundingBox(startX, startY, startZ, endX, endY, endZ);
         }
