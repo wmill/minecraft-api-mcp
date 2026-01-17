@@ -44,6 +44,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     # System tools
     "teleport_player": system.handle_teleport_player,
     "test_server_connection": system.handle_test_server_connection,
+    "get_coordinate_conventions": system.handle_coordinate_conventions,
     
     # Build management tools
     "create_build": builds.handle_create_build,

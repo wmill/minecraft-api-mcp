@@ -93,7 +93,7 @@ TOOL_SET_BLOCKS = Tool(
             },
             "blocks": {
                 "type": "array",
-                "description": "3D array of block objects (use null for no change). Each block object has blockName and optional blockStates.",
+                "description": "3D array of block objects (use null for no change). Each block object has blockName and optional blockStates. The array should be x, y, z, where y is height.",
                 "items": {
                     "type": "array",
                     "items": {
@@ -1275,6 +1275,19 @@ TOOL_GET_BUILD_STATUS = Tool(
     }
 )
 
+#    "handle_coordinate_conventions"
+TOOL_HANDLE_COORDINATE_CONVENTIONS = Tool(
+    name = "get_coordinate_conventions",
+    description="Get information about the Minecraft coordinate system",
+    inputSchema={
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    },
+)
+
+
 
 # Export all tool schemas as a list
 TOOL_SCHEMAS = [
@@ -1301,6 +1314,7 @@ TOOL_SCHEMAS = [
     # System tools
     TOOL_TELEPORT_PLAYER,
     TOOL_TEST_SERVER_CONNECTION,
+    TOOL_HANDLE_COORDINATE_CONVENTIONS,
     # Build management tools
     TOOL_CREATE_BUILD,
     TOOL_ADD_BUILD_TASK,

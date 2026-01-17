@@ -14,7 +14,7 @@ from ..utils.formatting import (
     format_error_response,
     format_coordinate
 )
-
+from ..utils.helpers import coordinate_info_blurb
 
 async def handle_teleport_player(
     api_client: MinecraftAPIClient,
@@ -113,3 +113,11 @@ async def handle_test_server_connection(
         )
     except Exception as e:
         return format_error_response(e, "testing server connection")
+
+async def handle_coordinate_conventions(
+    api_client: MinecraftAPIClient,
+    **arguments
+) -> CallToolResult:
+    return CallToolResult(
+        content=[TextContent(type="text", text=coordinate_info_blurb)]
+    )

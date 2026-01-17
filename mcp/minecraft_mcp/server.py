@@ -19,12 +19,14 @@ from mcp.types import (
     CallToolResult,
     TextContent,
     ContentBlock,
+    Resource,
 )
+from mcp.server.lowlevel.helper_types import ReadResourceContents
 
 from .client.minecraft_api import MinecraftAPIClient
 from .tools.schemas import TOOL_SCHEMAS
 from .tools.registry import get_handler
-from .utils.helpers import safe_url
+from .utils.helpers import safe_url, coordinate_info_blurb
 
 
 class MinecraftMCPServer:
@@ -98,6 +100,22 @@ class MinecraftMCPServer:
                     content=[TextContent(type="text", text=f"Error: {str(e)}")]
                 )
                 return error_result.content
+            
+        @self.server.list_resources()
+        async def list_resources() -> list[Resource]:
+            return [
+                Resource(
+                    uri="minecraft://docs/conventions",
+                    name="conventions",
+                    title="conventions",
+                    description="A brief guide to conventions and coordinate systems used",
+                )
+            ]
+        
+        @self.server.read_resource()
+        async def read_resource(uri: str):
+            # only have one so just return it
+            return [ReadResourceContents(mime_type="text/plain", content=coordinate_info_blurb)]
     
     async def run_stdio(self):
         """
