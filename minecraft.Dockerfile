@@ -15,8 +15,11 @@ RUN mkdir -p /minecraft/mods /minecraft/logs /minecraft/world
 # Copy the Fabric server launcher from mods directory
 COPY mods/fabric-server-launch.jar /minecraft/fabric-server-launch.jar
 
-# Copy your mod jar file
-COPY build/libs/*.jar /minecraft/mods/
+# Copy your mod jar file (remapped only)
+# ARG JAR_FILE
+# RUN test -n "${JAR_FILE}" || (echo "JAR_FILE build arg is required (e.g., modid-1.0.0-fat-remapped.jar)" && exit 1)
+# COPY build/libs/${JAR_FILE} /minecraft/mods/
+COPY build/libs/modid-*-remapped.jar /minecraft/mods/
 
 # Copy Fabric API and other mods from mods directory (excluding server launcher)
 COPY mods/fabric-api-*.jar /minecraft/mods/

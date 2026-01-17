@@ -1217,7 +1217,7 @@ TOOL_EXECUTE_BUILD = Tool(
 
 TOOL_QUERY_BUILDS_BY_LOCATION = Tool(
     name="query_builds_by_location",
-    description="Find builds that intersect with a specified area",
+    description="Find builds that intersect with a specified area. Useful to review and build upon existing builds.",
     inputSchema={
         "type": "object",
         "properties": {
