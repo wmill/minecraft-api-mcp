@@ -261,6 +261,34 @@ public class BoundingBox {
     }
 
     /**
+     * Creates a bounding box from ladder prefab request data.
+     */
+    public static BoundingBox fromPrefabLadderRequest(JsonNode taskData) {
+        if (taskData == null) {
+            return null;
+        }
+
+        if (!(taskData.has("x") && taskData.has("y") && taskData.has("z") && taskData.has("height"))) {
+            return null;
+        }
+
+        int x = taskData.get("x").asInt();
+        int y = taskData.get("y").asInt();
+        int z = taskData.get("z").asInt();
+        int height = taskData.get("height").asInt();
+
+        if (height <= 0) {
+            return null;
+        }
+
+        // Ladder is a vertical structure with 1x1 horizontal footprint
+        // Height extends upward from the base position
+        int endY = y + height - 1;
+
+        return new BoundingBox(x, y, z, x, endY, z);
+    }
+
+    /**
      * Creates a bounding box from task data based on task type.
      */
     public static BoundingBox fromTaskData(TaskType taskType, JsonNode taskData) {
@@ -279,6 +307,8 @@ public class BoundingBox {
                 return fromPrefabStairsRequest(taskData);
             case PREFAB_WINDOW:
                 return fromPrefabWindowRequest(taskData);
+            case PREFAB_LADDER:
+                return fromPrefabLadderRequest(taskData);
             case PREFAB_TORCH:
             case PREFAB_SIGN:
                 return fromPrefabRequest(taskData);

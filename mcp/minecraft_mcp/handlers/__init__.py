@@ -28,7 +28,8 @@ from .prefabs import (
     handle_place_stairs,
     handle_place_window_pane_wall,
     handle_place_torch,
-    handle_place_sign
+    handle_place_sign,
+    handle_place_ladder
 )
 
 from .builds import (
@@ -41,6 +42,7 @@ from .builds import (
     handle_add_build_task_prefab_window,
     handle_add_build_task_prefab_torch,
     handle_add_build_task_prefab_sign,
+    handle_add_build_task_prefab_ladder,
     handle_execute_build,
     handle_query_builds_by_location,
     handle_get_build_status
@@ -72,6 +74,7 @@ __all__ = [
     "handle_place_window_pane_wall",
     "handle_place_torch",
     "handle_place_sign",
+    "handle_place_ladder",
     # Build handlers
     "handle_create_build",
     "handle_add_build_task",
@@ -82,6 +85,7 @@ __all__ = [
     "handle_add_build_task_prefab_window",
     "handle_add_build_task_prefab_torch",
     "handle_add_build_task_prefab_sign",
+    "handle_add_build_task_prefab_ladder",
     "handle_execute_build",
     "handle_query_builds_by_location",
     "handle_get_build_status",

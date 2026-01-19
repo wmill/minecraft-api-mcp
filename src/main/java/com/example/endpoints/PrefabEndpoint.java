@@ -20,6 +20,7 @@ public class PrefabEndpoint extends APIEndpoint{
         registerWindowPane();
         registerTorch();
         registerSign();
+        registerLadder();
     }
     private void registerDoor() {
         app.post("/api/world/prefabs/door", ctx -> {
@@ -185,6 +186,36 @@ public class PrefabEndpoint extends APIEndpoint{
         });
     }
 
+    private void registerLadder() {
+        app.post("/api/world/prefabs/ladder", ctx -> {
+            LadderRequest req = ctx.bodyAsClass(LadderRequest.class);
+
+            // Delegate to core method
+            CompletableFuture<LadderResult> future = core.placeLadder(req);
+
+            // Wait for result and respond
+            try {
+                LadderResult result = future.get(10, TimeUnit.SECONDS);
+                if (!result.success()) {
+                    ctx.status(500).json(Map.of("error", result.error()));
+                } else {
+                    ctx.json(Map.of(
+                        "success", true,
+                        "world", result.world(),
+                        "blocks_placed", result.blocks_placed(),
+                        "facing", result.facing(),
+                        "start_position", result.start_position(),
+                        "end_position", result.end_position()
+                    ));
+                }
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for ladder placement"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+    }
+
     /**
      * Get access to the core prefab operations for programmatic use
      */
@@ -252,4 +283,14 @@ class SignRequest {
     public String facing; // optional for wall signs - "north", "south", "east", "west" - auto-detects if not provided
     public Integer rotation; // for standing signs - 0-15 (optional, defaults to 0)
     public Boolean glowing; // whether text glows (optional, defaults to false)
+}
+
+class LadderRequest {
+    public String world; // optional, defaults to overworld
+    public int x; // ladder base X coordinate
+    public int y; // ladder base Y coordinate
+    public int z; // ladder base Z coordinate
+    public int height; // number of ladder blocks to place vertically
+    public String block_type; // ladder block identifier (e.g., "minecraft:ladder")
+    public String facing; // optional - direction ladder faces ("north", "south", "east", "west")
 }

@@ -40,6 +40,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "place_window_pane_wall": prefabs.handle_place_window_pane_wall,
     "place_torch": prefabs.handle_place_torch,
     "place_sign": prefabs.handle_place_sign,
+    "place_ladder": prefabs.handle_place_ladder,
     
     # System tools
     "teleport_player": system.handle_teleport_player,
@@ -57,6 +58,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "add_build_task_prefab_window": builds.handle_add_build_task_prefab_window,
     "add_build_task_prefab_torch": builds.handle_add_build_task_prefab_torch,
     "add_build_task_prefab_sign": builds.handle_add_build_task_prefab_sign,
+    "add_build_task_prefab_ladder": builds.handle_add_build_task_prefab_ladder,
     "execute_build": builds.handle_execute_build,
     "query_builds_by_location": builds.handle_query_builds_by_location,
     "get_build_status": builds.handle_get_build_status,

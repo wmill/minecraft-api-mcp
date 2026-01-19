@@ -628,6 +628,49 @@ TOOL_PLACE_SIGN = Tool(
     }
 )
 
+TOOL_PLACE_LADDER = Tool(
+    name="place_ladder",
+    description="Place a vertical ladder structure at specified coordinates with automatic attachment validation",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "x": {
+                "type": "integer",
+                "description": "X coordinate for ladder base (east positive, west negative)"
+            },
+            "y": {
+                "type": "integer",
+                "description": "Y coordinate for ladder base (elevation: -64 to 320, sea level at 63)"
+            },
+            "z": {
+                "type": "integer",
+                "description": "Z coordinate for ladder base (south positive, north negative)"
+            },
+            "height": {
+                "type": "integer",
+                "description": "Number of ladder blocks to place vertically",
+                "minimum": 1
+            },
+            "block_type": {
+                "type": "string",
+                "description": "Ladder block type (e.g., 'minecraft:ladder')",
+                "default": "minecraft:ladder"
+            },
+            "facing": {
+                "type": "string",
+                "description": "Direction the ladder faces (north/south/east/west). If not provided, auto-detects based on adjacent solid blocks for attachment.",
+                "enum": ["north", "south", "east", "west"]
+            },
+            "world": {
+                "type": "string",
+                "description": "World name (optional, defaults to minecraft:overworld)",
+                "default": "minecraft:overworld"
+            }
+        },
+        "required": ["x", "y", "z", "height"]
+    }
+)
+
 
 # System Tools
 TOOL_TELEPORT_PLAYER = Tool(
@@ -1200,6 +1243,58 @@ TOOL_ADD_BUILD_TASK_PREFAB_SIGN = Tool(
     }
 )
 
+TOOL_ADD_BUILD_TASK_PREFAB_LADDER = Tool(
+    name="add_build_task_prefab_ladder",
+    description="Add a PREFAB_LADDER task to a build queue",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {
+                "type": "string",
+                "description": "Build UUID"
+            },
+            "x": {
+                "type": "integer",
+                "description": "X coordinate for ladder base (east positive, west negative)"
+            },
+            "y": {
+                "type": "integer",
+                "description": "Y coordinate for ladder base (elevation: -64 to 320, sea level at 63)"
+            },
+            "z": {
+                "type": "integer",
+                "description": "Z coordinate for ladder base (south positive, north negative)"
+            },
+            "height": {
+                "type": "integer",
+                "description": "Number of ladder blocks to place vertically",
+                "minimum": 1
+            },
+            "block_type": {
+                "type": "string",
+                "description": "Ladder block type (e.g., 'minecraft:ladder')",
+                "default": "minecraft:ladder"
+            },
+            "facing": {
+                "type": "string",
+                "description": "Direction the ladder faces (north/south/east/west). If not provided, auto-detects based on adjacent solid blocks for attachment.",
+                "enum": ["north", "south", "east", "west"]
+            },
+            "world": {
+                "type": "string",
+                "description": "World name (optional, defaults to minecraft:overworld)",
+                "default": "minecraft:overworld"
+            },
+            "description": {
+                "type": "string",
+                "description": "Description of task (optional)",
+                "default": ""               
+            }
+        },
+        "required": ["build_id", "x", "y", "z", "height"]
+    }
+)
+
 TOOL_EXECUTE_BUILD = Tool(
     name="execute_build",
     description="Execute all queued tasks in a build",
@@ -1311,6 +1406,7 @@ TOOL_SCHEMAS = [
     TOOL_PLACE_WINDOW_PANE_WALL,
     TOOL_PLACE_TORCH,
     TOOL_PLACE_SIGN,
+    TOOL_PLACE_LADDER,
     # System tools
     TOOL_TELEPORT_PLAYER,
     TOOL_TEST_SERVER_CONNECTION,
@@ -1326,6 +1422,7 @@ TOOL_SCHEMAS = [
     TOOL_ADD_BUILD_TASK_PREFAB_WINDOW,
     TOOL_ADD_BUILD_TASK_PREFAB_TORCH,
     TOOL_ADD_BUILD_TASK_PREFAB_SIGN,
+    TOOL_ADD_BUILD_TASK_PREFAB_LADDER,
     TOOL_EXECUTE_BUILD,
     TOOL_QUERY_BUILDS_BY_LOCATION,
     TOOL_GET_BUILD_STATUS,

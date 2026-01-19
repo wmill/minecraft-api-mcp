@@ -636,6 +636,69 @@ async def handle_add_build_task_prefab_sign(
         return format_error_response(e, "adding build task")
 
 
+async def handle_add_build_task_prefab_ladder(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    x: int,
+    y: int,
+    z: int,
+    height: int,
+    block_type: str = "minecraft:ladder",
+    facing: Optional[str] = None,
+    world: Optional[str] = None,
+    description: Optional[str] = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Add a PREFAB_LADDER task to a build queue.
+    
+    Args:
+        api_client: The Minecraft API client
+        build_id: Build UUID
+        x: X coordinate for ladder base
+        y: Y coordinate for ladder base
+        z: Z coordinate for ladder base
+        height: Number of ladder blocks to place vertically
+        block_type: Ladder block type (defaults to minecraft:ladder)
+        facing: Direction the ladder faces (north, south, east, west) - auto-detected if not specified
+        world: World name (optional)
+        description: Description of the task (optional)
+        **arguments: Additional arguments (ignored)
+        
+    Returns:
+        CallToolResult with task addition result
+    """
+    try:
+        task_data = {
+            "x": x,
+            "y": y,
+            "z": z,
+            "height": height,
+            "block_type": block_type,
+        }
+        if facing:
+            task_data["facing"] = facing
+        if world:
+            task_data["world"] = world
+        
+        result = await api_client.add_build_task(build_id, "PREFAB_LADDER", task_data, description)
+        
+        if result.get("success"):
+            task = result["task"]
+            response_text = f"✅ Successfully added PREFAB_LADDER task to build\n"
+            response_text += f"Task ID: {task['id']}\n"
+            response_text += f"Build ID: {build_id}\n"
+            response_text += f"Task Order: {task.get('task_order', 'N/A')}\n"
+            response_text += f"Status: {task['status']}"
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "adding build task")
+
+
 async def handle_execute_build(
     api_client: MinecraftAPIClient,
     build_id: str,

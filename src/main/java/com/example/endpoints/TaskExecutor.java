@@ -67,6 +67,7 @@ public class TaskExecutor {
                 case PREFAB_WINDOW -> executePrefabWindowTask(task);
                 case PREFAB_TORCH -> executePrefabTorchTask(task);
                 case PREFAB_SIGN -> executePrefabSignTask(task);
+                case PREFAB_LADDER -> executePrefabLadderTask(task);
                 default -> CompletableFuture.completedFuture(
                     new TaskExecutionResult(false, "Unknown task type: " + task.getTaskType(), null));
             };
@@ -246,6 +247,28 @@ public class TaskExecutor {
         } catch (Exception e) {
             return CompletableFuture.completedFuture(
                 new TaskExecutionResult(false, "Failed to parse PREFAB_SIGN task data: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * Executes a PREFAB_LADDER task using PrefabEndpointCore.
+     */
+    private CompletableFuture<TaskExecutionResult> executePrefabLadderTask(BuildTask task) {
+        try {
+            LadderRequest request = objectMapper.treeToValue(task.getTaskData(), LadderRequest.class);
+            
+            return prefabCore.placeLadder(request)
+                .thenApply(result -> {
+                    if (result.success()) {
+                        return new TaskExecutionResult(true, null, 
+                            "Placed " + result.blocks_placed() + " ladder blocks facing " + result.facing());
+                    } else {
+                        return new TaskExecutionResult(false, result.error(), null);
+                    }
+                });
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture(
+                new TaskExecutionResult(false, "Failed to parse PREFAB_LADDER task data: " + e.getMessage(), null));
         }
     }
 

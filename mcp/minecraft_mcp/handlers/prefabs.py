@@ -314,3 +314,58 @@ async def handle_place_sign(
             )
     except Exception as e:
         return format_error_response(e, "placing sign")
+
+
+async def handle_place_ladder(
+    api_client: MinecraftAPIClient,
+    x: int,
+    y: int,
+    z: int,
+    height: int,
+    block_type: str = "minecraft:ladder",
+    facing: Optional[str] = None,
+    world: Optional[str] = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Place a vertical ladder structure at specified coordinates.
+    
+    Args:
+        api_client: The Minecraft API client
+        x: X coordinate for ladder base
+        y: Y coordinate for ladder base
+        z: Z coordinate for ladder base
+        height: Number of ladder blocks to place vertically
+        block_type: Ladder block type (defaults to minecraft:ladder)
+        facing: Direction the ladder faces (north, south, east, west) - auto-detected if not specified
+        world: World name (optional)
+        **arguments: Additional arguments (ignored)
+        
+    Returns:
+        CallToolResult with placement result
+    """
+    try:
+        result = await api_client.place_ladder(
+            x, y, z, height, block_type, facing, world
+        )
+        
+        if result.get("success"):
+            blocks_placed = result.get("blocks_placed", height)
+            ladder_facing = result.get("facing", facing or "auto-detected")
+            start_pos = result.get("start_position", {"x": x, "y": y, "z": z})
+            end_pos = result.get("end_position", {"x": x, "y": y + height - 1, "z": z})
+            
+            location = f"from ({start_pos['x']}, {start_pos['y']}, {start_pos['z']}) to ({end_pos['x']}, {end_pos['y']}, {end_pos['z']})"
+            
+            response_text = f"✅ Successfully placed {blocks_placed} ladder block(s) {location}\n"
+            response_text += f"Height: {height} blocks\n"
+            response_text += f"Facing: {ladder_facing}\n"
+            response_text += f"Block Type: {block_type}"
+            
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to place ladder: {result}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "placing ladder")

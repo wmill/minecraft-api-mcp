@@ -689,6 +689,54 @@ class MinecraftAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def place_ladder(
+        self,
+        x: int,
+        y: int,
+        z: int,
+        height: int,
+        block_type: str = "minecraft:ladder",
+        facing: Optional[str] = None,
+        world: Optional[str] = None
+    ) -> dict:
+        """
+        Place a vertical ladder structure at specified coordinates.
+        
+        Args:
+            x: X coordinate for ladder base
+            y: Y coordinate for ladder base
+            z: Z coordinate for ladder base
+            height: Number of ladder blocks to place vertically
+            block_type: Ladder block type (defaults to minecraft:ladder)
+            facing: Direction the ladder faces (north, south, east, west) - auto-detected if not specified
+            world: World name (optional, defaults to minecraft:overworld)
+            
+        Returns:
+            dict: Response containing placement result with blocks_placed, facing, start_position, end_position
+            
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        payload = {
+            "x": x,
+            "y": y,
+            "z": z,
+            "height": height,
+            "block_type": block_type
+        }
+        if facing:
+            payload["facing"] = facing
+        if world:
+            payload["world"] = world
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/world/prefabs/ladder",
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def create_build(
         self,
         name: str,

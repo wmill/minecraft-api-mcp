@@ -45,6 +45,7 @@ public class TaskDataValidator {
             case PREFAB_WINDOW -> validateWindowPaneData(taskData);
             case PREFAB_TORCH -> validateTorchData(taskData);
             case PREFAB_SIGN -> validateSignData(taskData);
+            case PREFAB_LADDER -> validateLadderData(taskData);
             default -> ValidationResult.failure("Unknown task type: " + taskType);
         };
     }
@@ -374,6 +375,58 @@ public class TaskDataValidator {
         // Validate optional glowing field
         if (data.has("glowing") && !data.get("glowing").isBoolean()) {
             errors.add("glowing must be a boolean if provided");
+        }
+
+        return errors.isEmpty() ? ValidationResult.success() : ValidationResult.failure(String.join("; ", errors));
+    }
+
+    /**
+     * Validates PREFAB_LADDER task data against LadderRequest schema.
+     */
+    private ValidationResult validateLadderData(JsonNode data) {
+        List<String> errors = new ArrayList<>();
+
+        // Check required coordinate fields
+        if (!data.has("x") || !data.get("x").isInt()) {
+            errors.add("x is required and must be an integer");
+        }
+        if (!data.has("y") || !data.get("y").isInt()) {
+            errors.add("y is required and must be an integer");
+        }
+        if (!data.has("z") || !data.get("z").isInt()) {
+            errors.add("z is required and must be an integer");
+        }
+
+        // Check required height field
+        if (!data.has("height") || !data.get("height").isInt() || data.get("height").asInt() <= 0) {
+            errors.add("height is required and must be a positive integer");
+        }
+
+        // Check required block_type field
+        if (!data.has("block_type") || !data.get("block_type").isTextual() || data.get("block_type").asText().trim().isEmpty()) {
+            errors.add("block_type is required and must be a non-empty string");
+        } else {
+            String block_type = data.get("block_type").asText();
+            if (!isValidBlockIdentifier(block_type)) {
+                errors.add("block_type must be a valid block identifier (e.g., 'minecraft:ladder')");
+            }
+        }
+
+        // Validate optional facing field
+        if (data.has("facing")) {
+            if (!data.get("facing").isTextual()) {
+                errors.add("facing must be a string if provided");
+            } else {
+                String facing = data.get("facing").asText().toLowerCase();
+                if (!List.of("north", "south", "east", "west").contains(facing)) {
+                    errors.add("facing must be one of: north, south, east, west");
+                }
+            }
+        }
+
+        // Validate optional world field
+        if (data.has("world") && (!data.get("world").isTextual() || data.get("world").asText().trim().isEmpty())) {
+            errors.add("world must be a non-empty string if provided");
         }
 
         return errors.isEmpty() ? ValidationResult.success() : ValidationResult.failure(String.join("; ", errors));

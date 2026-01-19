@@ -3,6 +3,7 @@ package com.example.endpoints;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.DoorBlock;
+import net.minecraft.block.LadderBlock;
 import net.minecraft.block.StairsBlock;
 import net.minecraft.block.PaneBlock;
 import net.minecraft.block.BlockState;
@@ -533,6 +534,223 @@ public class PrefabEndpointCore {
         return future;
     }
 
+    /**
+     * Place ladder prefab
+     */
+    public CompletableFuture<LadderResult> placeLadder(LadderRequest request) {
+        CompletableFuture<LadderResult> future = new CompletableFuture<>();
+
+        // Validate world
+        RegistryKey<World> worldKey = request.world != null
+            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
+            : World.OVERWORLD;
+
+        ServerWorld world = server.getWorld(worldKey);
+        if (world == null) {
+            future.complete(new LadderResult(false, "Unknown world: " + worldKey, null, 0, null, null, null));
+            return future;
+        }
+
+        // Validate height
+        if (request.height <= 0) {
+            future.complete(new LadderResult(false, "Height must be positive", null, 0, null, null, null));
+            return future;
+        }
+
+        // Validate block type
+        Identifier blockId = Identifier.tryParse(request.block_type);
+        if (blockId == null) {
+            future.complete(new LadderResult(false, "Invalid block identifier", null, 0, null, null, null));
+            return future;
+        }
+
+        Block block = Registries.BLOCK.get(blockId);
+        if (!(block instanceof LadderBlock)) {
+            future.complete(new LadderResult(false, "Block is not a ladder: " + request.block_type, null, 0, null, null, null));
+            return future;
+        }
+
+        // Validate coordinates (basic bounds checking)
+        if (request.y < -64 || request.y > 320) {
+            future.complete(new LadderResult(false, "Y coordinate out of world bounds (-64 to 320)", null, 0, null, null, null));
+            return future;
+        }
+
+        // Validate height doesn't exceed world limits
+        int maxHeight = 320 - request.y + 1;
+        int actualHeight = Math.min(request.height, maxHeight);
+
+        logger.info("Placing ladder prefab in world {} at ({}, {}, {}) height {} block_type {}",
+            worldKey.getValue(), request.x, request.y, request.z, actualHeight, request.block_type);
+
+        // Execute on server thread
+        server.execute(() -> {
+            try {
+                int blocksPlaced = 0;
+                Direction facing = null;
+
+                // Determine facing direction using enhanced attachment validation
+                if (request.facing != null && !request.facing.isEmpty()) {
+                    // Use specified facing direction
+                    facing = switch(request.facing.toLowerCase()) {
+                        case "north" -> Direction.NORTH;
+                        case "south" -> Direction.SOUTH;
+                        case "east" -> Direction.EAST;
+                        case "west" -> Direction.WEST;
+                        default -> null;
+                    };
+
+                    if (facing == null) {
+                        future.complete(new LadderResult(false, "Invalid facing direction. Must be north, south, east, or west", null, 0, null, null, null));
+                        return;
+                    }
+
+                    // Validate that the specified facing has adequate attachment
+                    if (!validateLadderAttachment(world, request.x, request.y, request.z, actualHeight, facing)) {
+                        logger.warn("Specified facing direction {} has poor attachment, but proceeding as requested", facing.asString());
+                    }
+                } else {
+                    // Auto-detect optimal facing direction
+                    facing = findOptimalLadderFacing(world, request.x, request.y, request.z, actualHeight);
+
+                    if (facing == null) {
+                        // Apply fallback logic when no attachment is available
+                        facing = applyLadderFallbackLogic(world, request.x, request.y, request.z, actualHeight);
+                        if (facing == null) {
+                            future.complete(new LadderResult(false, "No suitable attachment found for ladder placement. Consider specifying a facing direction or providing adjacent solid blocks.", null, 0, null, null, null));
+                            return;
+                        }
+                        logger.info("Using fallback facing direction {} for ladder placement", facing.asString());
+                    }
+                }
+
+                // Place ladder blocks vertically with enhanced validation
+                for (int i = 0; i < actualHeight; i++) {
+                    BlockPos pos = new BlockPos(request.x, request.y + i, request.z);
+                    
+                    // Check attachment for each block
+                    if (!checkSolidBlockInDirection(world, pos, facing)) {
+                        logger.warn("No solid block to attach ladder at height {} in {} direction, placing anyway", i, facing.asString());
+                    }
+
+                    // Place ladder block with facing
+                    BlockState ladderState = block.getDefaultState()
+                        .with(Properties.HORIZONTAL_FACING, facing);
+
+                    world.setBlockState(pos, ladderState);
+                    blocksPlaced++;
+                }
+
+                Map<String, Integer> startPosition = Map.of("x", request.x, "y", request.y, "z", request.z);
+                Map<String, Integer> endPosition = Map.of("x", request.x, "y", request.y + actualHeight - 1, "z", request.z);
+
+                future.complete(new LadderResult(true, null, worldKey.getValue().toString(), blocksPlaced, facing.asString(), startPosition, endPosition));
+            } catch (Exception e) {
+                logger.error("Error placing ladder prefab", e);
+                future.complete(new LadderResult(false, "Exception during ladder placement: " + e.getMessage(), null, 0, null, null, null));
+            }
+        });
+
+        return future;
+    }
+
+    // Ladder attachment validation helper methods
+
+    /**
+     * Check for solid blocks in the specified facing direction from a position
+     */
+    private boolean checkSolidBlockInDirection(ServerWorld world, BlockPos pos, Direction facing) {
+        BlockPos attachPos = pos.offset(facing);
+        return world.getBlockState(attachPos).isSolidBlock(world, attachPos);
+    }
+
+    /**
+     * Validate ladder attachment for the entire height in the specified facing direction
+     */
+    private boolean validateLadderAttachment(ServerWorld world, int x, int y, int z, int height, Direction facing) {
+        int attachmentCount = 0;
+        for (int i = 0; i < height; i++) {
+            BlockPos pos = new BlockPos(x, y + i, z);
+            if (checkSolidBlockInDirection(world, pos, facing)) {
+                attachmentCount++;
+            }
+        }
+        
+        // Consider attachment valid if at least 50% of blocks have solid attachment
+        return (double) attachmentCount / height >= 0.5;
+    }
+
+    /**
+     * Auto-detection algorithm for optimal facing direction
+     * Prioritizes directions with the most solid block attachments across the ladder height
+     */
+    private Direction findOptimalLadderFacing(ServerWorld world, int x, int y, int z, int height) {
+        Direction[] directions = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+        Direction bestFacing = null;
+        int bestAttachmentCount = 0;
+
+        for (Direction dir : directions) {
+            int attachmentCount = 0;
+            for (int i = 0; i < height; i++) {
+                BlockPos pos = new BlockPos(x, y + i, z);
+                if (checkSolidBlockInDirection(world, pos, dir)) {
+                    attachmentCount++;
+                }
+            }
+
+            // Prefer directions with more attachments
+            if (attachmentCount > bestAttachmentCount) {
+                bestAttachmentCount = attachmentCount;
+                bestFacing = dir;
+            }
+        }
+
+        // Only return a facing if it has at least some attachment
+        return bestAttachmentCount > 0 ? bestFacing : null;
+    }
+
+    /**
+     * Fallback logic when no attachment is available
+     * Tries to find any direction with at least one solid block, or defaults to north
+     */
+    private Direction applyLadderFallbackLogic(ServerWorld world, int x, int y, int z, int height) {
+        Direction[] directions = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+        
+        // First fallback: find any direction with at least one solid block at any height
+        for (Direction dir : directions) {
+            for (int i = 0; i < height; i++) {
+                BlockPos pos = new BlockPos(x, y + i, z);
+                if (checkSolidBlockInDirection(world, pos, dir)) {
+                    logger.info("Fallback: Found minimal attachment in {} direction", dir.asString());
+                    return dir;
+                }
+            }
+        }
+
+        // Second fallback: check for solid blocks at base level only
+        for (Direction dir : directions) {
+            BlockPos basePos = new BlockPos(x, y, z);
+            if (checkSolidBlockInDirection(world, basePos, dir)) {
+                logger.info("Fallback: Found base-level attachment in {} direction", dir.asString());
+                return dir;
+            }
+        }
+
+        // Third fallback: check for any solid blocks in a wider area (adjacent to adjacent blocks)
+        for (Direction dir : directions) {
+            BlockPos basePos = new BlockPos(x, y, z);
+            BlockPos extendedPos = basePos.offset(dir).offset(dir); // Two blocks away
+            if (world.getBlockState(extendedPos).isSolidBlock(world, extendedPos)) {
+                logger.info("Fallback: Found extended attachment in {} direction", dir.asString());
+                return dir;
+            }
+        }
+
+        // Final fallback: return null to indicate no suitable attachment found
+        // The calling code will handle this by either failing or using a default direction
+        return null;
+    }
+
     // Helper methods
     private int buildStaircase(ServerWorld world, StairRequest req, Block baseBlock, Block stairBlock, Direction staircaseDirection) {
         int blocksPlaced = 0;
@@ -733,3 +951,4 @@ record StairResult(boolean success, String error, String world, int blocks_place
 record WindowPaneResult(boolean success, String error, String world, int panes_placed, String orientation, boolean waterlogged) {}
 record TorchResult(boolean success, String error, String world, String block_type, Map<String, Integer> position, boolean wall_mounted, String facing) {}
 record SignResult(boolean success, String error, String world, Map<String, Integer> position, String block_type, String sign_type, String facing, Integer rotation, boolean glowing) {}
+record LadderResult(boolean success, String error, String world, int blocks_placed, String facing, Map<String, Integer> start_position, Map<String, Integer> end_position) {}
