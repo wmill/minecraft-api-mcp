@@ -73,4 +73,7 @@ Pitch (vertical rotation):
 
 Warning! Pay attention to the fact that Minecraft coordinates have 0 yaw as south. In most engines it is east or north so don't let that trip you up.
 Similarly positive Z is south. 
+
+The facing attribute generally means something attached to the wall needs to be placed facing the wall. 
+Also something attached to the wall needs to be placed in the block next to the wall with the correct facing value.
 """

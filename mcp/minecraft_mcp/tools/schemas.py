@@ -459,7 +459,7 @@ TOOL_PLACE_STAIRS = Tool(
             },
             "staircase_direction": {
                 "type": "string",
-                "description": "Orientation of the staircase structure (determines width calculation)",
+                "description": "Orientation of the staircase structure (determines width calculation). Only the axis is used; staircase facing is automatically set based on ascending/descending.",
                 "enum": ["north", "south", "east", "west"]
             },
             "fill_support": {
@@ -1042,7 +1042,7 @@ TOOL_ADD_BUILD_TASK_PREFAB_STAIRS = Tool(
             },
             "staircase_direction": {
                 "type": "string",
-                "description": "Orientation of the staircase structure (determines width calculation)",
+                "description": "Orientation of the staircase structure (determines width calculation). Orientation of the staircase structure (determines width calculation). Only the axis is used; staircase facing is automatically set based on ascending/descending.",
                 "enum": ["north", "south", "east", "west"]
             },
             "fill_support": {

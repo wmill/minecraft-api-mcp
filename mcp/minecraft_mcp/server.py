@@ -105,7 +105,7 @@ class MinecraftMCPServer:
         async def list_resources() -> list[Resource]:
             return [
                 Resource(
-                    uri="minecraft://docs/conventions",
+                    uri="file://conventions",
                     name="conventions",
                     title="conventions",
                     description="A brief guide to conventions and coordinate systems used",
@@ -116,6 +116,7 @@ class MinecraftMCPServer:
         async def read_resource(uri: str):
             # only have one so just return it
             return [ReadResourceContents(mime_type="text/plain", content=coordinate_info_blurb)]
+        
     
     async def run_stdio(self):
         """

@@ -756,58 +756,71 @@ public class PrefabEndpointCore {
         int blocksPlaced = 0;
         
         // Calculate 3D line from start to end
-        int dx = Math.abs(req.end_x - req.start_x);
-        int dy = Math.abs(req.end_y - req.start_y);
-        int dz = Math.abs(req.end_z - req.start_z);
-        
-        
-        // Auto-calculate stair block facing direction from travel vector
-        Direction stairBlockFacing;
-        boolean isAscending = req.end_y > req.start_y;
-        
-        
-        if (isAscending) {
-            stairBlockFacing = staircaseDirection;
+        Direction.Axis axis = staircaseDirection.getAxis();
+        int deltaAxis = axis == Direction.Axis.X
+            ? req.end_x - req.start_x
+            : req.end_z - req.start_z;
+        int deltaY = req.end_y - req.start_y;
+
+        int dx = axis == Direction.Axis.X ? Math.abs(deltaAxis) : 0;
+        int dy = Math.abs(deltaY);
+        int dz = axis == Direction.Axis.Z ? Math.abs(deltaAxis) : 0;
+
+        Direction horizontalDirection;
+        if (axis == Direction.Axis.X) {
+            horizontalDirection = deltaAxis == 0
+                ? staircaseDirection
+                : (deltaAxis > 0 ? Direction.EAST : Direction.WEST);
         } else {
-            stairBlockFacing = staircaseDirection.getOpposite();
+            horizontalDirection = deltaAxis == 0
+                ? staircaseDirection
+                : (deltaAxis > 0 ? Direction.SOUTH : Direction.NORTH);
         }
 
-        // Calculate width from bounding box perpendicular to staircase direction
-        int width;
-        Direction lateralDirection;
-        if (staircaseDirection == Direction.NORTH || staircaseDirection == Direction.SOUTH) {
-            // Staircase oriented north/south, width is along X axis
-            width = dx + 1;
-            lateralDirection = Direction.EAST;
-        } else {
-            // Staircase oriented east/west, width is along Z axis
-            width = dz + 1;
-            lateralDirection = Direction.SOUTH;
-        }
+        Direction stairBlockFacing = deltaY >= 0
+            ? horizontalDirection
+            : horizontalDirection.getOpposite();
+
+        // Calculate width from bounding box perpendicular to staircase axis
+        int width = axis == Direction.Axis.X
+            ? Math.abs(req.end_z - req.start_z) + 1
+            : Math.abs(req.end_x - req.start_x) + 1;
+        int baseX = Math.min(req.start_x, req.end_x);
+        int baseZ = Math.min(req.start_z, req.end_z);
         
         // Use 3D Bresenham-like algorithm
-        int x = req.start_x, y = req.start_y, z = req.start_z;
+        int x = req.start_x;
+        int y = req.start_y;
+        int z = req.start_z;
+        if (axis == Direction.Axis.X) {
+            z = baseZ;
+        } else {
+            x = baseX;
+        }
         int maxSteps = Math.max(Math.max(dx, dy), dz);
         
         int prevY = y;
         for (int i = 0; i <= maxSteps; i++) {
-            BlockPos centerPos = new BlockPos(x, y, z);
             int nextX = x;
             int nextY = y;
             int nextZ = z;
             if (i < maxSteps) {
                 double progress = (double)(i + 1) / maxSteps;
-                nextX = req.start_x + (int)Math.round((req.end_x - req.start_x) * progress);
+                if (axis == Direction.Axis.X) {
+                    nextX = req.start_x + (int)Math.round((req.end_x - req.start_x) * progress);
+                    nextZ = baseZ;
+                } else {
+                    nextX = baseX;
+                    nextZ = req.start_z + (int)Math.round((req.end_z - req.start_z) * progress);
+                }
                 nextY = req.start_y + (int)Math.round((req.end_y - req.start_y) * progress);
-                nextZ = req.start_z + (int)Math.round((req.end_z - req.start_z) * progress);
             }
             
             // Place a line of blocks across the width
             for (int w = 0; w < width; w++) {
-                // Calculate offset from start position along the lateral axis
-                int offsetX = lateralDirection == Direction.EAST ? (req.start_x + w - x) : 0;
-                int offsetZ = lateralDirection == Direction.SOUTH ? (req.start_z + w - z) : 0;
-                BlockPos currentPos = centerPos.add(offsetX, 0, offsetZ);
+                BlockPos currentPos = axis == Direction.Axis.X
+                    ? new BlockPos(x, y, baseZ + w)
+                    : new BlockPos(baseX + w, y, z);
                 
                 // Clear space above for walking (4 blocks)
                 world.setBlockState(currentPos.up(), Blocks.AIR.getDefaultState());
