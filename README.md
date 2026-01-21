@@ -11,6 +11,8 @@ Next there is the MCP server, which for this project runs locally from the `mcp`
 ## MCP Server Config
 
 I'm running evertying with uv. You should be able to do a `uv sync` then `uv run minecraft_mcp.py` to start it up.
+You can also start it in sse mode with `uv run minecraft_mcp.py --transport sse --port 3001`.
+
 I'm using python `3.13.9`. Some of the dependencies don't support 3.14 yet.
 
 Try `npx @modelcontextprotocol/inspector uv run  minecraft_mcp.py` to make sure it's listing tools. 
@@ -26,7 +28,7 @@ There's a sample Claude Desktop Config in `mcp/mcp_config.json`. You'll need to 
 To get it working with goose I needed to set up a script in my $PATH,
 
 ```bash
-cd /Users/waltermiller/code/minecraft/fabric-sdk-mod-attempt/mcp
+cd /path/to/minecraft-api-mcp/mcp
 uv run minecraft_mcp.py
 cd -
 ```
