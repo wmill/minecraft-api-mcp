@@ -31,7 +31,7 @@ services:
     environment:
       # Escape $ as $$ so docker-compose does not interpolate.
       # This is changed on deploy
-      - BASIC_AUTH_HTPASSWD=
+      - BASIC_AUTH_HTPASSWD=${HTPASSWD}
     ports:
       - "80:80"
     restart: unless-stopped
