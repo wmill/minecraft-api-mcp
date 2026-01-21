@@ -437,5 +437,157 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });
+
+        // POST /api/builds/{id}/audit - Audit build task queue for obvious problems
+        app.post("/api/builds/{id}/audit", ctx -> {
+            try {
+                String idParam = ctx.pathParam("id");
+                UUID buildId;
+
+                try {
+                    buildId = UUID.fromString(idParam);
+                } catch (IllegalArgumentException e) {
+                    ctx.status(400).json(Map.of("error", "Invalid build ID format"));
+                    return;
+                }
+
+                Optional<Build> buildOpt = buildService.getBuild(buildId);
+                if (buildOpt.isEmpty()) {
+                    ctx.status(404).json(Map.of("error", "Build not found"));
+                    return;
+                }
+
+                List<BuildTask> tasks = buildService.getTasks(buildId);
+                List<Map<String, Object>> issues = new ArrayList<>();
+
+                // Sort tasks by order to ensure correct sequencing
+                tasks.sort(Comparator.comparingInt(BuildTask::getTaskOrder));
+
+                for (int i = 0; i < tasks.size(); i++) {
+                    BuildTask task = tasks.get(i);
+                    com.fasterxml.jackson.databind.JsonNode taskData = task.getTaskData();
+
+                    // Check 1: Stair direction alignment
+                    if (task.getTaskType() == com.example.buildtask.model.TaskType.PREFAB_STAIRS) {
+                        checkStairDirection(task, taskData, issues);
+                    }
+
+                    // Check 2: Fill overwriting earlier structures
+                    if (task.getTaskType() == com.example.buildtask.model.TaskType.BLOCK_FILL) {
+                        checkFillOverwrite(task, taskData, tasks.subList(0, i), issues);
+                    }
+                }
+
+                int warningCount = (int) issues.stream()
+                    .filter(issue -> "warning".equals(issue.get("severity")))
+                    .count();
+                int errorCount = (int) issues.stream()
+                    .filter(issue -> "error".equals(issue.get("severity")))
+                    .count();
+
+                ctx.json(Map.of(
+                    "success", true,
+                    "build_id", buildId.toString(),
+                    "issues", issues,
+                    "summary", Map.of("warnings", warningCount, "errors", errorCount)
+                ));
+
+                LOGGER.info("Audited build {} - found {} warnings, {} errors", buildId, warningCount, errorCount);
+
+            } catch (SQLException e) {
+                LOGGER.error("Database error during audit", e);
+                ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
+            } catch (Exception e) {
+                LOGGER.error("Unexpected error during audit", e);
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+    }
+
+    /**
+     * Checks if stair direction aligns with the longer horizontal dimension.
+     * Only warns if slope > 1 (steep stairs) combined with direction mismatch.
+     */
+    private void checkStairDirection(BuildTask task, com.fasterxml.jackson.databind.JsonNode taskData,
+                                     List<Map<String, Object>> issues) {
+        if (!taskData.has("staircase_direction") ||
+            !taskData.has("start_x") || !taskData.has("end_x") ||
+            !taskData.has("start_y") || !taskData.has("end_y") ||
+            !taskData.has("start_z") || !taskData.has("end_z")) {
+            return;
+        }
+
+        String direction = taskData.get("staircase_direction").asText().toUpperCase();
+        int xSpan = Math.abs(taskData.get("end_x").asInt() - taskData.get("start_x").asInt()) + 1;
+        int ySpan = Math.abs(taskData.get("end_y").asInt() - taskData.get("start_y").asInt()) + 1;
+        int zSpan = Math.abs(taskData.get("end_z").asInt() - taskData.get("start_z").asInt()) + 1;
+
+        boolean directionAlongX = direction.equals("EAST") || direction.equals("WEST");
+        boolean directionAlongZ = direction.equals("NORTH") || direction.equals("SOUTH");
+
+        // Calculate slope along the direction of travel
+        // Only warn if slope > 1 (steep) AND direction doesn't match longer dimension
+        if (directionAlongX && xSpan < zSpan) {
+            double slope = (double) ySpan / xSpan;
+            if (slope > 1) {
+                issues.add(Map.of(
+                    "severity", "warning",
+                    "task_id", task.getId().toString(),
+                    "task_order", task.getTaskOrder(),
+                    "check", "stair_direction_mismatch",
+                    "message", String.format("Staircase direction %s travels along X-axis but X span (%d) < Z span (%d), slope %.1f",
+                        direction, xSpan, zSpan, slope)
+                ));
+            }
+        } else if (directionAlongZ && zSpan < xSpan) {
+            double slope = (double) ySpan / zSpan;
+            if (slope > 1) {
+                issues.add(Map.of(
+                    "severity", "warning",
+                    "task_id", task.getId().toString(),
+                    "task_order", task.getTaskOrder(),
+                    "check", "stair_direction_mismatch",
+                    "message", String.format("Staircase direction %s travels along Z-axis but Z span (%d) < X span (%d), slope %.1f",
+                        direction, zSpan, xSpan, slope)
+                ));
+            }
+        }
+    }
+
+    /**
+     * Checks if a BLOCK_FILL task would overwrite earlier structure tasks.
+     */
+    private void checkFillOverwrite(BuildTask fillTask, com.fasterxml.jackson.databind.JsonNode fillData,
+                                    List<BuildTask> earlierTasks, List<Map<String, Object>> issues) {
+        com.example.buildtask.model.BoundingBox fillBox =
+            com.example.buildtask.model.BoundingBox.fromFillBoxRequest(fillData);
+
+        if (fillBox == null) {
+            return;
+        }
+
+        for (BuildTask earlierTask : earlierTasks) {
+            // Skip other fills - overwriting fills is usually intentional
+            if (earlierTask.getTaskType() == com.example.buildtask.model.TaskType.BLOCK_FILL) {
+                continue;
+            }
+
+            com.example.buildtask.model.BoundingBox earlierBox =
+                com.example.buildtask.model.BoundingBox.fromTaskData(
+                    earlierTask.getTaskType(), earlierTask.getTaskData());
+
+            if (earlierBox != null && fillBox.intersects(earlierBox)) {
+                issues.add(Map.of(
+                    "severity", "warning",
+                    "task_id", fillTask.getId().toString(),
+                    "task_order", fillTask.getTaskOrder(),
+                    "overlaps_task_id", earlierTask.getId().toString(),
+                    "overlaps_task_order", earlierTask.getTaskOrder(),
+                    "check", "fill_overwrites_structure",
+                    "message", String.format("BLOCK_FILL at order %d would overwrite %s at order %d",
+                        fillTask.getTaskOrder(), earlierTask.getTaskType(), earlierTask.getTaskOrder())
+                ));
+            }
+        }
     }
 }
