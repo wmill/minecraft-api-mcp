@@ -35,7 +35,10 @@ def load_config() -> ServerConfig:
     
     # Read from .env file in the mcp directory
     env_file = os.path.join(script_dir, ".env")
-    config = dotenv_values(env_file)
+    config = {
+        **dotenv_values(env_file),
+        **os.environ
+    }
     
     if "BASE_URL" in config:
         base_url = config["BASE_URL"]
