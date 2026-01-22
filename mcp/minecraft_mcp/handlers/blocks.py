@@ -4,6 +4,7 @@ Block-related tool handlers for the Minecraft MCP server.
 Handles tools for block manipulation, querying, and heightmaps.
 """
 
+import json
 from typing import Any, Dict, List, Optional
 from mcp.types import CallToolResult, TextContent
 
@@ -91,7 +92,7 @@ async def handle_get_blocks_chunk(
 ) -> CallToolResult:
     """
     Get a chunk of blocks from the world.
-    
+
     Args:
         api_client: The Minecraft API client
         start_x: Starting X coordinate
@@ -102,9 +103,9 @@ async def handle_get_blocks_chunk(
         size_z: Size in Z dimension
         world: World name (optional)
         **arguments: Additional arguments (ignored)
-        
+
     Returns:
-        CallToolResult with chunk data and block composition
+        CallToolResult with raw chunk JSON data
     """
     try:
         result = await api_client.get_blocks_chunk(
@@ -112,30 +113,11 @@ async def handle_get_blocks_chunk(
             size_x, size_y, size_z,
             world
         )
-        
+
         if result.get("success"):
-            blocks = result["blocks"]
-            block_counts = {}
-            
-            # Count block types
-            for x in range(len(blocks)):
-                for y in range(len(blocks[x])):
-                    for z in range(len(blocks[x][y])):
-                        block_data = blocks[x][y][z]
-                        if isinstance(block_data, dict):
-                            block_id = block_data.get("blockName", "unknown")
-                        else:
-                            block_id = str(block_data)
-                        block_counts[block_id] = block_counts.get(block_id, 0) + 1
-            
-            total_blocks = size_x * size_y * size_z
-            response_text = f"**Chunk Data ({size_x}x{size_y}x{size_z} blocks):**\n"
-            response_text += f"World: {result['world']}\n"
-            response_text += f"Start Position: ({start_x}, {start_y}, {start_z})\n\n"
-            response_text += "**Block Composition:**\n"
-            response_text += format_block_counts(block_counts, total_blocks)
-            
-            return format_success_response(response_text)
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(result, indent=2))]
+            )
         else:
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to get blocks: {result}")]
