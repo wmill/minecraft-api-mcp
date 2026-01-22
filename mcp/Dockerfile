@@ -5,8 +5,9 @@ WORKDIR /app
 # Install uv
 RUN pip install uv
 
-# Copy MCP server source
-COPY mcp/ .
+# Copy MCP server source (excluding .venv via .dockerignore)
+COPY pyproject.toml uv.lock ./
+COPY minecraft_mcp/ ./minecraft_mcp/
 
 # Install dependencies using uv
 RUN uv sync

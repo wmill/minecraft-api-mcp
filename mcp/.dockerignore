@@ -1,0 +1,25 @@
+# Virtual environments
+.venv/
+mcp-env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Test files
+test_*.py
+*_TEST_RESULTS.md
+
+# Config files (BASE_URL comes from env var in container)
+.env
+.tool-versions
+
+# Documentation
+*.md

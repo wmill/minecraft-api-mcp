@@ -75,8 +75,8 @@ services:
 
   mcp:
     build:
-      context: .
-      dockerfile: mcp.Dockerfile
+      context: ./mcp
+      dockerfile: Dockerfile
       platforms:
         - linux/amd64
         - linux/arm64
