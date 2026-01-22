@@ -220,7 +220,52 @@ class MinecraftMCPServer:
             """ASGI app wrapper for StreamableHTTPSessionManager."""
 
             async def __call__(self, scope, receive, send):
-                await session_manager.handle_request(scope, receive, send)
+                # Log request details for debugging
+                method = scope.get("method", "UNKNOWN")
+                path = scope.get("path", "")
+                query_string = scope.get("query_string", b"").decode("utf-8", errors="replace")
+                headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
+
+                print(f"[StreamableHTTP] {method} {path}{'?' + query_string if query_string else ''}", file=sys.stderr)
+                print(f"[StreamableHTTP] Headers: {headers}", file=sys.stderr)
+
+                # For POST requests, we need to capture the body
+                body_parts = []
+
+                async def logging_receive():
+                    message = await receive()
+                    if message.get("type") == "http.request":
+                        body = message.get("body", b"")
+                        body_parts.append(body)
+                        if body:
+                            try:
+                                print(f"[StreamableHTTP] Body: {body.decode('utf-8', errors='replace')[:1000]}", file=sys.stderr)
+                            except Exception as e:
+                                print(f"[StreamableHTTP] Body decode error: {e}", file=sys.stderr)
+                    return message
+
+                # Capture response status
+                async def logging_send(message):
+                    if message.get("type") == "http.response.start":
+                        status = message.get("status", 0)
+                        print(f"[StreamableHTTP] Response status: {status}", file=sys.stderr)
+                        if status >= 400:
+                            resp_headers = {k.decode(): v.decode() for k, v in message.get("headers", [])}
+                            print(f"[StreamableHTTP] Response headers: {resp_headers}", file=sys.stderr)
+                    elif message.get("type") == "http.response.body":
+                        body = message.get("body", b"")
+                        if body and scope.get("method") == "GET":  # Log body for failed GETs
+                            try:
+                                print(f"[StreamableHTTP] Response body: {body.decode('utf-8', errors='replace')[:500]}", file=sys.stderr)
+                            except Exception:
+                                pass
+                    await send(message)
+
+                try:
+                    await session_manager.handle_request(scope, logging_receive, logging_send)
+                except Exception as e:
+                    print(f"[StreamableHTTP] Exception: {type(e).__name__}: {e}", file=sys.stderr)
+                    raise
 
         return Starlette(
             debug=True,
