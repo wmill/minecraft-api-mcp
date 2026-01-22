@@ -62,6 +62,9 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "execute_build": builds.handle_execute_build,
     "query_builds_by_location": builds.handle_query_builds_by_location,
     "get_build_status": builds.handle_get_build_status,
+    "audit_build": builds.handle_audit_build,
+    "delete_build_task": builds.handle_delete_build_task,
+    "update_build_task": builds.handle_update_build_task,
 }
 
 

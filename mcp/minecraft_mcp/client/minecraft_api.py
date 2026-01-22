@@ -778,20 +778,22 @@ class MinecraftAPIClient:
         build_id: str,
         task_type: str,
         task_data: Dict[str, Any],
-        description: str
+        description: str,
+        task_order: Optional[int] = None
     ) -> dict:
         """
         Add a building task to a build queue.
-        
+
         Args:
             build_id: Build UUID
             task_type: Type of building task (BLOCK_SET, BLOCK_FILL, PREFAB_*, etc.)
             task_data: Task-specific payload data
             description: Description of the task
-            
+            task_order: Optional position to insert the task (shifts subsequent tasks)
+
         Returns:
             dict: Response containing task addition result
-            
+
         Raises:
             httpx.HTTPError: If the request fails
         """
@@ -800,11 +802,97 @@ class MinecraftAPIClient:
             "task_data": task_data,
             "description": description
         }
-        
+        if task_order is not None:
+            payload["task_order"] = task_order
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/{build_id}/tasks",
                 json=payload
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def delete_build_task(
+        self,
+        build_id: str,
+        task_id: str
+    ) -> dict:
+        """
+        Delete a task from a build queue.
+
+        Args:
+            build_id: Build UUID
+            task_id: Task UUID to delete
+
+        Returns:
+            dict: Response containing deletion result
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"{self.base_url}/api/builds/{build_id}/tasks/{task_id}"
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def update_build_task(
+        self,
+        build_id: str,
+        task_id: str,
+        task_data: Optional[Dict[str, Any]] = None,
+        description: Optional[str] = None
+    ) -> dict:
+        """
+        Update a task's data and/or description (partial update).
+
+        Args:
+            build_id: Build UUID
+            task_id: Task UUID to update
+            task_data: Partial task data to merge with existing (optional)
+            description: New description (optional)
+
+        Returns:
+            dict: Response containing updated task
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        payload = {}
+        if task_data is not None:
+            payload["task_data"] = task_data
+        if description is not None:
+            payload["description"] = description
+
+        async with httpx.AsyncClient() as client:
+            response = await client.patch(
+                f"{self.base_url}/api/builds/{build_id}/tasks/{task_id}",
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def audit_build(
+        self,
+        build_id: str
+    ) -> dict:
+        """
+        Audit a build's task queue for common mistakes.
+
+        Args:
+            build_id: Build UUID
+
+        Returns:
+            dict: Response containing audit issues and summary
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/builds/{build_id}/audit"
             )
             response.raise_for_status()
             return response.json()

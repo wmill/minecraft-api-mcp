@@ -1370,6 +1370,68 @@ TOOL_GET_BUILD_STATUS = Tool(
     }
 )
 
+TOOL_AUDIT_BUILD = Tool(
+    name="audit_build",
+    description="Audit a build's task queue for common mistakes like stair direction mismatches or fills that overwrite earlier structures",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {
+                "type": "string",
+                "description": "Build UUID"
+            }
+        },
+        "required": ["build_id"]
+    }
+)
+
+TOOL_DELETE_BUILD_TASK = Tool(
+    name="delete_build_task",
+    description="Delete a task from a build queue. Remaining tasks are automatically reordered.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {
+                "type": "string",
+                "description": "Build UUID"
+            },
+            "task_id": {
+                "type": "string",
+                "description": "Task UUID to delete"
+            }
+        },
+        "required": ["build_id", "task_id"]
+    }
+)
+
+TOOL_UPDATE_BUILD_TASK = Tool(
+    name="update_build_task",
+    description="Update a task's data and/or description. Task data is merged with existing data (partial update).",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {
+                "type": "string",
+                "description": "Build UUID"
+            },
+            "task_id": {
+                "type": "string",
+                "description": "Task UUID to update"
+            },
+            "task_data": {
+                "type": "object",
+                "description": "Partial task data to merge with existing. Only specified fields are updated.",
+                "additionalProperties": True
+            },
+            "description": {
+                "type": "string",
+                "description": "New description for the task (replaces existing)"
+            }
+        },
+        "required": ["build_id", "task_id"]
+    }
+)
+
 #    "handle_coordinate_conventions"
 TOOL_HANDLE_COORDINATE_CONVENTIONS = Tool(
     name = "get_coordinate_conventions",
@@ -1426,4 +1488,7 @@ TOOL_SCHEMAS = [
     TOOL_EXECUTE_BUILD,
     TOOL_QUERY_BUILDS_BY_LOCATION,
     TOOL_GET_BUILD_STATUS,
+    TOOL_AUDIT_BUILD,
+    TOOL_DELETE_BUILD_TASK,
+    TOOL_UPDATE_BUILD_TASK,
 ]

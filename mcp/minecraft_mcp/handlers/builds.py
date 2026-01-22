@@ -804,22 +804,22 @@ async def handle_get_build_status(
 ) -> CallToolResult:
     """
     Get build details, status, and task information.
-    
+
     Args:
         api_client: The Minecraft API client
         build_id: Build UUID
         **arguments: Additional arguments (ignored)
-        
+
     Returns:
         CallToolResult with build status and task details
     """
     try:
         result = await api_client.get_build_status(build_id)
-        
+
         if result.get("success"):
             build = result["build"]
             tasks = result.get("tasks", [])
-            
+
             response_text = f"**Build Status: {build['name']}**\n\n"
             response_text += f"**Build Details:**\n"
             response_text += f"- ID: {build['id']}\n"
@@ -830,7 +830,7 @@ async def handle_get_build_status(
             response_text += f"- Created: {build.get('created_at', 'N/A')}\n"
             if build.get('completed_at'):
                 response_text += f"- Completed: {build['completed_at']}\n"
-            
+
             response_text += f"\n**Task Queue ({len(tasks)} tasks):**\n"
             if not tasks:
                 response_text += "No tasks in queue\n"
@@ -855,7 +855,7 @@ async def handle_get_build_status(
 
                     if task.get('error_message'):
                         response_text += f"   - Error: {task['error_message']}\n"
-            
+
             return format_success_response(response_text)
         else:
             return CallToolResult(
@@ -863,3 +863,140 @@ async def handle_get_build_status(
             )
     except Exception as e:
         return format_error_response(e, "getting build status")
+
+
+async def handle_audit_build(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    **arguments
+) -> CallToolResult:
+    """
+    Audit a build's task queue for common mistakes.
+
+    Args:
+        api_client: The Minecraft API client
+        build_id: Build UUID
+        **arguments: Additional arguments (ignored)
+
+    Returns:
+        CallToolResult with audit issues and summary
+    """
+    try:
+        result = await api_client.audit_build(build_id)
+
+        if result.get("success"):
+            issues = result.get("issues", [])
+            summary = result.get("summary", {})
+
+            if not issues:
+                response_text = f"✅ **Build {build_id} passed audit with no issues**\n"
+            else:
+                response_text = f"**Audit Results for Build {build_id}**\n\n"
+                response_text += f"**Summary:** {summary.get('warnings', 0)} warnings, {summary.get('errors', 0)} errors\n\n"
+
+                for issue in issues:
+                    severity = issue.get('severity', 'warning')
+                    icon = "⚠️" if severity == "warning" else "❌"
+                    check = issue.get('check', 'unknown')
+                    message = issue.get('message', 'No message')
+                    task_order = issue.get('task_order', 'N/A')
+
+                    response_text += f"{icon} **{check}** (task order {task_order})\n"
+                    response_text += f"   {message}\n"
+
+                    if issue.get('overlaps_task_order'):
+                        response_text += f"   Overlaps with task order {issue['overlaps_task_order']}\n"
+
+                    response_text += "\n"
+
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to audit build: {result.get('error', 'Unknown error')}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "auditing build")
+
+
+async def handle_delete_build_task(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    task_id: str,
+    **arguments
+) -> CallToolResult:
+    """
+    Delete a task from a build queue.
+
+    Args:
+        api_client: The Minecraft API client
+        build_id: Build UUID
+        task_id: Task UUID to delete
+        **arguments: Additional arguments (ignored)
+
+    Returns:
+        CallToolResult with deletion result
+    """
+    try:
+        result = await api_client.delete_build_task(build_id, task_id)
+
+        if result.get("success"):
+            response_text = f"✅ Successfully deleted task {task_id} from build {build_id}\n"
+            response_text += f"Remaining tasks have been reordered."
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to delete task: {result.get('error', 'Unknown error')}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "deleting build task")
+
+
+async def handle_update_build_task(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    task_id: str,
+    task_data: Optional[Dict[str, Any]] = None,
+    description: Optional[str] = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Update a task's data and/or description.
+
+    Args:
+        api_client: The Minecraft API client
+        build_id: Build UUID
+        task_id: Task UUID to update
+        task_data: Partial task data to merge with existing (optional)
+        description: New description (optional)
+        **arguments: Additional arguments (ignored)
+
+    Returns:
+        CallToolResult with updated task details
+    """
+    try:
+        result = await api_client.update_build_task(build_id, task_id, task_data, description)
+
+        if result.get("success"):
+            task = result["task"]
+            response_text = f"✅ Successfully updated task {task_id}\n\n"
+            response_text += f"**Updated Task:**\n"
+            response_text += f"- ID: {task['id']}\n"
+            response_text += f"- Build ID: {task['build_id']}\n"
+            response_text += f"- Task Order: {task['task_order']}\n"
+            response_text += f"- Task Type: {task['task_type']}\n"
+            response_text += f"- Status: {task['status']}\n"
+            response_text += f"- Description: {task.get('description', '')}\n"
+
+            task_data_result = task.get('task_data', {})
+            if task_data_result:
+                response_text += f"- Task Data:\n"
+                for key, value in task_data_result.items():
+                    response_text += f"   - {key}: {value}\n"
+
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to update task: {result.get('error', 'Unknown error')}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "updating build task")
