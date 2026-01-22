@@ -137,21 +137,21 @@ public class BuildTaskEndpoint extends APIEndpoint {
             }
         });
 
-        // POST /api/builds/{id}/tasks - Add task to build
+        // POST /api/builds/{id}/tasks - Add task to build (optional task_order for insertion)
         app.post("/api/builds/{id}/tasks", ctx -> {
             try {
                 String idParam = ctx.pathParam("id");
                 UUID buildId;
-                
+
                 try {
                     buildId = UUID.fromString(idParam);
                 } catch (IllegalArgumentException e) {
                     ctx.status(400).json(Map.of("error", "Invalid build ID format"));
                     return;
                 }
-                
-                BuildService.AddTaskRequest request = ctx.bodyAsClass(BuildService.AddTaskRequest.class);
-                
+
+                AddTaskWithOrderRequest request = ctx.bodyAsClass(AddTaskWithOrderRequest.class);
+
                 // Validate request
                 if (request.task_type == null) {
                     ctx.status(400).json(Map.of("error", "Task type is required"));
@@ -161,9 +161,19 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     ctx.status(400).json(Map.of("error", "Task data is required"));
                     return;
                 }
-                
-                BuildTask task = buildService.addTask(buildId, request);
-                
+
+                BuildTask task;
+                BuildService.AddTaskRequest addRequest = new BuildService.AddTaskRequest(
+                    request.task_type, request.task_data, request.description != null ? request.description : "");
+
+                if (request.task_order != null) {
+                    // Insert at specific position
+                    task = buildService.insertTaskAt(buildId, addRequest, request.task_order);
+                } else {
+                    // Append to end (default behavior)
+                    task = buildService.addTask(buildId, addRequest);
+                }
+
                 ctx.status(201).json(Map.of(
                     "success", true,
                     "task", Map.of(
@@ -175,9 +185,9 @@ public class BuildTaskEndpoint extends APIEndpoint {
                         "taskData", task.getTaskData()
                     )
                 ));
-                
-                LOGGER.info("Added task {} to build {} via API", task.getId(), buildId);
-                
+
+                LOGGER.info("Added task {} to build {} at position {} via API", task.getId(), buildId, task.getTaskOrder());
+
             } catch (IllegalArgumentException e) {
                 ctx.status(400).json(Map.of("error", e.getMessage()));
             } catch (IllegalStateException e) {
@@ -302,6 +312,113 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
             } catch (Exception e) {
                 LOGGER.error("Unexpected error updating task queue", e);
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+
+        // DELETE /api/builds/{id}/tasks/{taskId} - Delete a specific task
+        app.delete("/api/builds/{id}/tasks/{taskId}", ctx -> {
+            try {
+                String idParam = ctx.pathParam("id");
+                String taskIdParam = ctx.pathParam("taskId");
+                UUID buildId;
+                UUID taskId;
+
+                try {
+                    buildId = UUID.fromString(idParam);
+                } catch (IllegalArgumentException e) {
+                    ctx.status(400).json(Map.of("error", "Invalid build ID format"));
+                    return;
+                }
+
+                try {
+                    taskId = UUID.fromString(taskIdParam);
+                } catch (IllegalArgumentException e) {
+                    ctx.status(400).json(Map.of("error", "Invalid task ID format"));
+                    return;
+                }
+
+                buildService.deleteTask(buildId, taskId);
+
+                ctx.json(Map.of(
+                    "success", true,
+                    "build_id", buildId.toString(),
+                    "deleted_task_id", taskId.toString(),
+                    "message", "Task deleted successfully"
+                ));
+
+                LOGGER.info("Deleted task {} from build {} via API", taskId, buildId);
+
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).json(Map.of("error", e.getMessage()));
+            } catch (IllegalStateException e) {
+                ctx.status(409).json(Map.of("error", e.getMessage()));
+            } catch (SQLException e) {
+                LOGGER.error("Database error deleting task", e);
+                ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
+            } catch (Exception e) {
+                LOGGER.error("Unexpected error deleting task", e);
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+
+        // PATCH /api/builds/{id}/tasks/{taskId} - Update task_data and/or description
+        app.patch("/api/builds/{id}/tasks/{taskId}", ctx -> {
+            try {
+                String idParam = ctx.pathParam("id");
+                String taskIdParam = ctx.pathParam("taskId");
+                UUID buildId;
+                UUID taskId;
+
+                try {
+                    buildId = UUID.fromString(idParam);
+                } catch (IllegalArgumentException e) {
+                    ctx.status(400).json(Map.of("error", "Invalid build ID format"));
+                    return;
+                }
+
+                try {
+                    taskId = UUID.fromString(taskIdParam);
+                } catch (IllegalArgumentException e) {
+                    ctx.status(400).json(Map.of("error", "Invalid task ID format"));
+                    return;
+                }
+
+                PatchTaskRequest request = ctx.bodyAsClass(PatchTaskRequest.class);
+
+                // At least one field must be provided
+                if (request.task_data == null && request.description == null) {
+                    ctx.status(400).json(Map.of("error", "At least one of task_data or description must be provided"));
+                    return;
+                }
+
+                BuildTask updatedTask = buildService.updateTask(buildId, taskId, request.task_data, request.description);
+
+                Map<String, Object> taskMap = new LinkedHashMap<>();
+                taskMap.put("id", updatedTask.getId().toString());
+                taskMap.put("build_id", updatedTask.getBuildId().toString());
+                taskMap.put("task_order", updatedTask.getTaskOrder());
+                taskMap.put("task_type", updatedTask.getTaskType().toString());
+                taskMap.put("status", updatedTask.getStatus().toString());
+                taskMap.put("task_data", updatedTask.getTaskData());
+                taskMap.put("description", updatedTask.getDescription() != null ? updatedTask.getDescription() : "");
+
+                ctx.json(Map.of(
+                    "success", true,
+                    "task", taskMap
+                ));
+
+                LOGGER.info("Updated task {} in build {} via API", taskId, buildId);
+
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).json(Map.of("error", e.getMessage()));
+            } catch (IllegalStateException e) {
+                ctx.status(409).json(Map.of("error", e.getMessage()));
+            } catch (SQLException e) {
+                LOGGER.error("Database error updating task", e);
+                ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
+            } catch (Exception e) {
+                LOGGER.error("Unexpected error updating task", e);
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });
@@ -589,5 +706,27 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 ));
             }
         }
+    }
+
+    /**
+     * Request object for adding a task with optional position.
+     */
+    public static class AddTaskWithOrderRequest {
+        public com.example.buildtask.model.TaskType task_type;
+        public com.fasterxml.jackson.databind.JsonNode task_data;
+        public String description;
+        public Integer task_order; // Optional: if provided, insert at this position
+
+        public AddTaskWithOrderRequest() {}
+    }
+
+    /**
+     * Request object for patching a task.
+     */
+    public static class PatchTaskRequest {
+        public com.fasterxml.jackson.databind.JsonNode task_data; // Partial update, merged with existing
+        public String description; // Full replacement if provided
+
+        public PatchTaskRequest() {}
     }
 }

@@ -259,6 +259,182 @@ public class BuildService {
     }
 
     /**
+     * Deletes a task from a build and reorders remaining tasks.
+     */
+    public void deleteTask(UUID buildId, UUID taskId) throws SQLException {
+        if (buildId == null) {
+            throw new IllegalArgumentException("Build ID cannot be null");
+        }
+        if (taskId == null) {
+            throw new IllegalArgumentException("Task ID cannot be null");
+        }
+
+        // Verify build exists and is not completed
+        Optional<Build> buildOpt = buildRepository.findById(buildId);
+        if (buildOpt.isEmpty()) {
+            throw new IllegalArgumentException("Build not found: " + buildId);
+        }
+        if (buildOpt.get().getStatus() == BuildStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot delete tasks from completed build: " + buildId);
+        }
+
+        // Verify task exists and belongs to this build
+        Optional<BuildTask> taskOpt = taskRepository.findById(taskId);
+        if (taskOpt.isEmpty()) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+        if (!taskOpt.get().getBuildId().equals(buildId)) {
+            throw new IllegalArgumentException("Task does not belong to build: " + buildId);
+        }
+
+        logger.info("Deleting task {} from build {}", taskId, buildId);
+
+        // Delete the task
+        taskRepository.deleteById(taskId);
+
+        // Reorder remaining tasks to close the gap
+        List<BuildTask> remainingTasks = taskRepository.findByBuildIdOrdered(buildId);
+        for (int i = 0; i < remainingTasks.size(); i++) {
+            BuildTask task = remainingTasks.get(i);
+            if (task.getTaskOrder() != i) {
+                task.setTaskOrder(i);
+            }
+        }
+        taskRepository.updateTaskQueue(buildId, remainingTasks);
+
+        logger.info("Deleted task {} and reordered {} remaining tasks", taskId, remainingTasks.size());
+    }
+
+    /**
+     * Inserts a task at a specific position in the queue.
+     * Shifts existing tasks at and after that position.
+     */
+    public BuildTask insertTaskAt(UUID buildId, AddTaskRequest request, int position) throws SQLException {
+        if (buildId == null) {
+            throw new IllegalArgumentException("Build ID cannot be null");
+        }
+        if (request == null) {
+            throw new IllegalArgumentException("Task request cannot be null");
+        }
+        if (position < 0) {
+            throw new IllegalArgumentException("Position cannot be negative");
+        }
+
+        // Verify build exists and is not completed
+        Optional<Build> buildOpt = buildRepository.findById(buildId);
+        if (buildOpt.isEmpty()) {
+            throw new IllegalArgumentException("Build not found: " + buildId);
+        }
+        if (buildOpt.get().getStatus() == BuildStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot add tasks to completed build: " + buildId);
+        }
+
+        // Get current tasks
+        List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
+
+        // Clamp position to valid range
+        int insertPosition = Math.min(position, tasks.size());
+
+        // Create the new task
+        BuildTask newTask = new BuildTask(buildId, insertPosition, request.task_type, request.task_data, request.description);
+
+        logger.info("Inserting task {} at position {} in build {}", newTask.getId(), insertPosition, buildId);
+
+        // Save the new task
+        BuildTask savedTask = taskRepository.create(newTask);
+
+        // Shift existing tasks at and after insert position
+        for (BuildTask task : tasks) {
+            if (task.getTaskOrder() >= insertPosition) {
+                task.setTaskOrder(task.getTaskOrder() + 1);
+            }
+        }
+        taskRepository.updateTaskQueue(buildId, tasks);
+
+        logger.info("Inserted task {} at position {}", savedTask.getId(), insertPosition);
+        return savedTask;
+    }
+
+    /**
+     * Updates a task's task_data (merge) and/or description.
+     */
+    public BuildTask updateTask(UUID buildId, UUID taskId, com.fasterxml.jackson.databind.JsonNode partialTaskData,
+                                String description) throws SQLException {
+        if (buildId == null) {
+            throw new IllegalArgumentException("Build ID cannot be null");
+        }
+        if (taskId == null) {
+            throw new IllegalArgumentException("Task ID cannot be null");
+        }
+
+        // Verify build exists and is not completed
+        Optional<Build> buildOpt = buildRepository.findById(buildId);
+        if (buildOpt.isEmpty()) {
+            throw new IllegalArgumentException("Build not found: " + buildId);
+        }
+        if (buildOpt.get().getStatus() == BuildStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot update tasks in completed build: " + buildId);
+        }
+
+        // Verify task exists and belongs to this build
+        Optional<BuildTask> taskOpt = taskRepository.findById(taskId);
+        if (taskOpt.isEmpty()) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+        BuildTask task = taskOpt.get();
+        if (!task.getBuildId().equals(buildId)) {
+            throw new IllegalArgumentException("Task does not belong to build: " + buildId);
+        }
+
+        logger.info("Updating task {} in build {}", taskId, buildId);
+
+        // Merge partial task_data with existing
+        if (partialTaskData != null && !partialTaskData.isNull()) {
+            com.fasterxml.jackson.databind.JsonNode existingData = task.getTaskData();
+            com.fasterxml.jackson.databind.node.ObjectNode merged;
+
+            if (existingData != null && existingData.isObject()) {
+                merged = existingData.deepCopy();
+            } else {
+                merged = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+            }
+
+            // Merge fields from partialTaskData into existing
+            partialTaskData.fields().forEachRemaining(entry ->
+                merged.set(entry.getKey(), entry.getValue()));
+
+            task.setTaskData(merged);
+        }
+
+        // Update description if provided
+        if (description != null) {
+            task.setDescription(description);
+        }
+
+        BuildTask updatedTask = taskRepository.update(task);
+        logger.info("Updated task {}", taskId);
+        return updatedTask;
+    }
+
+    /**
+     * Retrieves a single task by ID, verifying it belongs to the specified build.
+     */
+    public Optional<BuildTask> getTask(UUID buildId, UUID taskId) throws SQLException {
+        if (buildId == null) {
+            throw new IllegalArgumentException("Build ID cannot be null");
+        }
+        if (taskId == null) {
+            throw new IllegalArgumentException("Task ID cannot be null");
+        }
+
+        Optional<BuildTask> taskOpt = taskRepository.findById(taskId);
+        if (taskOpt.isPresent() && !taskOpt.get().getBuildId().equals(buildId)) {
+            return Optional.empty(); // Task doesn't belong to this build
+        }
+        return taskOpt;
+    }
+
+    /**
      * Request object for creating a new build.
      */
     public static class CreateBuildRequest {
