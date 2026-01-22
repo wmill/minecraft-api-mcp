@@ -53,7 +53,7 @@ async def main():
     parser = argparse.ArgumentParser(description="Minecraft MCP Server")
     parser.add_argument(
         "--transport",
-        choices=["stdio", "sse"],
+        choices=["stdio", "sse", "streamable-http"],
         default="stdio",
         help="Transport protocol to use (default: stdio)"
     )
@@ -67,6 +67,11 @@ async def main():
         type=int,
         default=3000,
         help="Port for HTTP/SSE server (default: 3000)"
+    )
+    parser.add_argument(
+        "--stateless",
+        action="store_true",
+        help="Run streamable-http in stateless mode (no session tracking)"
     )
 
     args = parser.parse_args()
@@ -83,6 +88,20 @@ async def main():
             print(f"SSE endpoint: http://{args.host}:{args.port}/sse", file=sys.stderr)
             print(f"Messages endpoint: http://{args.host}:{args.port}/messages", file=sys.stderr)
             app = server.create_sse_app()
+            config_obj = uvicorn.Config(
+                app,
+                host=args.host,
+                port=args.port,
+                log_level="info"
+            )
+            server_instance = uvicorn.Server(config_obj)
+            await server_instance.serve()
+        elif args.transport == "streamable-http":
+            print(f"Starting Streamable HTTP server on {args.host}:{args.port}", file=sys.stderr)
+            print(f"MCP endpoint: http://{args.host}:{args.port}/mcp", file=sys.stderr)
+            if args.stateless:
+                print("Running in stateless mode (no session tracking)", file=sys.stderr)
+            app = server.create_streamable_http_app(stateless=args.stateless)
             config_obj = uvicorn.Config(
                 app,
                 host=args.host,

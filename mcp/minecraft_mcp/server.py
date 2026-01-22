@@ -8,10 +8,14 @@ tool registration, routing, and transport layer management.
 import sys
 from typing import Any, Dict, List
 
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.lowlevel import NotificationOptions
 from starlette.applications import Starlette
 from starlette.routing import Route
@@ -187,6 +191,45 @@ class MinecraftMCPServer:
             ],
         )
     
+    def create_streamable_http_app(self, stateless: bool = False) -> Starlette:
+        """
+        Create a Starlette app for Streamable HTTP transport.
+
+        This is the modern HTTP transport that uses a single endpoint for all
+        communication. It supports session management, optional resumability,
+        and can return JSON responses or use SSE streaming.
+
+        Args:
+            stateless: If True, creates a fresh transport for each request
+                      with no session tracking. Default is False (stateful).
+
+        Returns:
+            Starlette application configured for Streamable HTTP transport
+        """
+        session_manager = StreamableHTTPSessionManager(
+            app=self.server,
+            stateless=stateless,
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: Starlette) -> AsyncIterator[None]:
+            async with session_manager.run():
+                yield
+
+        class StreamableHTTPEndpoint:
+            """ASGI app wrapper for StreamableHTTPSessionManager."""
+
+            async def __call__(self, scope, receive, send):
+                await session_manager.handle_request(scope, receive, send)
+
+        return Starlette(
+            debug=True,
+            routes=[
+                Route("/mcp", endpoint=StreamableHTTPEndpoint(), methods=["GET", "POST", "DELETE"]),
+            ],
+            lifespan=lifespan,
+        )
+
     async def run(self):
         """
         Run the MCP server (defaults to stdio for backward compatibility).
