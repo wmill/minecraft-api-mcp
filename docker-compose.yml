@@ -73,6 +73,23 @@ services:
         reservations:
           memory: 1G
 
+  mcp:
+    build:
+      context: .
+      dockerfile: mcp.Dockerfile
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    image: ghcr.io/wmill/minecraft-mcp:latest
+    container_name: minecraft-mcp-server
+    ports:
+      - "3737:3737"
+    environment:
+      - BASE_URL=http://minecraft:7070
+    depends_on:
+      - minecraft
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local
