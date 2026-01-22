@@ -16,4 +16,4 @@ RUN uv sync
 EXPOSE 3737
 
 # Run in SSE mode
-CMD ["uv", "run", "minecraft-mcp", "--transport", "sse", "--host", "0.0.0.0", "--port", "3737"]
+CMD ["uv", "run", "minecraft-mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "3737"]
