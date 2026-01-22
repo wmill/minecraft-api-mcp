@@ -34,6 +34,25 @@ services:
       - BASIC_AUTH_HTPASSWD=${HTPASSWD}
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: minecraft-certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: /bin/sh -c
+    command: |
+      trap exit TERM;
+      while :; do
+        certbot renew --webroot -w /var/www/certbot --quiet;
+        sleep 12h;
+      done
     restart: unless-stopped
 
   minecraft:
@@ -96,4 +115,8 @@ volumes:
   minecraft_world:
     driver: local
   minecraft_logs:
+    driver: local
+  letsencrypt:
+    driver: local
+  certbot_www:
     driver: local

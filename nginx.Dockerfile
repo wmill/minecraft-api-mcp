@@ -7,8 +7,8 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx-entrypoint.sh /usr/local/bin/nginx-entrypoint.sh
 RUN chmod +x /usr/local/bin/nginx-entrypoint.sh
 
-# Expose port 80 for the reverse proxy
-EXPOSE 80
+# Expose ports 80/443 for the reverse proxy
+EXPOSE 80 443
 
 ENTRYPOINT ["/usr/local/bin/nginx-entrypoint.sh"]
 # Start nginx
