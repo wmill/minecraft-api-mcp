@@ -410,7 +410,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/prefab/nbt",
+                f"{self.base_url}/api/world/structure/place",
                 json=payload
             )
             response.raise_for_status()
@@ -466,7 +466,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/prefab/door",
+                f"{self.base_url}/api/world/prefabs/door",
                 json=payload
             )
             response.raise_for_status()
@@ -525,7 +525,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/prefab/stairs",
+                f"{self.base_url}/api/world/prefabs/stairs",
                 json=payload
             )
             response.raise_for_status()
@@ -578,7 +578,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/prefab/window",
+                f"{self.base_url}/api/world/prefabs/window",
                 json=payload
             )
             response.raise_for_status()
@@ -623,7 +623,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/prefab/torch",
+                f"{self.base_url}/api/world/prefabs/torch",
                 json=payload
             )
             response.raise_for_status()
@@ -683,7 +683,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/prefab/sign",
+                f"{self.base_url}/api/world/prefabs/sign",
                 json=payload
             )
             response.raise_for_status()
