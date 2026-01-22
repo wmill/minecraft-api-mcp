@@ -1,5 +1,5 @@
 group "default" {
-  targets = ["nginx", "minecraft"]
+  targets = ["nginx", "minecraft", "mcp"]
 }
 
 # Optional knobs you can override from the CLI
@@ -18,4 +18,11 @@ target "minecraft" {
   dockerfile = "minecraft.Dockerfile"
   platforms  = ["linux/amd64", "linux/arm64"]
   tags       = ["${REGISTRY}/minecraft-api:${TAG}"]
+}
+
+target "mcp" {
+  context    = "./mcp"
+  dockerfile = "Dockerfile"
+  platforms  = ["linux/amd64", "linux/arm64"]
+  tags       = ["${REGISTRY}/minecraft-mcp:${TAG}"]
 }
