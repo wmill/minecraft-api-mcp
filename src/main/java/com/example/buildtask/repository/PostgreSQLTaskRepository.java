@@ -86,7 +86,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     public Optional<BuildTask> findById(UUID id) throws SQLException {
         String sql = """
             SELECT id, build_id, task_order, task_type, task_data, status, executed_at, error_message,
-                   min_x, min_y, min_z, max_x, max_y, max_z
+                   min_x, min_y, min_z, max_x, max_y, max_z, description
             FROM build_tasks
             WHERE id = ?
             """;
@@ -109,23 +109,23 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     public BuildTask update(BuildTask task) throws SQLException {
         String sql = """
             UPDATE build_tasks
-            SET task_order = ?, task_type = ?, task_data = ?::jsonb, status = ?, 
-                executed_at = ?, error_message = ?, min_x = ?, min_y = ?, min_z = ?, 
-                max_x = ?, max_y = ?, max_z = ?
+            SET task_order = ?, task_type = ?, task_data = ?::jsonb, status = ?,
+                executed_at = ?, error_message = ?, min_x = ?, min_y = ?, min_z = ?,
+                max_x = ?, max_y = ?, max_z = ?, description = ?
             WHERE id = ?
             """;
-        
+
         try (Connection conn = databaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
+
             stmt.setInt(1, task.getTaskOrder());
             stmt.setString(2, task.getTaskType().name());
             stmt.setString(3, task.getTaskData() != null ? task.getTaskData().toString() : null);
             stmt.setString(4, task.getStatus().name());
-            stmt.setTimestamp(5, task.getExecutedAt() != null ? 
+            stmt.setTimestamp(5, task.getExecutedAt() != null ?
                 Timestamp.from(task.getExecutedAt()) : null);
             stmt.setString(6, task.getErrorMessage());
-            
+
             // Set coordinate information
             BoundingBox coords = task.getCoordinates();
             if (coords != null) {
@@ -143,14 +143,15 @@ public class PostgreSQLTaskRepository implements TaskRepository {
                 stmt.setNull(11, Types.INTEGER);
                 stmt.setNull(12, Types.INTEGER);
             }
-            
-            stmt.setObject(13, task.getId());
-            
+
+            stmt.setString(13, task.getDescription());
+            stmt.setObject(14, task.getId());
+
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected == 0) {
                 throw new SQLException("Updating task failed, task not found: " + task.getId());
             }
-            
+
             LOGGER.debug("Updated task with ID: {}", task.getId());
             return task;
         }
@@ -205,7 +206,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     public List<BuildTask> findByBuildIdAndStatus(UUID buildId, TaskStatus status) throws SQLException {
         String sql = """
             SELECT id, build_id, task_order, task_type, task_data, status, executed_at, error_message,
-                   min_x, min_y, min_z, max_x, max_y, max_z
+                   min_x, min_y, min_z, max_x, max_y, max_z, description
             FROM build_tasks
             WHERE build_id = ? AND status = ?
             ORDER BY task_order ASC
@@ -287,8 +288,8 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     @Override
     public List<BuildTask> findByLocationIntersection(String world, BoundingBox boundingBox) throws SQLException {
         String sql = """
-            SELECT bt.id, bt.build_id, bt.task_order, bt.task_type, bt.task_data, bt.status, 
-                   bt.executed_at, bt.error_message, bt.min_x, bt.min_y, bt.min_z, bt.max_x, bt.max_y, bt.max_z
+            SELECT bt.id, bt.build_id, bt.task_order, bt.task_type, bt.task_data, bt.status,
+                   bt.executed_at, bt.error_message, bt.min_x, bt.min_y, bt.min_z, bt.max_x, bt.max_y, bt.max_z, bt.description
             FROM build_tasks bt
             INNER JOIN builds b ON bt.build_id = b.id
             WHERE b.world = ?
@@ -322,8 +323,8 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     @Override
     public List<BuildTask> findByWorldWithCoordinates(String world) throws SQLException {
         String sql = """
-            SELECT bt.id, bt.build_id, bt.task_order, bt.task_type, bt.task_data, bt.status, 
-                   bt.executed_at, bt.error_message, bt.min_x, bt.min_y, bt.min_z, bt.max_x, bt.max_y, bt.max_z
+            SELECT bt.id, bt.build_id, bt.task_order, bt.task_type, bt.task_data, bt.status,
+                   bt.executed_at, bt.error_message, bt.min_x, bt.min_y, bt.min_z, bt.max_x, bt.max_y, bt.max_z, bt.description
             FROM build_tasks bt
             INNER JOIN builds b ON bt.build_id = b.id
             WHERE b.world = ? AND bt.min_x IS NOT NULL
