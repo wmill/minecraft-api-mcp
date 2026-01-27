@@ -209,6 +209,11 @@ TOOL_FILL_BOX = Tool(
                 "type": "string",
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
+            },
+            "notify_neighbors": {
+                "type": "boolean",
+                "description": "Whether to notify neighboring blocks of changes (default: false). Enable for redstone or physics-dependent blocks.",
+                "default": False
             }
         },
         "required": ["x1", "y1", "z1", "x2", "y2", "z2", "block_type"]
@@ -917,10 +922,15 @@ TOOL_ADD_BUILD_TASK_BLOCK_FILL = Tool(
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
             },
+            "notify_neighbors": {
+                "type": "boolean",
+                "description": "Whether to notify neighboring blocks of changes (default: false). Enable for redstone or physics-dependent blocks.",
+                "default": False
+            },
             "description": {
                 "type": "string",
                 "description": "Description of task (optional)",
-                "default": ""               
+                "default": ""
             }
         },
         "required": ["build_id", "x1", "y1", "z1", "x2", "y2", "z2", "block_type"]

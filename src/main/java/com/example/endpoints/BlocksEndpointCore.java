@@ -243,14 +243,19 @@ public class BlocksEndpointCore {
                 BlockState blockState = block.getDefaultState();
                 int blocksSet = 0;
                 int blocksFailed = 0;
-                
+
+                // Determine flags for setBlockState
+                // Block.NOTIFY_ALL (3) is the default, which includes NOTIFY_NEIGHBORS (1) + NOTIFY_LISTENERS (2)
+                // When notify_neighbors is false, we skip neighbor updates for better performance
+                int flags = request.notify_neighbors ? Block.NOTIFY_ALL : Block.NOTIFY_LISTENERS;
+
                 // Fill the box
                 for (int x = minX; x <= maxX; x++) {
                     for (int y = minY; y <= maxY; y++) {
                         for (int z = minZ; z <= maxZ; z++) {
                             BlockPos pos = new BlockPos(x, y, z);
-                            
-                            if (world.setBlockState(pos, blockState)) {
+
+                            if (world.setBlockState(pos, blockState, flags)) {
                                 blocksSet++;
                             } else {
                                 blocksFailed++;

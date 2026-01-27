@@ -249,6 +249,7 @@ class FillBoxRequest {
     public int x1, y1, z1; // first corner coordinate
     public int x2, y2, z2; // second corner coordinate
     public String block_type; // block identifier (e.g., "minecraft:stone")
+    public boolean notify_neighbors; // optional, defaults to false
 }
 
 class HeightmapRequest {

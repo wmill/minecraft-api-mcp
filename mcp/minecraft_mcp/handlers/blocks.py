@@ -136,11 +136,12 @@ async def handle_fill_box(
     z2: int,
     block_type: str,
     world: str = None,
+    notify_neighbors: bool = False,
     **arguments
 ) -> CallToolResult:
     """
     Fill a cuboid/box with a specific block type between two coordinates.
-    
+
     Args:
         api_client: The Minecraft API client
         x1: First corner X coordinate
@@ -151,14 +152,15 @@ async def handle_fill_box(
         z2: Second corner Z coordinate
         block_type: Block type identifier
         world: World name (optional)
+        notify_neighbors: Whether to notify neighboring blocks of changes (default: false)
         **arguments: Additional arguments (ignored)
-        
+
     Returns:
         CallToolResult with fill result
     """
     try:
-        result = await api_client.fill_box(x1, y1, z1, x2, y2, z2, block_type, world)
-        
+        result = await api_client.fill_box(x1, y1, z1, x2, y2, z2, block_type, world, notify_neighbors)
+
         if result.get("success"):
             range_str = format_coordinate_range(x1, y1, z1, x2, y2, z2)
             response_text = f"✅ Successfully filled {result['blocks_filled']} blocks with {block_type} {range_str} in world {result['world']}"

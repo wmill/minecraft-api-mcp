@@ -204,11 +204,12 @@ class MinecraftAPIClient:
         y2: int,
         z2: int,
         block_type: str,
-        world: Optional[str] = None
+        world: Optional[str] = None,
+        notify_neighbors: bool = False
     ) -> dict:
         """
         Fill a cuboid/box with a specific block type between two coordinates.
-        
+
         Args:
             x1: First corner X coordinate
             y1: First corner Y coordinate
@@ -218,10 +219,11 @@ class MinecraftAPIClient:
             z2: Second corner Z coordinate
             block_type: Block type identifier (e.g., 'minecraft:stone')
             world: World name (optional, defaults to minecraft:overworld)
-            
+            notify_neighbors: Whether to notify neighboring blocks of changes (default: false)
+
         Returns:
             dict: Response containing fill result with block counts
-            
+
         Raises:
             httpx.HTTPError: If the request fails
         """
@@ -232,11 +234,12 @@ class MinecraftAPIClient:
             "x2": x2,
             "y2": y2,
             "z2": z2,
-            "block_type": block_type
+            "block_type": block_type,
+            "notify_neighbors": notify_neighbors
         }
         if world:
             payload["world"] = world
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/blocks/fill",

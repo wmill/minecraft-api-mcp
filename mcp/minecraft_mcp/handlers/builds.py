@@ -235,12 +235,13 @@ async def handle_add_build_task_block_fill(
     z2: int,
     block_type: str,
     world: Optional[str] = None,
+    notify_neighbors: bool = False,
     description: Optional[str] = None,
     **arguments
 ) -> CallToolResult:
     """
     Add a BLOCK_FILL task to a build queue.
-    
+
     Args:
         api_client: The Minecraft API client
         build_id: Build UUID
@@ -252,9 +253,10 @@ async def handle_add_build_task_block_fill(
         z2: Second corner Z coordinate
         block_type: Block type identifier
         world: World name (optional)
+        notify_neighbors: Whether to notify neighboring blocks of changes (default: false)
         description: description of the task (optional)
         **arguments: Additional arguments (ignored)
-        
+
     Returns:
         CallToolResult with task addition result
     """
@@ -267,10 +269,11 @@ async def handle_add_build_task_block_fill(
             "y2": y2,
             "z2": z2,
             "block_type": block_type,
+            "notify_neighbors": notify_neighbors,
         }
         if world:
             task_data["world"] = world
-        
+
         result = await api_client.add_build_task(build_id, "BLOCK_FILL", task_data, description)
         
         if result.get("success"):
