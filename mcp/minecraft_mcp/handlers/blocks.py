@@ -163,7 +163,7 @@ async def handle_fill_box(
 
         if result.get("success"):
             range_str = format_coordinate_range(x1, y1, z1, x2, y2, z2)
-            response_text = f"✅ Successfully filled {result['blocks_filled']} blocks with {block_type} {range_str} in world {result['world']}"
+            response_text = f"✅ Successfully filled {result['blocks_set']} blocks with {block_type} {range_str} in world {result['world']}"
             return format_success_response(response_text)
         else:
             return CallToolResult(
