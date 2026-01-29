@@ -133,7 +133,7 @@ TOOL_SET_BLOCKS = Tool(
 
 TOOL_GET_BLOCKS_CHUNK = Tool(
     name="get_blocks_chunk",
-    description="Get a chunk of blocks from the world",
+    description="Get a chunk of blocks from the world. Maximum 125 total blocks (e.g., 5x5x5).",
     inputSchema={
         "type": "object",
         "properties": {

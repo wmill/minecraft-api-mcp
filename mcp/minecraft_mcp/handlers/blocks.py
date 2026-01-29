@@ -108,6 +108,16 @@ async def handle_get_blocks_chunk(
         CallToolResult with raw chunk JSON data
     """
     try:
+        # Limit total blocks to 125 (5x5x5) to avoid large JSON responses
+        total_blocks = size_x * size_y * size_z
+        if total_blocks > 125:
+            return CallToolResult(
+                content=[TextContent(
+                    type="text",
+                    text=f"❌ Chunk size too large: {size_x}x{size_y}x{size_z} = {total_blocks} blocks. Maximum is 125 blocks (e.g., 5x5x5)."
+                )]
+            )
+
         result = await api_client.get_blocks_chunk(
             start_x, start_y, start_z,
             size_x, size_y, size_z,
