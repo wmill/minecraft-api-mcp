@@ -428,25 +428,25 @@ public class BuildTaskEndpoint extends APIEndpoint {
             try {
                 String idParam = ctx.pathParam("id");
                 UUID buildId;
-                
+
                 try {
                     buildId = UUID.fromString(idParam);
                 } catch (IllegalArgumentException e) {
                     ctx.status(400).json(Map.of("error", "Invalid build ID format"));
                     return;
                 }
-                
+
                 // Execute build asynchronously
                 buildService.executeBuild(buildId)
                     .thenAccept(result -> {
-                        // Note: In a real implementation, you might want to use WebSockets or 
+                        // Note: In a real implementation, you might want to use WebSockets or
                         // Server-Sent Events for real-time updates. For now, we return immediately.
                     })
                     .exceptionally(throwable -> {
                         LOGGER.error("Error during build execution", throwable);
                         return null;
                     });
-                
+
                 // Return immediate response that execution has started
                 ctx.status(202).json(Map.of(
                     "success", true,
@@ -454,11 +454,50 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     "message", "Build execution started",
                     "status", "accepted"
                 ));
-                
+
                 LOGGER.info("Started execution of build {} via API", buildId);
-                
+
             } catch (Exception e) {
                 LOGGER.error("Unexpected error starting build execution", e);
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+
+        // POST /api/builds/{id}/replay - Replay a completed or failed build
+        app.post("/api/builds/{id}/replay", ctx -> {
+            try {
+                String idParam = ctx.pathParam("id");
+                UUID buildId;
+
+                try {
+                    buildId = UUID.fromString(idParam);
+                } catch (IllegalArgumentException e) {
+                    ctx.status(400).json(Map.of("error", "Invalid build ID format"));
+                    return;
+                }
+
+                // Replay build asynchronously (resets tasks and re-executes)
+                buildService.replayBuild(buildId)
+                    .thenAccept(result -> {
+                        // Execution happens asynchronously
+                    })
+                    .exceptionally(throwable -> {
+                        LOGGER.error("Error during build replay", throwable);
+                        return null;
+                    });
+
+                // Return immediate response that replay has started
+                ctx.status(202).json(Map.of(
+                    "success", true,
+                    "build_id", buildId.toString(),
+                    "message", "Build replay started (tasks reset and re-executing)",
+                    "status", "accepted"
+                ));
+
+                LOGGER.info("Started replay of build {} via API", buildId);
+
+            } catch (Exception e) {
+                LOGGER.error("Unexpected error starting build replay", e);
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });

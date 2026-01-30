@@ -252,6 +252,58 @@ public class BuildService {
     }
 
     /**
+     * Replays a build by resetting all task statuses and re-executing.
+     * Requirements: Allows re-running completed or failed builds.
+     */
+    public CompletableFuture<BuildExecutionResult> replayBuild(UUID buildId) {
+        if (buildId == null) {
+            return CompletableFuture.completedFuture(
+                new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build ID cannot be null"));
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                logger.info("Starting replay of build {}", buildId);
+
+                // Get build and verify it exists
+                Optional<Build> buildOpt = buildRepository.findById(buildId);
+                if (buildOpt.isEmpty()) {
+                    return new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build not found: " + buildId);
+                }
+
+                Build build = buildOpt.get();
+
+                // Reset build status to CREATED
+                build.setStatus(BuildStatus.CREATED);
+                buildRepository.update(build);
+
+                // Reset all task statuses to PENDING
+                List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
+                for (BuildTask task : tasks) {
+                    task.resetForReplay();
+                    taskRepository.update(task);
+                }
+
+                logger.info("Reset {} tasks for replay of build {}", tasks.size(), buildId);
+
+            } catch (SQLException e) {
+                logger.error("Database error resetting build for replay", e);
+                return new BuildExecutionResult(buildId, false, 0, 0, List.of(),
+                    "Database error during reset: " + e.getMessage());
+            }
+
+            // Now execute the build normally
+            try {
+                return executeBuild(buildId).get();
+            } catch (Exception e) {
+                logger.error("Error during replay execution", e);
+                return new BuildExecutionResult(buildId, false, 0, 0, List.of(),
+                    "Error during replay: " + e.getMessage());
+            }
+        }, executorService);
+    }
+
+    /**
      * Shuts down the executor service.
      */
     public void shutdown() {

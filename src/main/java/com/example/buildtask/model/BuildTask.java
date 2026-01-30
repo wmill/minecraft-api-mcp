@@ -62,6 +62,15 @@ public class BuildTask {
     }
 
     /**
+     * Resets the task for replay by clearing execution state.
+     */
+    public void resetForReplay() {
+        this.status = TaskStatus.QUEUED;
+        this.executedAt = null;
+        this.errorMessage = null;
+    }
+
+    /**
      * Updates the coordinates based on the current task data.
      */
     public void updateCoordinates() {
