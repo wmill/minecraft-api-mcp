@@ -62,10 +62,10 @@ cp server.properties.example server.properties
 
 ```bash
 # Build image
-docker build -t minecraft-fabric-mod .
+docker build -f minecraft.Dockerfile -t minecraft-fabric-mod .
 
 # Run container
-docker run -d -p 25565:25565 -p 7070:7070 minecraft-fabric-mod
+docker run -d -p 25565:25565 -p 7070:7070 -v minecraft_data:/minecraft minecraft-fabric-mod
 ```
 
 ### Using Docker Compose (Recommended)
@@ -100,8 +100,14 @@ docker-compose down -v
 
 ## Volumes
 
-- `/minecraft/world` - World data (persistent)
-- `/minecraft/logs` - Server logs (persistent)
+- `/minecraft` - Full server home (persistent)
+
+The container now keeps packaged binaries and default config templates inside the image under `/opt/minecraft-dist`, then syncs them into the live `/minecraft` volume on startup. Runtime state such as `ops.json`, `whitelist.json`, `banned-players.json`, `banned-ips.json`, world data, and logs persists across container recreation.
+
+On startup, the container:
+- refreshes the server launcher and packaged mod jars from the image
+- creates `server.properties` and `eula.txt` only if they do not already exist in the volume
+- preserves operator-managed files already present in `/minecraft`
 
 ## API Endpoints
 
@@ -133,7 +139,7 @@ Once running, the mod API will be available at:
 For development, you can mount your mod directly:
 ```bash
 # Add to docker-compose.yml volumes:
-- ./build/libs:/minecraft/mods
+- ./build/libs:/opt/minecraft-dist/mods
 ```
 
 Then rebuild your mod and restart the container to test changes.

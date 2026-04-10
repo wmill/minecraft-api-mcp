@@ -67,8 +67,7 @@ services:
     ports:
       - "25565:25565"
     volumes:
-      - minecraft_world:/minecraft/world
-      - minecraft_logs:/minecraft/logs
+      - minecraft_data:/minecraft
     environment:
       # Database connection
       - DB_HOST=postgres
@@ -112,9 +111,7 @@ services:
 volumes:
   postgres_data:
     driver: local
-  minecraft_world:
-    driver: local
-  minecraft_logs:
+  minecraft_data:
     driver: local
   letsencrypt:
     driver: local
