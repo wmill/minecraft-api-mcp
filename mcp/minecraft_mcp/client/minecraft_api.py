@@ -998,6 +998,50 @@ class MinecraftAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def start_rail_plan(
+        self,
+        build_id: str,
+        start_x: int,
+        start_y: int,
+        start_z: int,
+        end_x: int,
+        end_y: int,
+        end_z: int,
+        world: Optional[str] = None,
+        weight_overrides: Optional[Dict[str, float]] = None
+    ) -> dict:
+        payload = {
+            "start_x": start_x,
+            "start_y": start_y,
+            "start_z": start_z,
+            "end_x": end_x,
+            "end_y": end_y,
+            "end_z": end_z,
+        }
+        if world:
+            payload["world"] = world
+        if weight_overrides:
+            payload["weight_overrides"] = weight_overrides
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/builds/{build_id}/plan-rail",
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_rail_plan_status(
+        self,
+        job_id: str
+    ) -> dict:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/api/rail-plans/{job_id}"
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def teleport_player(
         self,
         player_name: str,

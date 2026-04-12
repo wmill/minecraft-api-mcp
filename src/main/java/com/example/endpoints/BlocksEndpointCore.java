@@ -377,6 +377,22 @@ public class BlocksEndpointCore {
         
         return future;
     }
+
+    public CompletableFuture<int[][]> getHeightmapHeights(int x1, int z1, int x2, int z2, String worldName, String heightmapTypeName) {
+        HeightmapRequest request = new HeightmapRequest();
+        request.x1 = x1;
+        request.z1 = z1;
+        request.x2 = x2;
+        request.z2 = z2;
+        request.world = worldName;
+        request.heightmap_type = heightmapTypeName;
+        return getHeightmap(request).thenCompose(result -> {
+            if (!result.success()) {
+                return CompletableFuture.failedFuture(new IllegalStateException(result.error()));
+            }
+            return CompletableFuture.completedFuture(result.heights());
+        });
+    }
 }
 
 // Result classes for core operations

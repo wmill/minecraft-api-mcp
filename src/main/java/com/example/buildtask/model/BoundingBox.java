@@ -288,6 +288,39 @@ public class BoundingBox {
         return new BoundingBox(x, y, z, x, endY, z);
     }
 
+    public static BoundingBox fromRailSegmentRequest(JsonNode taskData) {
+        if (taskData == null || !taskData.has("path") || !taskData.get("path").isArray()) {
+            return null;
+        }
+
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        boolean foundPoint = false;
+
+        for (JsonNode point : taskData.get("path")) {
+            if (point == null || !point.has("x") || !point.has("y") || !point.has("z")) {
+                continue;
+            }
+
+            int x = point.get("x").asInt();
+            int y = point.get("y").asInt();
+            int z = point.get("z").asInt();
+            minX = Math.min(minX, x - 1);
+            minY = Math.min(minY, y - 1);
+            minZ = Math.min(minZ, z - 1);
+            maxX = Math.max(maxX, x + 1);
+            maxY = Math.max(maxY, y + 3);
+            maxZ = Math.max(maxZ, z + 1);
+            foundPoint = true;
+        }
+
+        return foundPoint ? new BoundingBox(minX, minY, minZ, maxX, maxY, maxZ) : null;
+    }
+
     /**
      * Creates a bounding box from task data based on task type.
      */
@@ -312,6 +345,10 @@ public class BoundingBox {
             case PREFAB_TORCH:
             case PREFAB_SIGN:
                 return fromPrefabRequest(taskData);
+            case RAIL_SURFACE_SEGMENT:
+            case RAIL_BRIDGE_SEGMENT:
+            case RAIL_TUNNEL_SEGMENT:
+                return fromRailSegmentRequest(taskData);
             default:
                 return null;
         }

@@ -2,10 +2,13 @@ package com.example;
 
 import com.example.buildtask.repository.BuildRepository;
 import com.example.buildtask.repository.PostgreSQLBuildRepository;
+import com.example.buildtask.repository.PostgreSQLRailPlanningJobRepository;
 import com.example.buildtask.repository.PostgreSQLTaskRepository;
+import com.example.buildtask.repository.RailPlanningJobRepository;
 import com.example.buildtask.repository.TaskRepository;
 import com.example.buildtask.service.BuildService;
 import com.example.buildtask.service.LocationQueryService;
+import com.example.buildtask.service.RailPlanningService;
 import com.example.database.DatabaseManager;
 import com.example.endpoints.*;
 import io.javalin.Javalin;
@@ -64,6 +67,7 @@ public class APIServer {
         // Create repositories
         BuildRepository buildRepository = new PostgreSQLBuildRepository(databaseManager.getDatabaseConfig());
         TaskRepository taskRepository = new PostgreSQLTaskRepository(databaseManager.getDatabaseConfig());
+        RailPlanningJobRepository railPlanningJobRepository = new PostgreSQLRailPlanningJobRepository(databaseManager.getDatabaseConfig());
         
         // Create task executor
         TaskExecutor taskExecutor = new TaskExecutor(server);
@@ -71,9 +75,11 @@ public class APIServer {
         // Create services
         BuildService buildService = new BuildService(buildRepository, taskRepository, taskExecutor);
         LocationQueryService locationQueryService = new LocationQueryService(buildRepository, taskRepository);
+        RailPlanningService railPlanningService = new RailPlanningService(
+            buildRepository, buildService, railPlanningJobRepository, server, logger);
         
         // Create and register build task endpoint
-        new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService);
+        new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, railPlanningService);
         
         logger.info("Build task management system initialized successfully");
     }

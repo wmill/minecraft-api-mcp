@@ -46,6 +46,7 @@ public class TaskDataValidator {
             case PREFAB_TORCH -> validateTorchData(taskData);
             case PREFAB_SIGN -> validateSignData(taskData);
             case PREFAB_LADDER -> validateLadderData(taskData);
+            case RAIL_SURFACE_SEGMENT, RAIL_BRIDGE_SEGMENT, RAIL_TUNNEL_SEGMENT -> validateRailSegmentData(taskData);
             default -> ValidationResult.failure("Unknown task type: " + taskType);
         };
     }
@@ -425,6 +426,47 @@ public class TaskDataValidator {
         }
 
         // Validate optional world field
+        if (data.has("world") && (!data.get("world").isTextual() || data.get("world").asText().trim().isEmpty())) {
+            errors.add("world must be a non-empty string if provided");
+        }
+
+        return errors.isEmpty() ? ValidationResult.success() : ValidationResult.failure(String.join("; ", errors));
+    }
+
+    private ValidationResult validateRailSegmentData(JsonNode data) {
+        List<String> errors = new ArrayList<>();
+
+        if (!data.has("path") || !data.get("path").isArray() || data.get("path").size() < 2) {
+            errors.add("path is required and must contain at least 2 points");
+        } else {
+            for (int i = 0; i < data.get("path").size(); i++) {
+                JsonNode point = data.get("path").get(i);
+                if (!point.isObject()
+                    || !point.has("x") || !point.get("x").isInt()
+                    || !point.has("y") || !point.get("y").isInt()
+                    || !point.has("z") || !point.get("z").isInt()) {
+                    errors.add("path[" + i + "] must contain integer x, y, z fields");
+                }
+            }
+        }
+
+        String[] blockFields = {"rail_bed_block", "support_block", "power_block"};
+        for (String field : blockFields) {
+            if (!data.has(field) || !data.get(field).isTextual() || !isValidBlockIdentifier(data.get(field).asText())) {
+                errors.add(field + " is required and must be a valid block identifier");
+            }
+        }
+
+        if (data.has("tunnel_lining_block")
+            && !data.get("tunnel_lining_block").isNull()
+            && (!data.get("tunnel_lining_block").isTextual() || !isValidBlockIdentifier(data.get("tunnel_lining_block").asText()))) {
+            errors.add("tunnel_lining_block must be a valid block identifier if provided");
+        }
+
+        if (!data.has("powered_rail_interval") || !data.get("powered_rail_interval").isInt() || data.get("powered_rail_interval").asInt() <= 0) {
+            errors.add("powered_rail_interval is required and must be a positive integer");
+        }
+
         if (data.has("world") && (!data.get("world").isTextual() || data.get("world").asText().trim().isEmpty())) {
             errors.add("world must be a non-empty string if provided");
         }

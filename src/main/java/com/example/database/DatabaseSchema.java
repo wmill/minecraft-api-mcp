@@ -33,6 +33,7 @@ public class DatabaseSchema {
             try {
                 createBuildsTable(connection);
                 createBuildTasksTable(connection);
+                createRailPlanningJobsTable(connection);
                 createIndexes(connection);
                 
                 connection.commit();
@@ -115,6 +116,48 @@ public class DatabaseSchema {
             LOGGER.debug("Added foreign key constraint for build_tasks");
         }
     }
+
+    private void createRailPlanningJobsTable(Connection connection) throws SQLException {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS rail_planning_jobs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                build_id UUID NOT NULL,
+                status VARCHAR(50) NOT NULL,
+                phase VARCHAR(255) NOT NULL,
+                sampled_area_count INTEGER NOT NULL DEFAULT 0,
+                route_length INTEGER NOT NULL DEFAULT 0,
+                error_message TEXT,
+                request_data JSONB,
+                result_data JSONB,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+            """;
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+            LOGGER.debug("Created rail_planning_jobs table");
+        }
+
+        String fkSql = """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.table_constraints 
+                    WHERE constraint_name = 'rail_planning_jobs_build_id_fkey'
+                ) THEN
+                    ALTER TABLE rail_planning_jobs
+                    ADD CONSTRAINT rail_planning_jobs_build_id_fkey
+                    FOREIGN KEY (build_id) REFERENCES builds(id) ON DELETE CASCADE;
+                END IF;
+            END $$
+            """;
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(fkSql);
+            LOGGER.debug("Added foreign key constraint for rail_planning_jobs");
+        }
+    }
     
     private void createIndexes(Connection connection) throws SQLException {
         String[] indexes = {
@@ -124,6 +167,8 @@ public class DatabaseSchema {
             "CREATE INDEX IF NOT EXISTS idx_tasks_build_id ON build_tasks(build_id)",
             "CREATE INDEX IF NOT EXISTS idx_tasks_status ON build_tasks(status)",
             "CREATE INDEX IF NOT EXISTS idx_tasks_coordinates ON build_tasks(min_x, min_y, min_z, max_x, max_y, max_z)",
+            "CREATE INDEX IF NOT EXISTS idx_rail_planning_build_id ON rail_planning_jobs(build_id)",
+            "CREATE INDEX IF NOT EXISTS idx_rail_planning_status ON rail_planning_jobs(status)",
             // Spatial index for efficient location queries using box type
             "CREATE INDEX IF NOT EXISTS idx_tasks_location_query ON build_tasks USING GIST (box(point(min_x, min_z), point(max_x, max_z)))"
         };
@@ -143,7 +188,7 @@ public class DatabaseSchema {
         try (Connection connection = databaseConfig.getConnection()) {
             String sql = """
                 SELECT COUNT(*) FROM information_schema.tables 
-                WHERE table_name IN ('builds', 'build_tasks') 
+                WHERE table_name IN ('builds', 'build_tasks', 'rail_planning_jobs') 
                 AND table_schema = 'public'
                 """;
             
@@ -151,7 +196,7 @@ public class DatabaseSchema {
                  var rs = stmt.executeQuery(sql)) {
                 
                 if (rs.next()) {
-                    return rs.getInt(1) == 2; // Both tables should exist
+                    return rs.getInt(1) == 3;
                 }
             }
         } catch (SQLException e) {
@@ -173,6 +218,7 @@ public class DatabaseSchema {
             try {
                 try (Statement stmt = connection.createStatement()) {
                     stmt.execute("DROP TABLE IF EXISTS build_tasks CASCADE");
+                    stmt.execute("DROP TABLE IF EXISTS rail_planning_jobs CASCADE");
                     stmt.execute("DROP TABLE IF EXISTS builds CASCADE");
                 }
                 

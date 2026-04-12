@@ -4,6 +4,7 @@ import com.example.buildtask.model.Build;
 import com.example.buildtask.model.BuildTask;
 import com.example.buildtask.service.BuildService;
 import com.example.buildtask.service.LocationQueryService;
+import com.example.buildtask.service.RailPlanningService;
 import io.javalin.Javalin;
 import net.minecraft.server.MinecraftServer;
 
@@ -19,12 +20,15 @@ import java.util.stream.Collectors;
 public class BuildTaskEndpoint extends APIEndpoint {
     private final BuildService buildService;
     private final LocationQueryService locationQueryService;
+    private final RailPlanningService railPlanningService;
 
     public BuildTaskEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
-                           BuildService buildService, LocationQueryService locationQueryService) {
+                           BuildService buildService, LocationQueryService locationQueryService,
+                           RailPlanningService railPlanningService) {
         super(app, server, logger);
         this.buildService = buildService;
         this.locationQueryService = locationQueryService;
+        this.railPlanningService = railPlanningService;
         init();
     }
 
@@ -655,6 +659,80 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
             } catch (Exception e) {
                 LOGGER.error("Unexpected error during audit", e);
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+
+        app.post("/api/builds/{id}/plan-rail", ctx -> {
+            try {
+                UUID buildId = UUID.fromString(ctx.pathParam("id"));
+                RailPlanningService.StartRailPlanningRequest request = ctx.bodyAsClass(RailPlanningService.StartRailPlanningRequest.class);
+                request.build_id = buildId;
+                if (request.world == null || request.world.isBlank()) {
+                    Optional<Build> build = buildService.getBuild(buildId);
+                    request.world = build.map(Build::getWorld).orElse("minecraft:overworld");
+                }
+
+                var job = railPlanningService.startPlanning(request);
+                ctx.status(202).json(Map.of(
+                    "success", true,
+                    "planning_job", Map.of(
+                        "id", job.getId().toString(),
+                        "build_id", job.getBuildId().toString(),
+                        "status", job.getStatus().name(),
+                        "phase", job.getPhase(),
+                        "sampled_area_count", job.getSampledAreaCount(),
+                        "route_length", job.getRouteLength(),
+                        "created_at", job.getCreatedAt().toString(),
+                        "updated_at", job.getUpdatedAt().toString()
+                    )
+                ));
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).json(Map.of("error", e.getMessage()));
+            } catch (IllegalStateException e) {
+                ctx.status(409).json(Map.of("error", e.getMessage()));
+            } catch (SQLException e) {
+                LOGGER.error("Database error starting rail planner", e);
+                ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
+            } catch (Exception e) {
+                LOGGER.error("Unexpected error starting rail planner", e);
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+
+        app.get("/api/rail-plans/{jobId}", ctx -> {
+            try {
+                UUID jobId = UUID.fromString(ctx.pathParam("jobId"));
+                var jobOpt = railPlanningService.getJob(jobId);
+                if (jobOpt.isEmpty()) {
+                    ctx.status(404).json(Map.of("error", "Planning job not found"));
+                    return;
+                }
+
+                var job = jobOpt.get();
+                Map<String, Object> response = new LinkedHashMap<>();
+                response.put("id", job.getId().toString());
+                response.put("build_id", job.getBuildId().toString());
+                response.put("status", job.getStatus().name());
+                response.put("phase", job.getPhase());
+                response.put("sampled_area_count", job.getSampledAreaCount());
+                response.put("route_length", job.getRouteLength());
+                response.put("created_at", job.getCreatedAt().toString());
+                response.put("updated_at", job.getUpdatedAt().toString());
+                if (job.getErrorMessage() != null) {
+                    response.put("error_message", job.getErrorMessage());
+                }
+                if (job.getResultData() != null) {
+                    response.put("result", job.getResultData());
+                }
+                ctx.json(Map.of("success", true, "planning_job", response));
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).json(Map.of("error", "Invalid planning job ID format"));
+            } catch (SQLException e) {
+                LOGGER.error("Database error fetching rail planner job", e);
+                ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
+            } catch (Exception e) {
+                LOGGER.error("Unexpected error fetching rail planner job", e);
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });

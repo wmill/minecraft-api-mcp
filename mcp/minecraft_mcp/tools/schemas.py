@@ -1442,6 +1442,42 @@ TOOL_UPDATE_BUILD_TASK = Tool(
     }
 )
 
+TOOL_PLAN_RAIL_ROUTE = Tool(
+    name="plan_rail_route",
+    description="Plan a terrain-following rail corridor between two anchors and append rail build tasks asynchronously.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {"type": "string", "description": "Build UUID"},
+            "start_x": {"type": "integer", "description": "Start X"},
+            "start_y": {"type": "integer", "description": "Start Y"},
+            "start_z": {"type": "integer", "description": "Start Z"},
+            "end_x": {"type": "integer", "description": "End X"},
+            "end_y": {"type": "integer", "description": "End Y"},
+            "end_z": {"type": "integer", "description": "End Z"},
+            "world": {"type": "string", "description": "World name", "default": "minecraft:overworld"},
+            "weight_overrides": {
+                "type": "object",
+                "description": "Optional planning weights such as surface_cost, grade_cost, detour_cost, max_grade, powered_rail_interval",
+                "additionalProperties": {"type": "number"}
+            }
+        },
+        "required": ["build_id", "start_x", "start_y", "start_z", "end_x", "end_y", "end_z"]
+    }
+)
+
+TOOL_GET_RAIL_PLAN_STATUS = Tool(
+    name="get_rail_plan_status",
+    description="Poll the status of an asynchronous rail planning job.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "planning_job_id": {"type": "string", "description": "Rail planning job UUID"}
+        },
+        "required": ["planning_job_id"]
+    }
+)
+
 #    "handle_coordinate_conventions"
 TOOL_HANDLE_COORDINATE_CONVENTIONS = Tool(
     name = "get_coordinate_conventions",
@@ -1501,4 +1537,6 @@ TOOL_SCHEMAS = [
     TOOL_AUDIT_BUILD,
     TOOL_DELETE_BUILD_TASK,
     TOOL_UPDATE_BUILD_TASK,
+    TOOL_PLAN_RAIL_ROUTE,
+    TOOL_GET_RAIL_PLAN_STATUS,
 ]

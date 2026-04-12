@@ -921,6 +921,65 @@ async def handle_audit_build(
         return format_error_response(e, "auditing build")
 
 
+async def handle_plan_rail_route(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    start_x: int,
+    start_y: int,
+    start_z: int,
+    end_x: int,
+    end_y: int,
+    end_z: int,
+    world: Optional[str] = None,
+    weight_overrides: Optional[Dict[str, float]] = None,
+    **arguments
+) -> CallToolResult:
+    try:
+        result = await api_client.start_rail_plan(
+            build_id, start_x, start_y, start_z, end_x, end_y, end_z, world, weight_overrides
+        )
+        if result.get("success"):
+            job = result["planning_job"]
+            response_text = f"✅ Started rail planning job\n"
+            response_text += f"Planning Job ID: {job['id']}\n"
+            response_text += f"Build ID: {job['build_id']}\n"
+            response_text += f"Status: {job['status']}\n"
+            response_text += f"Phase: {job['phase']}"
+            return format_success_response(response_text)
+        return CallToolResult(
+            content=[TextContent(type="text", text=f"❌ Failed to start rail planning: {result.get('error', 'Unknown error')}")]
+        )
+    except Exception as e:
+        return format_error_response(e, "starting rail planner")
+
+
+async def handle_get_rail_plan_status(
+    api_client: MinecraftAPIClient,
+    planning_job_id: str,
+    **arguments
+) -> CallToolResult:
+    try:
+        result = await api_client.get_rail_plan_status(planning_job_id)
+        if result.get("success"):
+            job = result["planning_job"]
+            response_text = f"**Rail Planning Job {job['id']}**\n\n"
+            response_text += f"- Build ID: {job['build_id']}\n"
+            response_text += f"- Status: {job['status']}\n"
+            response_text += f"- Phase: {job['phase']}\n"
+            response_text += f"- Sampled Tiles: {job['sampled_area_count']}\n"
+            response_text += f"- Route Length: {job['route_length']}\n"
+            if job.get("error_message"):
+                response_text += f"- Error: {job['error_message']}\n"
+            if job.get("result"):
+                response_text += f"- Result: {job['result']}\n"
+            return format_success_response(response_text)
+        return CallToolResult(
+            content=[TextContent(type="text", text=f"❌ Failed to fetch rail planning status: {result.get('error', 'Unknown error')}")]
+        )
+    except Exception as e:
+        return format_error_response(e, "getting rail planner status")
+
+
 async def handle_delete_build_task(
     api_client: MinecraftAPIClient,
     build_id: str,
