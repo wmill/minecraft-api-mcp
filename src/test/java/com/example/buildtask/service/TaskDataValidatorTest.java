@@ -256,4 +256,43 @@ class TaskDataValidatorTest {
         assertFalse(result.isValid());
         assertTrue(result.getErrorMessage().contains("Task type cannot be null"));
     }
+
+    @Test
+    void testValidRailSegmentData() throws Exception {
+        String validData = """
+            {
+                "path": [
+                    {"x": 0, "y": 64, "z": 0},
+                    {"x": 1, "y": 64, "z": 0}
+                ],
+                "rail_bed_block": "minecraft:stone",
+                "support_block": "minecraft:stone_bricks",
+                "power_block": "minecraft:redstone_block",
+                "powered_rail_interval": 8,
+                "world": "minecraft:overworld"
+            }
+            """;
+        JsonNode data = objectMapper.readTree(validData);
+
+        TaskDataValidator.ValidationResult result = validator.validateTaskData(TaskType.RAIL_SURFACE_SEGMENT, data);
+
+        assertTrue(result.isValid());
+    }
+
+    @Test
+    void testInvalidRailSegmentDataMissingPathAndBlocks() throws Exception {
+        String invalidData = """
+            {
+                "powered_rail_interval": 0
+            }
+            """;
+        JsonNode data = objectMapper.readTree(invalidData);
+
+        TaskDataValidator.ValidationResult result = validator.validateTaskData(TaskType.RAIL_BRIDGE_SEGMENT, data);
+
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("path is required"));
+        assertTrue(result.getErrorMessage().contains("rail_bed_block is required"));
+        assertTrue(result.getErrorMessage().contains("powered_rail_interval is required"));
+    }
 }

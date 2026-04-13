@@ -125,6 +125,25 @@ class BoundingBoxTest {
         assertThat(box.getMaxZ()).isEqualTo(7);
     }
 
+    @Test
+    void fromTaskDataRailSegmentUsesPathEnvelope() {
+        ObjectNode taskData = mapper.createObjectNode();
+        ArrayNode path = mapper.createArrayNode();
+        path.addObject().put("x", 10).put("y", 64).put("z", 20);
+        path.addObject().put("x", 12).put("y", 65).put("z", 23);
+        taskData.set("path", path);
+
+        BoundingBox box = BoundingBox.fromTaskData(TaskType.RAIL_SURFACE_SEGMENT, taskData);
+
+        assertThat(box).isNotNull();
+        assertThat(box.getMinX()).isEqualTo(9);
+        assertThat(box.getMinY()).isEqualTo(63);
+        assertThat(box.getMinZ()).isEqualTo(19);
+        assertThat(box.getMaxX()).isEqualTo(13);
+        assertThat(box.getMaxY()).isEqualTo(68);
+        assertThat(box.getMaxZ()).isEqualTo(24);
+    }
+
     private ArrayNode buildBlocks3d() {
         ArrayNode blocks = mapper.createArrayNode();
         for (int x = 0; x < 2; x++) {
