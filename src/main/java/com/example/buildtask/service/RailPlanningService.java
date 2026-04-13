@@ -34,6 +34,9 @@ public class RailPlanningService {
     private static final Logger LOGGER = LoggerFactory.getLogger(RailPlanningService.class);
     private static final int TILE_SIZE = 64;
     private static final int DEFAULT_MARGIN = 24;
+    private static final int DEFAULT_MAX_DROP_BELOW_ANCHOR = 4;
+    private static final int DEFAULT_VOID_SURFACE_THRESHOLD = -48;
+    private static final double DEFAULT_VOID_SURFACE_PENALTY = 1000.0;
 
     private final BuildRepository buildRepository;
     private final BuildService buildService;
@@ -197,21 +200,59 @@ public class RailPlanningService {
     private List<RoutePoint> buildTrackProfile(List<GridPoint> coarsePath, HeightField field, StartRailPlanningRequest request) {
         List<RoutePoint> result = new ArrayList<>();
         double maxGrade = effectiveDouble(request.weight_overrides, "max_grade", 1.0);
-        int minTrackY = field.heightAt(coarsePath.get(0).x(), coarsePath.get(0).z());
-        int targetEndY = field.heightAt(coarsePath.get(coarsePath.size() - 1).x(), coarsePath.get(coarsePath.size() - 1).z());
+        int startTrackY = request.start_y;
+        int targetEndY = request.end_y;
+        int maxStep = Math.max(1, (int) Math.ceil(maxGrade));
+        int maxDropBelowAnchor = effectiveInt(request.weight_overrides, "max_drop_below_anchor", DEFAULT_MAX_DROP_BELOW_ANCHOR);
+
+        List<Integer> surfaceHeights = coarsePath.stream()
+            .map(point -> field.heightAt(point.x(), point.z()))
+            .toList();
+        List<Integer> trackHeights = computeTrackProfileHeights(
+            surfaceHeights, startTrackY, targetEndY, maxStep, maxDropBelowAnchor);
 
         for (int i = 0; i < coarsePath.size(); i++) {
             GridPoint point = coarsePath.get(i);
-            int surfaceY = field.heightAt(point.x(), point.z());
-            double progress = coarsePath.size() == 1 ? 1.0 : (double) i / (coarsePath.size() - 1);
-            int idealY = (int) Math.round(minTrackY + (targetEndY - minTrackY) * progress);
-            int desired = Math.max(idealY, surfaceY - 3);
-            int previousTrackY = result.isEmpty() ? surfaceY : result.get(result.size() - 1).trackY();
-            int maxStep = Math.max(1, (int) Math.ceil(maxGrade));
-            int trackY = clamp(desired, previousTrackY - maxStep, previousTrackY + maxStep);
+            int surfaceY = surfaceHeights.get(i);
+            int trackY = trackHeights.get(i);
             result.add(new RoutePoint(point.x(), point.z(), surfaceY, trackY));
         }
         return result;
+    }
+
+    static List<Integer> computeTrackProfileHeights(List<Integer> surfaceHeights,
+                                                    int startTrackY,
+                                                    int endTrackY,
+                                                    int maxStep,
+                                                    int maxDropBelowAnchor) {
+        List<Integer> trackHeights = new ArrayList<>();
+        if (surfaceHeights.isEmpty()) {
+            return trackHeights;
+        }
+
+        int safeMaxStep = Math.max(1, maxStep);
+        int anchorFloor = Math.min(startTrackY, endTrackY) - Math.max(0, maxDropBelowAnchor);
+
+        for (int i = 0; i < surfaceHeights.size(); i++) {
+            int surfaceY = surfaceHeights.get(i);
+            double progress = surfaceHeights.size() == 1 ? 1.0 : (double) i / (surfaceHeights.size() - 1);
+            int idealY = (int) Math.round(startTrackY + (endTrackY - startTrackY) * progress);
+            int desired = Math.max(idealY, Math.max(anchorFloor, surfaceY - 3));
+            int previousTrackY = trackHeights.isEmpty() ? startTrackY : trackHeights.get(trackHeights.size() - 1);
+            int trackY = clampStatic(desired, Math.max(anchorFloor, previousTrackY - safeMaxStep), previousTrackY + safeMaxStep);
+
+            if (i == 0) {
+                trackY = startTrackY;
+            }
+            if (i == surfaceHeights.size() - 1) {
+                int targetY = Math.max(anchorFloor, endTrackY);
+                trackY = clampStatic(targetY, Math.max(anchorFloor, previousTrackY - safeMaxStep), previousTrackY + safeMaxStep);
+            }
+
+            trackHeights.add(trackY);
+        }
+
+        return trackHeights;
     }
 
     private List<GridPoint> route(HeightField field, StartRailPlanningRequest request) {
@@ -256,6 +297,9 @@ public class RailPlanningService {
         double detourCost = effectiveDouble(request.weight_overrides, "detour_cost", 0.15) * distanceFromLine(neighbor, start, end);
         double base = effectiveDouble(request.weight_overrides, "surface_cost", 1.0);
         double turnCost = effectiveDouble(request.weight_overrides, "turn_cost", 0.5);
+        if (nextY <= effectiveInt(request.weight_overrides, "void_surface_threshold", DEFAULT_VOID_SURFACE_THRESHOLD)) {
+            base += effectiveDouble(request.weight_overrides, "void_surface_penalty", DEFAULT_VOID_SURFACE_PENALTY);
+        }
         return base + gradeCost + detourCost + turnCost;
     }
 
@@ -401,6 +445,10 @@ public class RailPlanningService {
     }
 
     private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static int clampStatic(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 
