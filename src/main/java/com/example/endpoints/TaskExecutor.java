@@ -373,7 +373,7 @@ public class TaskExecutor {
     private void clearTunnel(ServerWorld world, BlockPos pos, RailSegmentDefinition segment) {
         BlockState air = Blocks.AIR.getDefaultState();
         for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = 0; dy <= 2; dy++) {
+            for (int dy = 0; dy <= 3; dy++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     world.setBlockState(pos.add(dx, dy, dz), air, Block.NOTIFY_LISTENERS);
                 }
@@ -386,10 +386,18 @@ public class TaskExecutor {
         if (lining == null) {
             return;
         }
+        // Solid ceiling at dy=3 (full 3x3)
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                world.setBlockState(pos.add(dx, 3, dz), lining, Block.NOTIFY_LISTENERS);
+            }
+        }
+        // Walls at dy=1 and dy=2 (surrounding 8 positions only, not dy=0 to avoid
+        // overwriting the rail block at the previous step's center on turns)
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 if (Math.abs(dx) == 1 || Math.abs(dz) == 1) {
-                    world.setBlockState(pos.add(dx, 0, dz), lining, Block.NOTIFY_LISTENERS);
+                    world.setBlockState(pos.add(dx, 1, dz), lining, Block.NOTIFY_LISTENERS);
                     world.setBlockState(pos.add(dx, 2, dz), lining, Block.NOTIFY_LISTENERS);
                 }
             }

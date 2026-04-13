@@ -205,7 +205,7 @@ public class RailPlanningService {
             int surfaceY = field.heightAt(point.x(), point.z());
             double progress = coarsePath.size() == 1 ? 1.0 : (double) i / (coarsePath.size() - 1);
             int idealY = (int) Math.round(minTrackY + (targetEndY - minTrackY) * progress);
-            int desired = clamp(idealY, surfaceY - 3, surfaceY + 1);
+            int desired = Math.max(idealY, surfaceY - 3);
             int previousTrackY = result.isEmpty() ? surfaceY : result.get(result.size() - 1).trackY();
             int maxStep = Math.max(1, (int) Math.ceil(maxGrade));
             int trackY = clamp(desired, previousTrackY - maxStep, previousTrackY + maxStep);
