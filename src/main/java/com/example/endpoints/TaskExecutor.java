@@ -406,7 +406,9 @@ public class TaskExecutor {
         BlockState support = getBlockState(segment.supportBlock());
         BlockState power = getBlockState(segment.powerBlock());
         BlockState chosenSupport = support != null ? support : power;
-        BlockState topSupport = poweredRail && power != null ? power : bed;
+        // BlockState topSupport = poweredRail && power != null ? power : bed;
+        // FIXME: skipping powered rail redstone as it is unneded
+        BlockState topSupport = bed;
         if (topSupport != null) {
             world.setBlockState(pos.down(), topSupport, Block.NOTIFY_LISTENERS);
         }
