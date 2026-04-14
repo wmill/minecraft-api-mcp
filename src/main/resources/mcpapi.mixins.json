@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"package": "ca.waltermiller.mcpapi.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+      "ca.waltermiller.mcpapi.mixin.ExampleMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

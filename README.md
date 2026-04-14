@@ -42,7 +42,3 @@ Visual Studio Code was able to use the Claude Desktop settings after going throu
 First you'll need the postgres image up and running `docker compose up -d postgres`
 
 After that the gradle runServer command worked for me. Kudos to the fabric devs.
-
-# Final notes
-
-The mod is still called "modid" and "com.example" in the Java code because I haven't changed it yet.

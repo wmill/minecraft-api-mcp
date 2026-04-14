@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"id": "modid",
+	"id": "mcpapi",
 	"version": "0.0.1",
 	"name": "Example mod",
 	"description": "This is an example description! Tell everyone what your mod is about!",
@@ -12,14 +12,14 @@
 		"sources": "https://github.com/FabricMC/fabric-example-mod"
 	},
 	"license": "Commercial",
-	"icon": "assets/modid/icon.png",
+	"icon": "assets/mcpapi/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.example.ExampleMod"
+			"ca.waltermiller.mcpapi.ExampleMod"
 		],
 		"client": [
-			"com.example.ExampleModClient"
+			"ca.waltermiller.mcpapi.ExampleModClient"
 		]
 	},
 	"mixins": [],

@@ -198,10 +198,10 @@ DB_PASSWORD=your_password
 ### Resource Structure
 
 **Mod Metadata**: `src/main/resources/fabric.mod.json`
-- Mod ID: "modid"
+- Mod ID: "mcpapi"
 - Version: 0.0.1
 - Entrypoints: Main (`ExampleMod`), Client
-- Mixins: `modid.mixins.json`
+- Mixins: `mcpapi.mixins.json`
 - Requires: FabricLoader >=0.16.14, Minecraft ~1.21.7, Java >=21
 
 ## Testing
