@@ -317,6 +317,7 @@ public class TaskExecutor {
                 for (int i = 0; i < segment.path().size(); i++) {
                     RailPoint point = segment.path().get(i);
                     BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
+                    boolean powered = shouldPlacePoweredRail(segment.path(), i, segment.poweredRailInterval());
 
                     if ("tunnel".equals(mode)) {
                         clearTunnel(world, pos, segment);
@@ -324,14 +325,15 @@ public class TaskExecutor {
                         clearHeadroom(world, pos);
                     }
 
-                    ensureBase(world, pos, segment, "bridge".equals(mode));
-                    if (placeRail(world, pos, segment.path(), i, segment)) {
+                    // NOTE: disabling support for now
+                    // ensureBase(world, pos, segment, "bridge".equals(mode), powered);
+                    if (placeRail(world, pos, segment.path(), i, segment, powered)) {
                         poweredRailsPlaced++;
                     }
 
-                    if ("tunnel".equals(mode)) {
-                        lineTunnel(world, pos, segment);
-                    }
+                    // if ("tunnel".equals(mode)) {
+                    //     lineTunnel(world, pos, segment);
+                    // }
                     railsPlaced++;
                 }
 
@@ -399,13 +401,14 @@ public class TaskExecutor {
         }
     }
 
-    private void ensureBase(ServerWorld world, BlockPos pos, RailSegmentDefinition segment, boolean extendSupportColumn) {
+    private void ensureBase(ServerWorld world, BlockPos pos, RailSegmentDefinition segment, boolean extendSupportColumn, boolean poweredRail) {
         BlockState bed = getBlockState(segment.railBedBlock());
         BlockState support = getBlockState(segment.supportBlock());
         BlockState power = getBlockState(segment.powerBlock());
         BlockState chosenSupport = support != null ? support : power;
-        if (bed != null) {
-            world.setBlockState(pos.down(), bed, Block.NOTIFY_LISTENERS);
+        BlockState topSupport = poweredRail && power != null ? power : bed;
+        if (topSupport != null) {
+            world.setBlockState(pos.down(), topSupport, Block.NOTIFY_LISTENERS);
         }
 
         if (chosenSupport == null) {
@@ -423,18 +426,11 @@ public class TaskExecutor {
         }
     }
 
-    private boolean placeRail(ServerWorld world, BlockPos pos, List<RailPoint> path, int index, RailSegmentDefinition segment) {
+    private boolean placeRail(ServerWorld world, BlockPos pos, List<RailPoint> path, int index, RailSegmentDefinition segment, boolean powered) {
         Direction forward = getForwardDirection(path, index);
-        boolean powered = shouldPlacePoweredRail(path, index, segment.poweredRailInterval());
         BlockState railState = powered ? Blocks.POWERED_RAIL.getDefaultState() : Blocks.RAIL.getDefaultState();
         railState = applyRailShape(railState, path, index, forward);
         world.setBlockState(pos, railState, Block.NOTIFY_ALL);
-        if (powered) {
-            BlockState power = getBlockState(segment.powerBlock());
-            if (power != null) {
-                world.setBlockState(pos.down(2), power, Block.NOTIFY_LISTENERS);
-            }
-        }
         return powered;
     }
 
