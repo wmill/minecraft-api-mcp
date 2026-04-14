@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.example.endpoints.BlocksEndpointCore;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.math.Direction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +38,10 @@ public class RailPlanningService {
     private static final int DEFAULT_MAX_DROP_BELOW_ANCHOR = 4;
     private static final int DEFAULT_VOID_SURFACE_THRESHOLD = -48;
     private static final double DEFAULT_VOID_SURFACE_PENALTY = 1000.0;
+    private static final double DEFAULT_BRIDGE_COST = 2.5;
+    private static final double DEFAULT_TUNNEL_COST = 6.0;
+    private static final int DEFAULT_WATER_SURFACE_THRESHOLD = 63;
+    private static final double DEFAULT_WATER_TUNNEL_PENALTY = 8.0;
 
     private final BuildRepository buildRepository;
     private final BuildService buildService;
@@ -259,48 +264,98 @@ public class RailPlanningService {
         GridPoint start = new GridPoint(request.start_x, request.start_z);
         GridPoint end = new GridPoint(request.end_x, request.end_z);
         PriorityQueue<PathNode> open = new PriorityQueue<>(Comparator.comparingDouble(PathNode::fScore));
-        Map<GridPoint, Double> gScores = new HashMap<>();
-        Map<GridPoint, GridPoint> cameFrom = new HashMap<>();
+        Map<NodeState, Double> gScores = new HashMap<>();
+        Map<NodeState, NodeState> cameFrom = new HashMap<>();
 
-        open.add(new PathNode(start, 0.0, heuristic(start, end)));
-        gScores.put(start, 0.0);
+        NodeState startState = new NodeState(start, null);
+        open.add(new PathNode(startState, 0.0, heuristic(start, end)));
+        gScores.put(startState, 0.0);
 
         while (!open.isEmpty()) {
             PathNode currentNode = open.poll();
-            GridPoint current = currentNode.point();
+            NodeState currentState = currentNode.state();
+            GridPoint current = currentState.point();
             if (current.equals(end)) {
-                return reconstructPath(cameFrom, current);
+                return reconstructPath(cameFrom, currentState);
             }
 
             for (GridPoint neighbor : neighbors(current)) {
                 if (!field.contains(neighbor.x(), neighbor.z())) {
                     continue;
                 }
-                double movementCost = transitionCost(current, neighbor, field, request, start, end);
-                double tentative = gScores.get(current) + movementCost;
-                if (tentative < gScores.getOrDefault(neighbor, Double.POSITIVE_INFINITY)) {
-                    cameFrom.put(neighbor, current);
-                    gScores.put(neighbor, tentative);
-                    open.add(new PathNode(neighbor, tentative, tentative + heuristic(neighbor, end)));
+                Direction moveDirection = directionBetween(current, neighbor);
+                NodeState neighborState = new NodeState(neighbor, moveDirection);
+                double movementCost = transitionCost(currentState, neighborState, field, request, start, end);
+                double tentative = gScores.get(currentState) + movementCost;
+                if (tentative < gScores.getOrDefault(neighborState, Double.POSITIVE_INFINITY)) {
+                    cameFrom.put(neighborState, currentState);
+                    gScores.put(neighborState, tentative);
+                    open.add(new PathNode(neighborState, tentative, tentative + heuristic(neighbor, end)));
                 }
             }
         }
         return List.of();
     }
 
-    private double transitionCost(GridPoint current, GridPoint neighbor, HeightField field, StartRailPlanningRequest request,
+    private double transitionCost(NodeState currentState, NodeState neighborState, HeightField field, StartRailPlanningRequest request,
                                   GridPoint start, GridPoint end) {
+        GridPoint current = currentState.point();
+        GridPoint neighbor = neighborState.point();
         int currentY = field.heightAt(current.x(), current.z());
         int nextY = field.heightAt(neighbor.x(), neighbor.z());
         double grade = Math.abs(nextY - currentY);
         double gradeCost = effectiveDouble(request.weight_overrides, "grade_cost", 5.0) * grade;
         double detourCost = effectiveDouble(request.weight_overrides, "detour_cost", 0.15) * distanceFromLine(neighbor, start, end);
         double base = effectiveDouble(request.weight_overrides, "surface_cost", 1.0);
-        double turnCost = effectiveDouble(request.weight_overrides, "turn_cost", 0.5);
+        double turnCost = computeTurnPenalty(currentState.incomingDirection(), neighborState.incomingDirection(), request.weight_overrides);
+        double idealTrackY = idealTrackYForPoint(neighbor, start, end, request.start_y, request.end_y);
+        double terrainPenalty = computeTerrainPenalty(nextY, idealTrackY, request.weight_overrides);
         if (nextY <= effectiveInt(request.weight_overrides, "void_surface_threshold", DEFAULT_VOID_SURFACE_THRESHOLD)) {
             base += effectiveDouble(request.weight_overrides, "void_surface_penalty", DEFAULT_VOID_SURFACE_PENALTY);
         }
-        return base + gradeCost + detourCost + turnCost;
+        return base + gradeCost + detourCost + turnCost + terrainPenalty;
+    }
+
+    static double computeTurnPenalty(Direction incoming, Direction outgoing, Map<String, Double> weights) {
+        if (incoming == null || outgoing == null || incoming == outgoing) {
+            return 0.0;
+        }
+        return effectiveDoubleStatic(weights, "turn_cost", 0.5);
+    }
+
+    static double computeTerrainPenalty(int surfaceY, double idealTrackY, Map<String, Double> weights) {
+        double bridgeCost = effectiveDoubleStatic(weights, "bridge_cost", DEFAULT_BRIDGE_COST);
+        double tunnelCost = effectiveDoubleStatic(weights, "tunnel_cost", DEFAULT_TUNNEL_COST);
+        int waterSurfaceThreshold = effectiveIntStatic(weights, "water_surface_threshold", DEFAULT_WATER_SURFACE_THRESHOLD);
+        double waterTunnelPenalty = effectiveDoubleStatic(weights, "water_tunnel_penalty", DEFAULT_WATER_TUNNEL_PENALTY);
+
+        double bridgeHeight = Math.max(0.0, idealTrackY - (surfaceY + 1.0));
+        double tunnelCover = Math.max(0.0, surfaceY - (idealTrackY + 2.0));
+
+        double penalty = bridgeHeight * bridgeCost + tunnelCover * tunnelCost;
+        if (surfaceY <= waterSurfaceThreshold && tunnelCover > 0.0) {
+            penalty += waterTunnelPenalty * tunnelCover;
+        }
+        return penalty;
+    }
+
+    private static double idealTrackYForPoint(GridPoint point, GridPoint start, GridPoint end, int startY, int endY) {
+        double totalDistance = Math.abs(end.x() - start.x()) + Math.abs(end.z() - start.z());
+        if (totalDistance == 0.0) {
+            return startY;
+        }
+        double distanceFromStart = Math.abs(point.x() - start.x()) + Math.abs(point.z() - start.z());
+        double progress = Math.max(0.0, Math.min(1.0, distanceFromStart / totalDistance));
+        return startY + (endY - startY) * progress;
+    }
+
+    private Direction directionBetween(GridPoint current, GridPoint neighbor) {
+        int dx = Integer.compare(neighbor.x(), current.x());
+        if (dx != 0) {
+            return dx > 0 ? Direction.EAST : Direction.WEST;
+        }
+        int dz = Integer.compare(neighbor.z(), current.z());
+        return dz > 0 ? Direction.SOUTH : Direction.NORTH;
     }
 
     private double distanceFromLine(GridPoint point, GridPoint start, GridPoint end) {
@@ -322,12 +377,12 @@ public class RailPlanningService {
         );
     }
 
-    private List<GridPoint> reconstructPath(Map<GridPoint, GridPoint> cameFrom, GridPoint current) {
+    private List<GridPoint> reconstructPath(Map<NodeState, NodeState> cameFrom, NodeState current) {
         List<GridPoint> path = new ArrayList<>();
-        path.add(current);
+        path.add(current.point());
         while (cameFrom.containsKey(current)) {
             current = cameFrom.get(current);
-            path.add(current);
+            path.add(current.point());
         }
         List<GridPoint> ordered = new ArrayList<>();
         for (int i = path.size() - 1; i >= 0; i--) {
@@ -431,13 +486,21 @@ public class RailPlanningService {
     }
 
     private int effectiveInt(Map<String, Double> weights, String key, int fallback) {
+        return effectiveIntStatic(weights, key, fallback);
+    }
+
+    private double effectiveDouble(Map<String, Double> weights, String key, double fallback) {
+        return effectiveDoubleStatic(weights, key, fallback);
+    }
+
+    private static int effectiveIntStatic(Map<String, Double> weights, String key, int fallback) {
         if (weights == null || !weights.containsKey(key)) {
             return fallback;
         }
         return (int) Math.round(weights.get(key));
     }
 
-    private double effectiveDouble(Map<String, Double> weights, String key, double fallback) {
+    private static double effectiveDoubleStatic(Map<String, Double> weights, String key, double fallback) {
         if (weights == null || !weights.containsKey(key)) {
             return fallback;
         }
@@ -470,7 +533,9 @@ public class RailPlanningService {
 
     private record GridPoint(int x, int z) {}
 
-    private record PathNode(GridPoint point, double gScore, double fScore) {}
+    private record NodeState(GridPoint point, Direction incomingDirection) {}
+
+    private record PathNode(NodeState state, double gScore, double fScore) {}
 
     private record RoutePoint(int x, int z, int surfaceY, int trackY) {}
 

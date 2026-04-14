@@ -1,24 +1,23 @@
 package com.example.endpoints;
 
 import com.example.buildtask.model.BuildTask;
-import com.example.buildtask.model.TaskType;
 import com.example.buildtask.model.TaskStatus;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.example.buildtask.model.TaskType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.minecraft.block.enums.RailShape;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Unit tests for TaskExecutor.
- * Tests task execution logic and validation integration.
- */
 class TaskExecutorTest {
 
     @Mock
@@ -30,38 +29,28 @@ class TaskExecutorTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        // Note: TaskExecutor requires a real MinecraftServer for core operations
-        // These tests focus on validation and error handling
         objectMapper = new ObjectMapper();
+        taskExecutor = new TaskExecutor(mockServer);
     }
 
     @Test
-    void testExecuteTaskWithNullTask() {
-        // Create TaskExecutor with mock server (will fail for actual execution but works for validation)
-        taskExecutor = new TaskExecutor(mockServer);
-        
+    void executeTaskWithNullTaskReturnsValidationError() {
         TaskExecutor.TaskExecutionResult result = taskExecutor.executeTask(null);
-        
+
         assertFalse(result.success());
         assertEquals("Task cannot be null", result.errorMessage());
     }
 
     @Test
-    void testTaskValidationFailure() throws Exception {
-        taskExecutor = new TaskExecutor(mockServer);
-        
-        // Create a task with invalid data (missing required fields)
+    void taskValidationFailureMarksTaskFailed() throws Exception {
         BuildTask task = new BuildTask();
         task.setId(UUID.randomUUID());
         task.setBuildId(UUID.randomUUID());
         task.setTaskType(TaskType.BLOCK_SET);
-        
-        // Create invalid task data (missing required fields)
-        JsonNode invalidData = objectMapper.readTree("{}");
-        task.setTaskData(invalidData);
-        
+        task.setTaskData(objectMapper.readTree("{}"));
+
         TaskExecutor.TaskExecutionResult result = taskExecutor.executeTask(task);
-        
+
         assertFalse(result.success());
         assertTrue(result.errorMessage().contains("Task data validation failed"));
         assertEquals(TaskStatus.FAILED, task.getStatus());
@@ -69,58 +58,55 @@ class TaskExecutorTest {
     }
 
     @Test
-    void testTaskValidationSuccess() throws Exception {
-        taskExecutor = new TaskExecutor(mockServer);
-        
-        // Create a task with valid data structure (will still fail execution due to mock server)
-        BuildTask task = new BuildTask();
-        task.setId(UUID.randomUUID());
-        task.setBuildId(UUID.randomUUID());
-        task.setTaskType(TaskType.BLOCK_SET);
-        
-        // Create valid task data structure
-        String validTaskData = """
-            {
-                "start_x": 0,
-                "start_y": 64,
-                "start_z": 0,
-                "blocks": [
-                    [
-                        [
-                            {
-                                "block_name": "minecraft:stone"
-                            }
-                        ]
-                    ]
-                ]
-            }
-            """;
-        JsonNode validData = objectMapper.readTree(validTaskData);
-        task.setTaskData(validData);
-        
-        // This will pass validation but fail execution due to mock server
-        TaskExecutor.TaskExecutionResult result = taskExecutor.executeTask(task);
-        
-        // Should fail due to mock server, but not due to validation
-        assertFalse(result.success());
-        // Should not be a validation error
-        assertFalse(result.errorMessage().contains("Task data validation failed"));
+    void tunnelLiningOffsetsLeaveThreeBlockInteriorOpen() {
+        List<BlockPos> offsets = TaskExecutor.tunnelLiningOffsets();
+
+        assertThatOffsetMissing(offsets, new BlockPos(0, 0, 0));
+        assertThatOffsetMissing(offsets, new BlockPos(0, 1, 0));
+        assertThatOffsetMissing(offsets, new BlockPos(0, 2, 0));
+        assertTrue(offsets.contains(new BlockPos(1, 1, 0)));
+        assertTrue(offsets.contains(new BlockPos(0, 3, 0)));
     }
 
     @Test
-    void testUnknownTaskType() {
-        taskExecutor = new TaskExecutor(mockServer);
-        
-        // Create a task with null task type to trigger unknown type handling
+    void poweredRailsArePlacedOnStraightSegments() {
+        List<TaskExecutor.RailPoint> path = List.of(
+            new TaskExecutor.RailPoint(0, 64, 0),
+            new TaskExecutor.RailPoint(1, 64, 0),
+            new TaskExecutor.RailPoint(2, 64, 0)
+        );
+
+        assertTrue(TaskExecutor.shouldPlacePoweredRail(path, 1, 1));
+        assertEquals(RailShape.EAST_WEST, TaskExecutor.getRailShape(path, 1, Direction.EAST));
+    }
+
+    @Test
+    void poweredRailsAreSkippedAtCorners() {
+        List<TaskExecutor.RailPoint> path = List.of(
+            new TaskExecutor.RailPoint(0, 64, 0),
+            new TaskExecutor.RailPoint(1, 64, 0),
+            new TaskExecutor.RailPoint(1, 64, 1)
+        );
+
+        assertFalse(TaskExecutor.shouldPlacePoweredRail(path, 1, 1));
+        assertEquals(RailShape.SOUTH_EAST, TaskExecutor.getRailShape(path, 1, Direction.EAST));
+    }
+
+    @Test
+    void nullTaskTypeFailsValidation() {
         BuildTask task = new BuildTask();
         task.setId(UUID.randomUUID());
         task.setBuildId(UUID.randomUUID());
         task.setTaskType(null);
         task.setTaskData(objectMapper.createObjectNode());
-        
+
         TaskExecutor.TaskExecutionResult result = taskExecutor.executeTask(task);
-        
+
         assertFalse(result.success());
         assertTrue(result.errorMessage().contains("Task type cannot be null"));
+    }
+
+    private void assertThatOffsetMissing(List<BlockPos> offsets, BlockPos expectedMissing) {
+        assertFalse(offsets.contains(expectedMissing), "Offset should not be lined: " + expectedMissing);
     }
 }

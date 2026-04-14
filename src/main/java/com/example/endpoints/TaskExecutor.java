@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.state.property.Properties;
 import net.minecraft.block.PoweredRailBlock;
 import net.minecraft.block.RailBlock;
 import net.minecraft.block.enums.RailShape;
@@ -312,9 +313,9 @@ public class TaskExecutor {
                 }
 
                 int railsPlaced = 0;
+                int poweredRailsPlaced = 0;
                 for (int i = 0; i < segment.path().size(); i++) {
                     RailPoint point = segment.path().get(i);
-                    Direction forward = getForwardDirection(segment.path(), i);
                     BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
 
                     if ("tunnel".equals(mode)) {
@@ -324,14 +325,21 @@ public class TaskExecutor {
                     }
 
                     ensureBase(world, pos, segment, "bridge".equals(mode));
-                    placeRail(world, pos, forward, i, segment);
+                    if (placeRail(world, pos, segment.path(), i, segment)) {
+                        poweredRailsPlaced++;
+                    }
+
                     if ("tunnel".equals(mode)) {
                         lineTunnel(world, pos, segment);
                     }
                     railsPlaced++;
                 }
 
-                future.complete(new TaskExecutionResult(true, null, "Placed " + railsPlaced + " rail blocks"));
+                future.complete(new TaskExecutionResult(
+                    true,
+                    null,
+                    "Placed " + railsPlaced + " rail blocks (" + poweredRailsPlaced + " powered)"
+                ));
             } catch (Exception e) {
                 future.complete(new TaskExecutionResult(false, "Failed to execute rail segment: " + e.getMessage(), null));
             }
@@ -386,21 +394,8 @@ public class TaskExecutor {
         if (lining == null) {
             return;
         }
-        // Solid ceiling at dy=3 (full 3x3)
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                world.setBlockState(pos.add(dx, 3, dz), lining, Block.NOTIFY_LISTENERS);
-            }
-        }
-        // Walls at dy=1 and dy=2 (surrounding 8 positions only, not dy=0 to avoid
-        // overwriting the rail block at the previous step's center on turns)
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                if (Math.abs(dx) == 1 || Math.abs(dz) == 1) {
-                    world.setBlockState(pos.add(dx, 1, dz), lining, Block.NOTIFY_LISTENERS);
-                    world.setBlockState(pos.add(dx, 2, dz), lining, Block.NOTIFY_LISTENERS);
-                }
-            }
+        for (BlockPos offset : tunnelLiningOffsets()) {
+            world.setBlockState(pos.add(offset), lining, Block.NOTIFY_LISTENERS);
         }
     }
 
@@ -428,10 +423,11 @@ public class TaskExecutor {
         }
     }
 
-    private void placeRail(ServerWorld world, BlockPos pos, Direction forward, int index, RailSegmentDefinition segment) {
-        boolean powered = index % segment.poweredRailInterval() == 0;
+    private boolean placeRail(ServerWorld world, BlockPos pos, List<RailPoint> path, int index, RailSegmentDefinition segment) {
+        Direction forward = getForwardDirection(path, index);
+        boolean powered = shouldPlacePoweredRail(path, index, segment.poweredRailInterval());
         BlockState railState = powered ? Blocks.POWERED_RAIL.getDefaultState() : Blocks.RAIL.getDefaultState();
-        railState = applyRailShape(railState, forward);
+        railState = applyRailShape(railState, path, index, forward);
         world.setBlockState(pos, railState, Block.NOTIFY_ALL);
         if (powered) {
             BlockState power = getBlockState(segment.powerBlock());
@@ -439,22 +435,102 @@ public class TaskExecutor {
                 world.setBlockState(pos.down(2), power, Block.NOTIFY_LISTENERS);
             }
         }
+        return powered;
     }
 
-    private BlockState applyRailShape(BlockState railState, Direction forward) {
+    private BlockState applyRailShape(BlockState railState, List<RailPoint> path, int index, Direction forward) {
+        RailShape shape = getRailShape(path, index, forward);
         if (railState.contains(PoweredRailBlock.SHAPE)) {
-            RailShape shape = (forward == Direction.EAST || forward == Direction.WEST)
-                ? RailShape.EAST_WEST
-                : RailShape.NORTH_SOUTH;
-            return railState.with(PoweredRailBlock.SHAPE, shape);
+            railState = railState.with(PoweredRailBlock.SHAPE, shape);
+            if (railState.contains(PoweredRailBlock.POWERED)) {
+                railState = railState.with(PoweredRailBlock.POWERED, true);
+            } else if (railState.contains(Properties.POWERED)) {
+                railState = railState.with(Properties.POWERED, true);
+            }
+            return railState;
         }
         if (railState.contains(RailBlock.SHAPE)) {
-            RailShape shape = (forward == Direction.EAST || forward == Direction.WEST)
-                ? RailShape.EAST_WEST
-                : RailShape.NORTH_SOUTH;
             return railState.with(RailBlock.SHAPE, shape);
         }
         return railState;
+    }
+
+    static List<BlockPos> tunnelLiningOffsets() {
+        List<BlockPos> offsets = new ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0) {
+                    continue;
+                }
+                offsets.add(new BlockPos(dx, 0, dz));
+            }
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                offsets.add(new BlockPos(dx, 3, dz));
+                if (Math.abs(dx) == 1 || Math.abs(dz) == 1) {
+                    offsets.add(new BlockPos(dx, 1, dz));
+                    offsets.add(new BlockPos(dx, 2, dz));
+                }
+            }
+        }
+        return offsets;
+    }
+
+    static boolean shouldPlacePoweredRail(List<RailPoint> path, int index, int poweredRailInterval) {
+        boolean poweredEligible = isStraightSegment(path, index) && poweredRailInterval > 0;
+        return poweredEligible && (countStraightSegmentsUpTo(path, index) % poweredRailInterval == 0);
+    }
+
+    static RailShape getRailShape(List<RailPoint> path, int index, Direction fallbackForward) {
+        Direction previous = getIncomingDirection(path, index);
+        Direction next = getOutgoingDirection(path, index);
+        Direction primary = next != null ? next : previous;
+        if (primary == null) {
+            primary = fallbackForward;
+        }
+
+        if (previous != null && next != null && previous.getAxis() != next.getAxis()) {
+            if (matchesCurve(previous, next, Direction.NORTH, Direction.EAST)) {
+                return RailShape.NORTH_EAST;
+            }
+            if (matchesCurve(previous, next, Direction.NORTH, Direction.WEST)) {
+                return RailShape.NORTH_WEST;
+            }
+            if (matchesCurve(previous, next, Direction.SOUTH, Direction.EAST)) {
+                return RailShape.SOUTH_EAST;
+            }
+            if (matchesCurve(previous, next, Direction.SOUTH, Direction.WEST)) {
+                return RailShape.SOUTH_WEST;
+            }
+        }
+
+        return (primary == Direction.EAST || primary == Direction.WEST)
+            ? RailShape.EAST_WEST
+            : RailShape.NORTH_SOUTH;
+    }
+
+    private static boolean matchesCurve(Direction previous, Direction next, Direction first, Direction second) {
+        return (previous == first && next == second) || (previous == second && next == first);
+    }
+
+    static boolean isStraightSegment(List<RailPoint> path, int index) {
+        Direction previous = getIncomingDirection(path, index);
+        Direction next = getOutgoingDirection(path, index);
+        if (previous == null || next == null) {
+            return true;
+        }
+        return previous.getAxis() == next.getAxis();
+    }
+
+    private static int countStraightSegmentsUpTo(List<RailPoint> path, int index) {
+        int count = 0;
+        for (int i = 0; i <= index; i++) {
+            if (isStraightSegment(path, i)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private Direction getForwardDirection(List<RailPoint> path, int index) {
@@ -462,6 +538,29 @@ public class TaskExecutor {
         RailPoint neighbor = index + 1 < path.size() ? path.get(index + 1) : path.get(index - 1);
         int dx = Integer.compare(neighbor.x(), current.x());
         int dz = Integer.compare(neighbor.z(), current.z());
+        if (Math.abs(dx) >= Math.abs(dz)) {
+            return dx >= 0 ? Direction.EAST : Direction.WEST;
+        }
+        return dz >= 0 ? Direction.SOUTH : Direction.NORTH;
+    }
+
+    private static Direction getIncomingDirection(List<RailPoint> path, int index) {
+        if (index == 0) {
+            return null;
+        }
+        return directionBetween(path.get(index - 1), path.get(index));
+    }
+
+    private static Direction getOutgoingDirection(List<RailPoint> path, int index) {
+        if (index >= path.size() - 1) {
+            return null;
+        }
+        return directionBetween(path.get(index), path.get(index + 1));
+    }
+
+    private static Direction directionBetween(RailPoint from, RailPoint to) {
+        int dx = Integer.compare(to.x(), from.x());
+        int dz = Integer.compare(to.z(), from.z());
         if (Math.abs(dx) >= Math.abs(dz)) {
             return dx >= 0 ? Direction.EAST : Direction.WEST;
         }
@@ -484,9 +583,9 @@ public class TaskExecutor {
      */
     public record TaskExecutionResult(boolean success, String errorMessage, String details) {}
 
-    private record RailPoint(int x, int y, int z) {}
+    static record RailPoint(int x, int y, int z) {}
 
-    private record RailSegmentDefinition(
+    static record RailSegmentDefinition(
         List<RailPoint> path,
         String world,
         String railBedBlock,
