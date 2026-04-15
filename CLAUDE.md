@@ -80,11 +80,11 @@ uv run minecraft_mcp.py --transport sse --host 0.0.0.0 --port 3000
 ### Core Java Components
 
 #### Mod Initialization
-- **ExampleMod** (`src/main/java/com/example/ExampleMod.java`): Main mod entrypoint that initializes database and API server when Minecraft server starts
-- **APIServer** (`src/main/java/com/example/APIServer.java`): Javalin-based web server running on port 7070, orchestrates endpoint registration and initializes build system
+- **ExampleMod** (`src/main/java/ca/waltermiller/mcpapi/ExampleMod.java`): Main mod entrypoint that initializes database and API server when Minecraft server starts
+- **APIServer** (`src/main/java/ca/waltermiller/mcpapi/APIServer.java`): Javalin-based web server running on port 7070, orchestrates endpoint registration and initializes build system
 
 #### Endpoint System
-**Location**: `src/main/java/com/example/endpoints/`
+**Location**: `src/main/java/ca/waltermiller/mcpapi/endpoints/`
 
 All endpoints extend `APIEndpoint` base class and receive:
 - Javalin app instance for route registration
@@ -93,24 +93,24 @@ All endpoints extend `APIEndpoint` base class and receive:
 
 **Key Endpoints:**
 - `PlayersEndpoint` - Query online players with positions/rotations
-- `BlocksEndpoint` - Read/write block data, handle chunks
+- `BlocksEndpoint` - Read/write block data, handle chunks, heightmap queries
 - `EntitiesEndpoint` - List entity types, spawn entities
 - `MessageEndpoint` - Send messages to players (broadcast or targeted)
 - `PlayerTeleportEndpoint` - Teleport players to coordinates
-- `PrefabEndpoint` - Place prefab structures from NBT files
-- `NBTStructureEndpoint` - Work with NBT data structures
-- `BuildTaskEndpoint` - Complex build task management with database persistence
+- `PrefabEndpoint` - Place prefab structures: doors, stairs, windows, torches, signs, ladders
+- `NBTStructureEndpoint` - Place NBT data structures
+- `BuildTaskEndpoint` - Complex build task management with database persistence; includes audit, replay, rail planning, and location query routes
+- `TaskExecutor` - Executes queued build tasks on the Minecraft server thread
 
 #### Build Task System
-**Location**: `src/main/java/com/example/buildtask/`
+**Location**: `src/main/java/ca/waltermiller/mcpapi/buildtask/`
 
 A comprehensive system for queuing, persisting, and executing complex build operations:
 
 **Architecture Pattern**: Repository-Service-Executor
-- **Repositories** (`repository/`): PostgreSQL data access with implementations for Build and Task entities
-- **Services** (`service/`): Business logic for task validation, location queries, and build orchestration
-- **Models** (`model/`): Data classes (Build, BuildTask, BoundingBox, TaskType, TaskStatus)
-- **Executor**: `TaskExecutor` - Executes queued tasks on Minecraft server thread
+- **Repositories** (`repository/`): PostgreSQL data access with implementations for Build, Task, and RailPlanningJob entities
+- **Services** (`service/`): Business logic for task validation, location queries, build orchestration, and rail planning
+- **Models** (`model/`): Data classes (Build, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus, RailPlanningJob, RailPlanningStatus)
 
 **Task Types:**
 - `BLOCK_SET` - Place a 3D array of blocks
@@ -120,13 +120,23 @@ A comprehensive system for queuing, persisting, and executing complex build oper
 - `PREFAB_WINDOW` - Place window panes in walls
 - `PREFAB_TORCH` - Place torches (wall or floor) with proper facing
 - `PREFAB_SIGN` - Place signs with text content
+- `PREFAB_LADDER` - Place vertical ladders with auto-facing
+- `RAIL_SURFACE_SEGMENT` - Rail corridor segment on the surface
+- `RAIL_BRIDGE_SEGMENT` - Rail corridor segment over a gap (bridge)
+- `RAIL_TUNNEL_SEGMENT` - Rail corridor segment underground (tunnel)
 
 **Database Schema:**
 - `builds` table: Build metadata (id, name, description, world, status, timestamps)
 - `build_tasks` table: Individual tasks (id, build_id, task_order, task_type, status, task_data JSONB, description, executed_at)
+- `rail_planning_jobs` table: Async rail planning jobs (id, build_id, status, phases, timestamps)
+
+#### Rail Planning System
+**Location**: `src/main/java/ca/waltermiller/mcpapi/buildtask/service/RailPlanningService.java`
+
+Asynchronously plans terrain-following rail corridors between two points. Triggered via `POST /api/builds/{id}/plan-rail`; status polled via `GET /api/rail-plans/{jobId}`. The planner samples heightmap data, classifies each segment as surface/bridge/tunnel, then queues the appropriate RAIL_* build tasks.
 
 #### Database Layer
-**Location**: `src/main/java/com/example/database/`
+**Location**: `src/main/java/ca/waltermiller/mcpapi/database/`
 
 - **DatabaseManager**: Singleton managing HikariCP connection pool
 - **DatabaseConfig**: Environment-based configuration (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD)
@@ -159,12 +169,16 @@ DB_PASSWORD=your_password
   - `blocks.py` - Block manipulation tools
   - `messages.py` - Messaging tools
   - `prefabs.py` - Prefab placement tools
-  - `builds.py` - Build task management tools (create builds, add tasks, execute, query by location, get status)
+  - `builds.py` - Build task management tools (create builds, add tasks, execute, audit, query by location, get status, rail planning)
   - `system.py` - System tools
 
 - **`tools/`**: Tool definitions and registry:
   - `registry.py` - Maps tool names to handler functions
   - `schemas.py` - Defines tool schemas for MCP discovery
+
+- **`utils/`**: Shared utilities:
+  - `formatting.py` - Response formatting helpers
+  - `helpers.py` - General helper utilities
 
 ### Key Patterns
 
@@ -194,26 +208,33 @@ DB_PASSWORD=your_password
 - starlette >= 0.27.0 - ASGI framework for SSE
 - uvicorn >= 0.23.0 - ASGI server
 - debugpy >= 1.8.19 - Debugging support
+- requests >= 2.32.5 - Synchronous HTTP (used in some utilities)
 
 ### Resource Structure
 
 **Mod Metadata**: `src/main/resources/fabric.mod.json`
 - Mod ID: "mcpapi"
 - Version: 0.0.1
-- Entrypoints: Main (`ExampleMod`), Client
+- Entrypoints: Main (`ca.waltermiller.mcpapi.ExampleMod`), Client (`ca.waltermiller.mcpapi.ExampleModClient`)
 - Mixins: `mcpapi.mixins.json`
 - Requires: FabricLoader >=0.16.14, Minecraft ~1.21.7, Java >=21
 
 ## Testing
 
 **Framework**: JUnit 5 + Mockito + AssertJ
-**Location**: `src/test/java/com/example/`
+**Location**: `src/test/java/ca/waltermiller/mcpapi/`
 
 **Test Categories:**
 - Database layer tests: `DatabaseManagerTest`, `DatabaseConfigTest`, `DatabaseIntegrationTest`
 - Endpoint core logic tests: `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`
 - Build system tests: `TaskExecutorTest`, `BuildTaskEndpointIntegrationTest`, `TaskDataValidatorTest`
 - Utility tests: `CoordinateUtilsTest`
+
+**Python Tests** (`mcp/`):
+- `test_backward_compatibility.py` - Backward compatibility tests
+- `test_stdio_transport.py` - Stdio transport tests
+- `test_debug_mode.py` - Debug mode tests
+- `test_final_verification.py` - Final verification tests
 
 **Testing Best Practices** (see TESTING.md):
 - Extract pure logic from endpoints into testable helper methods
@@ -232,7 +253,7 @@ Minecraft uses a right-handed 3D coordinate system:
 
 ## Development Notes
 
-- Mod ID is "modid" (defined in `ExampleMod.MOD_ID`)
+- Mod ID is "mcpapi" (defined in `ExampleMod.MOD_ID`)
 - Web API server runs on port 7070, starts automatically with Minecraft server
 - Database schema auto-creates on first server start
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
