@@ -59,13 +59,36 @@ class TaskExecutorTest {
 
     @Test
     void tunnelLiningOffsetsLeaveThreeBlockInteriorOpen() {
-        List<BlockPos> offsets = TaskExecutor.tunnelLiningOffsets();
+        List<BlockPos> offsets = TaskExecutor.tunnelLiningOffsets(null, null);
 
         assertThatOffsetMissing(offsets, new BlockPos(0, 0, 0));
         assertThatOffsetMissing(offsets, new BlockPos(0, 1, 0));
         assertThatOffsetMissing(offsets, new BlockPos(0, 2, 0));
         assertTrue(offsets.contains(new BlockPos(1, 1, 0)));
         assertTrue(offsets.contains(new BlockPos(0, 3, 0)));
+    }
+
+    @Test
+    void tunnelLiningOffsetsOpenStraightTunnelFaces() {
+        List<BlockPos> offsets = TaskExecutor.tunnelLiningOffsets(Direction.WEST, Direction.EAST);
+
+        assertThatOffsetMissing(offsets, new BlockPos(-1, 1, 0));
+        assertThatOffsetMissing(offsets, new BlockPos(1, 1, 0));
+        assertThatOffsetMissing(offsets, new BlockPos(1, 3, 1));
+        assertTrue(offsets.contains(new BlockPos(0, 1, -1)));
+        assertTrue(offsets.contains(new BlockPos(0, 1, 1)));
+        assertTrue(offsets.contains(new BlockPos(0, 3, 0)));
+    }
+
+    @Test
+    void tunnelLiningOffsetsOpenCornerFacesWithoutRemovingClosedWalls() {
+        List<BlockPos> offsets = TaskExecutor.tunnelLiningOffsets(Direction.WEST, Direction.SOUTH);
+
+        assertThatOffsetMissing(offsets, new BlockPos(-1, 2, 0));
+        assertThatOffsetMissing(offsets, new BlockPos(0, 2, 1));
+        assertTrue(offsets.contains(new BlockPos(1, 2, 0)));
+        assertTrue(offsets.contains(new BlockPos(0, 2, -1)));
+        assertTrue(offsets.contains(new BlockPos(1, 3, -1)));
     }
 
     @Test

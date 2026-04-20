@@ -331,9 +331,9 @@ public class TaskExecutor {
                         poweredRailsPlaced++;
                     }
 
-                    // if ("tunnel".equals(mode)) {
-                    //     lineTunnel(world, pos, segment);
-                    // }
+                    if ("tunnel".equals(mode)) {
+                        lineTunnel(world, pos, segment, segment.path(), i);
+                    }
                     railsPlaced++;
                 }
 
@@ -391,12 +391,14 @@ public class TaskExecutor {
         }
     }
 
-    private void lineTunnel(ServerWorld world, BlockPos pos, RailSegmentDefinition segment) {
+    private void lineTunnel(ServerWorld world, BlockPos pos, RailSegmentDefinition segment, List<RailPoint> path, int index) {
         BlockState lining = getBlockState(segment.tunnelLiningBlock() != null ? segment.tunnelLiningBlock() : segment.supportBlock());
         if (lining == null) {
             return;
         }
-        for (BlockPos offset : tunnelLiningOffsets()) {
+        Direction incoming = getIncomingDirection(path, index);
+        Direction outgoing = getOutgoingDirection(path, index);
+        for (BlockPos offset : tunnelLiningOffsets(incoming, outgoing)) {
             world.setBlockState(pos.add(offset), lining, Block.NOTIFY_LISTENERS);
         }
     }
@@ -453,26 +455,39 @@ public class TaskExecutor {
         return railState;
     }
 
-    static List<BlockPos> tunnelLiningOffsets() {
+    static List<BlockPos> tunnelLiningOffsets(Direction incoming, Direction outgoing) {
         List<BlockPos> offsets = new ArrayList<>();
         for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = 0; dy <= 3; dy++) {
             for (int dz = -1; dz <= 1; dz++) {
-                if (dx == 0 && dz == 0) {
-                    continue;
-                }
-                offsets.add(new BlockPos(dx, 0, dz));
-            }
-        }
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                offsets.add(new BlockPos(dx, 3, dz));
-                if (Math.abs(dx) == 1 || Math.abs(dz) == 1) {
-                    offsets.add(new BlockPos(dx, 1, dz));
-                    offsets.add(new BlockPos(dx, 2, dz));
+                    if (!isTunnelShellBoundary(dx, dy, dz)) {
+                        continue;
+                    }
+                    if (isOpenTunnelFace(dx, dz, incoming) || isOpenTunnelFace(dx, dz, outgoing)) {
+                        continue;
+                    }
+                    offsets.add(new BlockPos(dx, dy, dz));
                 }
             }
         }
         return offsets;
+    }
+
+    private static boolean isTunnelShellBoundary(int dx, int dy, int dz) {
+        return dy == 3 || Math.abs(dx) == 1 || Math.abs(dz) == 1;
+    }
+
+    private static boolean isOpenTunnelFace(int dx, int dz, Direction direction) {
+        if (direction == null) {
+            return false;
+        }
+        return switch (direction) {
+            case NORTH -> dz == -1;
+            case SOUTH -> dz == 1;
+            case EAST -> dx == 1;
+            case WEST -> dx == -1;
+            default -> false;
+        };
     }
 
     static boolean shouldPlacePoweredRail(List<RailPoint> path, int index, int poweredRailInterval) {
