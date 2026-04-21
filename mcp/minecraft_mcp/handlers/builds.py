@@ -4,8 +4,9 @@ Build management tool handlers for the Minecraft MCP server.
 Handles tools for creating builds, adding tasks to builds, executing builds, and querying build status.
 """
 
+import base64
 from typing import Any, Dict, List, Optional
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult, ImageContent, TextContent
 
 from ..client.minecraft_api import MinecraftAPIClient
 from ..utils.formatting import (
@@ -1062,3 +1063,60 @@ async def handle_update_build_task(
             )
     except Exception as e:
         return format_error_response(e, "updating build task")
+
+
+PREVIEW_ADVISORY = (
+    "This is a flat-shaded isometric preview of the planned build. Textures are "
+    "not rendered \u2014 each block is a single color approximating the Minecraft "
+    "block color. Use this to check structural issues (alignment, gaps, "
+    "orientation, collisions with terrain) rather than aesthetics. Tasks have "
+    "NOT been executed; this is a dry-run."
+)
+
+
+async def handle_preview_build(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    iso_scale: Optional[int] = None,
+    **arguments,
+) -> CallToolResult:
+    """
+    Render an isometric preview PNG for a build (dry-run; nothing is placed in
+    the world).
+    """
+    try:
+        result = await api_client.preview_build(build_id, iso_scale=iso_scale)
+
+        if result.get("empty"):
+            return CallToolResult(
+                content=[TextContent(
+                    type="text",
+                    text="Build has no tasks to render. Add tasks before requesting a preview."
+                )]
+            )
+
+        if result.get("status_code") != 200 or "png_bytes" not in result:
+            return CallToolResult(
+                content=[TextContent(
+                    type="text",
+                    text=f"\u274c Preview failed: {result.get('error', 'Unknown error')}"
+                )]
+            )
+
+        png_bytes = result["png_bytes"]
+        encoded = base64.b64encode(png_bytes).decode("ascii")
+        advisory = PREVIEW_ADVISORY
+        if result.get("partial"):
+            advisory += (
+                "\n\n\u26a0\ufe0f Warning: one or more tasks failed during the dry-run. "
+                "The preview shows only blocks that were placed up to the failure."
+            )
+
+        return CallToolResult(
+            content=[
+                ImageContent(type="image", mimeType="image/png", data=encoded),
+                TextContent(type="text", text=advisory),
+            ]
+        )
+    except Exception as e:
+        return format_error_response(e, "rendering build preview")

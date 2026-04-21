@@ -1478,6 +1478,29 @@ TOOL_GET_RAIL_PLAN_STATUS = Tool(
     }
 )
 
+TOOL_PREVIEW_BUILD = Tool(
+    name="preview_build",
+    description=(
+        "Render a flat-shaded isometric PNG preview of a build without placing "
+        "any blocks in the world (dry-run). Textures are not rendered; each "
+        "block is a single approximate color. Use to verify structural layout, "
+        "alignment, and terrain collisions before executing the build."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {"type": "string", "description": "Build UUID"},
+            "iso_scale": {
+                "type": "integer",
+                "description": "Pixels per voxel edge unit (1-32). Default 6.",
+                "minimum": 1,
+                "maximum": 32,
+            },
+        },
+        "required": ["build_id"],
+    },
+)
+
 #    "handle_coordinate_conventions"
 TOOL_HANDLE_COORDINATE_CONVENTIONS = Tool(
     name = "get_coordinate_conventions",
@@ -1539,4 +1562,5 @@ TOOL_SCHEMAS = [
     TOOL_UPDATE_BUILD_TASK,
     TOOL_PLAN_RAIL_ROUTE,
     TOOL_GET_RAIL_PLAN_STATUS,
+    TOOL_PREVIEW_BUILD,
 ]

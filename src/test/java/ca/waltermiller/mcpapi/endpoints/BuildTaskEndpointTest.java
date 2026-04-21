@@ -50,6 +50,9 @@ class BuildTaskEndpointTest {
     @Mock
     private RailPlanningService railPlanningService;
 
+    @Mock
+    private TaskExecutor taskExecutor;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private Javalin app;
@@ -59,7 +62,7 @@ class BuildTaskEndpointTest {
     void setUp() {
         app = Javalin.create(config -> config.http.defaultContentType = "application/json");
         new BuildTaskEndpoint(app, mockServer, LoggerFactory.getLogger(BuildTaskEndpointTest.class),
-            buildService, locationQueryService, railPlanningService);
+            buildService, locationQueryService, railPlanningService, taskExecutor);
         app.start(0);
         baseUrl = "http://localhost:" + app.port();
     }

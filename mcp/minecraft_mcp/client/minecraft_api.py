@@ -998,6 +998,52 @@ class MinecraftAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def preview_build(
+        self,
+        build_id: str,
+        iso_scale: Optional[int] = None,
+    ) -> dict:
+        """
+        Fetch an isometric PNG preview of a build (dry-run; no blocks placed).
+
+        Args:
+            build_id: Build UUID
+            iso_scale: Optional renderer scale (1-32, default 6)
+
+        Returns:
+            dict with keys:
+              - status_code: HTTP status
+              - content_type: response Content-Type
+              - png_bytes: raw PNG bytes (present when status=200)
+              - partial: True if X-Preview-Partial header set
+              - empty: True when 204 No Content (build has nothing to render)
+              - error: error message when non-2xx
+        """
+        params = {}
+        if iso_scale is not None:
+            params["iso_scale"] = iso_scale
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/api/builds/{build_id}/preview",
+                params=params,
+            )
+            result: dict = {
+                "status_code": response.status_code,
+                "content_type": response.headers.get("content-type", ""),
+                "partial": response.headers.get("x-preview-partial") == "true",
+                "empty": response.status_code == 204,
+            }
+            if response.status_code == 200:
+                result["png_bytes"] = response.content
+            elif response.status_code == 204:
+                pass
+            else:
+                try:
+                    result["error"] = response.json().get("error", response.text)
+                except Exception:
+                    result["error"] = response.text or f"HTTP {response.status_code}"
+            return result
+
     async def start_rail_plan(
         self,
         build_id: str,

@@ -7,11 +7,20 @@ import ca.waltermiller.mcpapi.buildtask.model.TaskType;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import ca.waltermiller.mcpapi.buildtask.service.LocationQueryService;
 import ca.waltermiller.mcpapi.buildtask.service.RailPlanningService;
+import ca.waltermiller.mcpapi.preview.BlockGrid;
+import ca.waltermiller.mcpapi.preview.IsoRenderer;
+import ca.waltermiller.mcpapi.preview.RecordingBlockSink;
 import io.javalin.Javalin;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
+import net.minecraft.world.World;
 
 import java.sql.SQLException;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -23,14 +32,16 @@ public class BuildTaskEndpoint extends APIEndpoint {
     private final BuildService buildService;
     private final LocationQueryService locationQueryService;
     private final RailPlanningService railPlanningService;
+    private final TaskExecutor taskExecutor;
 
     public BuildTaskEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
                            BuildService buildService, LocationQueryService locationQueryService,
-                           RailPlanningService railPlanningService) {
+                           RailPlanningService railPlanningService, TaskExecutor taskExecutor) {
         super(app, server, logger);
         this.buildService = buildService;
         this.locationQueryService = locationQueryService;
         this.railPlanningService = railPlanningService;
+        this.taskExecutor = taskExecutor;
         init();
     }
 
@@ -698,6 +709,98 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
             } catch (Exception e) {
                 LOGGER.error("Unexpected error starting rail planner", e);
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+
+        // GET /api/builds/{id}/preview - Isometric PNG dry-run preview
+        app.get("/api/builds/{id}/preview", ctx -> {
+            try {
+                UUID buildId;
+                try {
+                    buildId = UUID.fromString(ctx.pathParam("id"));
+                } catch (IllegalArgumentException e) {
+                    ctx.status(400).json(Map.of("error", "Invalid build ID format"));
+                    return;
+                }
+
+                Optional<Build> buildOpt = buildService.getBuild(buildId);
+                if (buildOpt.isEmpty()) {
+                    ctx.status(404).json(Map.of("error", "Build not found"));
+                    return;
+                }
+                Build build = buildOpt.get();
+
+                int scale = IsoRenderer.DEFAULT_SCALE;
+                String scaleParam = ctx.queryParam("iso_scale");
+                if (scaleParam != null && !scaleParam.isBlank()) {
+                    try {
+                        scale = Integer.parseInt(scaleParam);
+                    } catch (NumberFormatException e) {
+                        ctx.status(400).json(Map.of("error", "iso_scale must be an integer"));
+                        return;
+                    }
+                    if (scale < 1 || scale > 32) {
+                        ctx.status(400).json(Map.of("error", "iso_scale must be between 1 and 32"));
+                        return;
+                    }
+                }
+
+                List<BuildTask> tasks = buildService.getTasks(buildId);
+                tasks.sort(Comparator.comparingInt(BuildTask::getTaskOrder));
+
+                RegistryKey<World> worldKey = build.getWorld() != null
+                        ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(build.getWorld()))
+                        : World.OVERWORLD;
+                ServerWorld serverWorld = server.getWorld(worldKey);
+                if (serverWorld == null) {
+                    ctx.status(400).json(Map.of("error", "World not loaded: " + build.getWorld()));
+                    return;
+                }
+
+                RecordingBlockSink sink = new RecordingBlockSink(serverWorld);
+                int finalScale = scale;
+                CompletableFuture<Boolean> allOk = CompletableFuture.supplyAsync(() -> {
+                    boolean partial = false;
+                    for (BuildTask task : tasks) {
+                        TaskExecutor.TaskExecutionResult result = taskExecutor.executeTask(task, sink);
+                        if (!result.success()) {
+                            partial = true;
+                            LOGGER.warn("Preview dry-run task {} failed: {}", task.getId(), result.errorMessage());
+                        }
+                    }
+                    return !partial;
+                }, server::execute);
+
+                boolean ok;
+                try {
+                    ok = allOk.get();
+                } catch (Exception e) {
+                    LOGGER.error("Preview dry-run interrupted", e);
+                    ctx.status(500).json(Map.of("error", "Preview execution failed: " + e.getMessage()));
+                    return;
+                }
+
+                BlockGrid grid = BlockGrid.from(sink.placedBlocks());
+                if (grid.isEmpty()) {
+                    ctx.status(204);
+                    return;
+                }
+
+                byte[] png = IsoRenderer.renderPng(grid, finalScale);
+                ctx.contentType("image/png");
+                if (!ok) {
+                    ctx.header("X-Preview-Partial", "true");
+                }
+                ctx.result(png);
+
+                LOGGER.info("Rendered preview for build {} ({} recorded blocks, scale {})",
+                        buildId, sink.placedBlocks().size(), finalScale);
+            } catch (SQLException e) {
+                LOGGER.error("Database error rendering preview", e);
+                ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
+            } catch (Exception e) {
+                LOGGER.error("Unexpected error rendering preview", e);
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });

@@ -79,7 +79,7 @@ public class APIServer {
             buildRepository, buildService, railPlanningJobRepository, server, logger);
         
         // Create and register build task endpoint
-        new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, railPlanningService);
+        new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, railPlanningService, taskExecutor);
         
         logger.info("Build task management system initialized successfully");
     }
