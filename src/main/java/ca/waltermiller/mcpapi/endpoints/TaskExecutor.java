@@ -2,6 +2,8 @@ package ca.waltermiller.mcpapi.endpoints;
 
 import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
 import ca.waltermiller.mcpapi.buildtask.service.TaskDataValidator;
+import ca.waltermiller.mcpapi.preview.BlockSink;
+import ca.waltermiller.mcpapi.preview.WorldBlockSink;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -112,6 +114,176 @@ public class TaskExecutor {
             task.markFailed(errorMessage);
             logger.error("Task {} failed with exception", task.getId(), e);
             return new TaskExecutionResult(false, errorMessage, null);
+        }
+    }
+
+    /**
+     * Synchronous dry-run dispatch: runs a task against the given sink without mutating
+     * task status. Caller is responsible for running this on the server thread.
+     * Used by the preview endpoint; real execute path still goes through executeTask(task).
+     */
+    public TaskExecutionResult executeTask(BuildTask task, BlockSink sink) {
+        if (task == null) {
+            return new TaskExecutionResult(false, "Task cannot be null", null);
+        }
+
+        TaskDataValidator.ValidationResult validationResult = validator.validateTaskData(task.getTaskType(), task.getTaskData());
+        if (!validationResult.isValid()) {
+            return new TaskExecutionResult(false, "Task data validation failed: " + validationResult.getErrorMessage(), null);
+        }
+
+        try {
+            return switch (task.getTaskType()) {
+                case BLOCK_SET -> dispatchBlockSetInto(task, sink);
+                case BLOCK_FILL -> dispatchBlockFillInto(task, sink);
+                case PREFAB_DOOR -> dispatchPrefabDoorInto(task, sink);
+                case PREFAB_STAIRS -> dispatchPrefabStairsInto(task, sink);
+                case PREFAB_WINDOW -> dispatchPrefabWindowInto(task, sink);
+                case PREFAB_TORCH -> dispatchPrefabTorchInto(task, sink);
+                case PREFAB_SIGN -> dispatchPrefabSignInto(task, sink);
+                case PREFAB_LADDER -> dispatchPrefabLadderInto(task, sink);
+                case RAIL_SURFACE_SEGMENT -> dispatchRailSegmentInto(task, sink, "surface");
+                case RAIL_BRIDGE_SEGMENT -> dispatchRailSegmentInto(task, sink, "bridge");
+                case RAIL_TUNNEL_SEGMENT -> dispatchRailSegmentInto(task, sink, "tunnel");
+                default -> new TaskExecutionResult(false, "Unknown task type: " + task.getTaskType(), null);
+            };
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Exception during task execution: " + e.getMessage(), null);
+        }
+    }
+
+    private RegistryKey<World> resolveWorldKey(String worldString) {
+        return worldString != null
+            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(worldString))
+            : World.OVERWORLD;
+    }
+
+    private TaskExecutionResult dispatchBlockSetInto(BuildTask task, BlockSink sink) {
+        try {
+            BlockSetRequest request = objectMapper.treeToValue(task.getTaskData(), BlockSetRequest.class);
+            BlockSetResult result = blocksCore.setBlocksInto(sink, request, resolveWorldKey(request.world));
+            if (result.success()) {
+                return new TaskExecutionResult(true, null, "Set " + result.blocksSet() + " blocks, skipped " + result.blocksSkipped());
+            }
+            return new TaskExecutionResult(false, result.error(), null);
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Failed to parse BLOCK_SET task data: " + e.getMessage(), null);
+        }
+    }
+
+    private TaskExecutionResult dispatchBlockFillInto(BuildTask task, BlockSink sink) {
+        try {
+            FillBoxRequest request = objectMapper.treeToValue(task.getTaskData(), FillBoxRequest.class);
+            int minX = Math.min(request.x1, request.x2);
+            int maxX = Math.max(request.x1, request.x2);
+            int minY = Math.min(request.y1, request.y2);
+            int maxY = Math.max(request.y1, request.y2);
+            int minZ = Math.min(request.z1, request.z2);
+            int maxZ = Math.max(request.z1, request.z2);
+            int totalBlocks = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+            FillResult result = blocksCore.fillBoxInto(sink, request, resolveWorldKey(request.world),
+                minX, minY, minZ, maxX, maxY, maxZ, totalBlocks);
+            if (result.success()) {
+                return new TaskExecutionResult(true, null, "Filled " + result.blocksSet() + " blocks, failed " + result.blocksFailed());
+            }
+            return new TaskExecutionResult(false, result.error(), null);
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Failed to parse BLOCK_FILL task data: " + e.getMessage(), null);
+        }
+    }
+
+    private TaskExecutionResult dispatchPrefabDoorInto(BuildTask task, BlockSink sink) {
+        try {
+            DoorRequest request = objectMapper.treeToValue(task.getTaskData(), DoorRequest.class);
+            DoorResult result = prefabCore.placeDoorInto(sink, request, resolveWorldKey(request.world));
+            if (result.success()) {
+                return new TaskExecutionResult(true, null, "Placed " + result.doors_placed() + " doors");
+            }
+            return new TaskExecutionResult(false, result.error(), null);
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Failed to parse PREFAB_DOOR task data: " + e.getMessage(), null);
+        }
+    }
+
+    private TaskExecutionResult dispatchPrefabStairsInto(BuildTask task, BlockSink sink) {
+        try {
+            StairRequest request = objectMapper.treeToValue(task.getTaskData(), StairRequest.class);
+            StairResult result = prefabCore.placeStairsInto(sink, request, resolveWorldKey(request.world));
+            if (result.success()) {
+                return new TaskExecutionResult(true, null, "Placed " + result.blocks_placed() + " stair blocks");
+            }
+            return new TaskExecutionResult(false, result.error(), null);
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Failed to parse PREFAB_STAIRS task data: " + e.getMessage(), null);
+        }
+    }
+
+    private TaskExecutionResult dispatchPrefabWindowInto(BuildTask task, BlockSink sink) {
+        try {
+            WindowPaneRequest request = objectMapper.treeToValue(task.getTaskData(), WindowPaneRequest.class);
+            WindowPaneResult result = prefabCore.placeWindowPaneInto(sink, request, resolveWorldKey(request.world));
+            if (result.success()) {
+                return new TaskExecutionResult(true, null, "Placed " + result.panes_placed() + " window panes");
+            }
+            return new TaskExecutionResult(false, result.error(), null);
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Failed to parse PREFAB_WINDOW task data: " + e.getMessage(), null);
+        }
+    }
+
+    private TaskExecutionResult dispatchPrefabTorchInto(BuildTask task, BlockSink sink) {
+        try {
+            TorchRequest request = objectMapper.treeToValue(task.getTaskData(), TorchRequest.class);
+            TorchResult result = prefabCore.placeTorchInto(sink, request, resolveWorldKey(request.world));
+            if (result.success()) {
+                return new TaskExecutionResult(true, null,
+                    "Placed torch at (" + result.position().get("x") + ", " +
+                    result.position().get("y") + ", " + result.position().get("z") + ")");
+            }
+            return new TaskExecutionResult(false, result.error(), null);
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Failed to parse PREFAB_TORCH task data: " + e.getMessage(), null);
+        }
+    }
+
+    private TaskExecutionResult dispatchPrefabSignInto(BuildTask task, BlockSink sink) {
+        try {
+            SignRequest request = objectMapper.treeToValue(task.getTaskData(), SignRequest.class);
+            SignResult result = prefabCore.placeSignInto(sink, request, resolveWorldKey(request.world));
+            if (result.success()) {
+                return new TaskExecutionResult(true, null,
+                    "Placed sign at (" + result.position().get("x") + ", " +
+                    result.position().get("y") + ", " + result.position().get("z") + ")");
+            }
+            return new TaskExecutionResult(false, result.error(), null);
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Failed to parse PREFAB_SIGN task data: " + e.getMessage(), null);
+        }
+    }
+
+    private TaskExecutionResult dispatchPrefabLadderInto(BuildTask task, BlockSink sink) {
+        try {
+            LadderRequest request = objectMapper.treeToValue(task.getTaskData(), LadderRequest.class);
+            LadderResult result = prefabCore.placeLadderInto(sink, request, resolveWorldKey(request.world));
+            if (result.success()) {
+                return new TaskExecutionResult(true, null,
+                    "Placed " + result.blocks_placed() + " ladder blocks facing " + result.facing());
+            }
+            return new TaskExecutionResult(false, result.error(), null);
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Failed to parse PREFAB_LADDER task data: " + e.getMessage(), null);
+        }
+    }
+
+    private TaskExecutionResult dispatchRailSegmentInto(BuildTask task, BlockSink sink, String mode) {
+        try {
+            RailSegmentDefinition segment = parseRailSegment(task);
+            if (segment.path().size() < 2) {
+                return new TaskExecutionResult(false, "Rail segment path must contain at least 2 points", null);
+            }
+            return executeRailSegmentInto(sink, segment, mode);
+        } catch (Exception e) {
+            return new TaskExecutionResult(false, "Failed to execute rail segment: " + e.getMessage(), null);
         }
     }
 
@@ -312,41 +484,49 @@ public class TaskExecutor {
                     return;
                 }
 
-                int railsPlaced = 0;
-                int poweredRailsPlaced = 0;
-                for (int i = 0; i < segment.path().size(); i++) {
-                    RailPoint point = segment.path().get(i);
-                    BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
-                    boolean powered = shouldPlacePoweredRail(segment.path(), i, segment.poweredRailInterval());
-
-                    if ("tunnel".equals(mode)) {
-                        clearTunnel(world, pos, segment);
-                    } else {
-                        clearHeadroom(world, pos);
-                    }
-
-                    // NOTE: disabling support for now
-                    // ensureBase(world, pos, segment, "bridge".equals(mode), powered);
-                    if (placeRail(world, pos, segment.path(), i, segment, powered)) {
-                        poweredRailsPlaced++;
-                    }
-
-                    if ("tunnel".equals(mode)) {
-                        lineTunnel(world, pos, segment, segment.path(), i);
-                    }
-                    railsPlaced++;
-                }
-
-                future.complete(new TaskExecutionResult(
-                    true,
-                    null,
-                    "Placed " + railsPlaced + " rail blocks (" + poweredRailsPlaced + " powered)"
-                ));
+                future.complete(executeRailSegmentInto(new WorldBlockSink(world), segment, mode));
             } catch (Exception e) {
                 future.complete(new TaskExecutionResult(false, "Failed to execute rail segment: " + e.getMessage(), null));
             }
         });
         return future;
+    }
+
+    /**
+     * Synchronous rail segment placement against a sink. Assumes caller has already
+     * resolved the world and is on the server thread.
+     */
+    TaskExecutionResult executeRailSegmentInto(BlockSink sink, RailSegmentDefinition segment, String mode) {
+        int railsPlaced = 0;
+        int poweredRailsPlaced = 0;
+        for (int i = 0; i < segment.path().size(); i++) {
+            RailPoint point = segment.path().get(i);
+            BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
+            boolean powered = shouldPlacePoweredRail(segment.path(), i, segment.poweredRailInterval());
+
+            if ("tunnel".equals(mode)) {
+                clearTunnel(sink, pos, segment);
+            } else {
+                clearHeadroom(sink, pos);
+            }
+
+            // NOTE: disabling support for now
+            // ensureBase(sink, pos, segment, "bridge".equals(mode), powered);
+            if (placeRail(sink, pos, segment.path(), i, segment, powered)) {
+                poweredRailsPlaced++;
+            }
+
+            if ("tunnel".equals(mode)) {
+                lineTunnel(sink, pos, segment, segment.path(), i);
+            }
+            railsPlaced++;
+        }
+
+        return new TaskExecutionResult(
+            true,
+            null,
+            "Placed " + railsPlaced + " rail blocks (" + poweredRailsPlaced + " powered)"
+        );
     }
 
     private RailSegmentDefinition parseRailSegment(BuildTask task) {
@@ -373,25 +553,25 @@ public class TaskExecutor {
         );
     }
 
-    private void clearHeadroom(ServerWorld world, BlockPos pos) {
+    private void clearHeadroom(BlockSink sink, BlockPos pos) {
         BlockState air = Blocks.AIR.getDefaultState();
-        world.setBlockState(pos, air, Block.NOTIFY_LISTENERS);
-        world.setBlockState(pos.up(), air, Block.NOTIFY_LISTENERS);
-        world.setBlockState(pos.up(2), air, Block.NOTIFY_LISTENERS);
+        sink.setBlockState(pos, air, Block.NOTIFY_LISTENERS);
+        sink.setBlockState(pos.up(), air, Block.NOTIFY_LISTENERS);
+        sink.setBlockState(pos.up(2), air, Block.NOTIFY_LISTENERS);
     }
 
-    private void clearTunnel(ServerWorld world, BlockPos pos, RailSegmentDefinition segment) {
+    private void clearTunnel(BlockSink sink, BlockPos pos, RailSegmentDefinition segment) {
         BlockState air = Blocks.AIR.getDefaultState();
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = 0; dy <= 3; dy++) {
                 for (int dz = -1; dz <= 1; dz++) {
-                    world.setBlockState(pos.add(dx, dy, dz), air, Block.NOTIFY_LISTENERS);
+                    sink.setBlockState(pos.add(dx, dy, dz), air, Block.NOTIFY_LISTENERS);
                 }
             }
         }
     }
 
-    private void lineTunnel(ServerWorld world, BlockPos pos, RailSegmentDefinition segment, List<RailPoint> path, int index) {
+    private void lineTunnel(BlockSink sink, BlockPos pos, RailSegmentDefinition segment, List<RailPoint> path, int index) {
         BlockState lining = getBlockState(segment.tunnelLiningBlock() != null ? segment.tunnelLiningBlock() : segment.supportBlock());
         if (lining == null) {
             return;
@@ -399,11 +579,11 @@ public class TaskExecutor {
         Direction incoming = getIncomingDirection(path, index);
         Direction outgoing = getOutgoingDirection(path, index);
         for (BlockPos offset : tunnelLiningOffsets(incoming, outgoing)) {
-            world.setBlockState(pos.add(offset), lining, Block.NOTIFY_LISTENERS);
+            sink.setBlockState(pos.add(offset), lining, Block.NOTIFY_LISTENERS);
         }
     }
 
-    private void ensureBase(ServerWorld world, BlockPos pos, RailSegmentDefinition segment, boolean extendSupportColumn, boolean poweredRail) {
+    private void ensureBase(BlockSink sink, BlockPos pos, RailSegmentDefinition segment, boolean extendSupportColumn, boolean poweredRail) {
         BlockState bed = getBlockState(segment.railBedBlock());
         BlockState support = getBlockState(segment.supportBlock());
         BlockState power = getBlockState(segment.powerBlock());
@@ -412,7 +592,7 @@ public class TaskExecutor {
         // FIXME: skipping powered rail redstone as it is unneded
         BlockState topSupport = bed;
         if (topSupport != null) {
-            world.setBlockState(pos.down(), topSupport, Block.NOTIFY_LISTENERS);
+            sink.setBlockState(pos.down(), topSupport, Block.NOTIFY_LISTENERS);
         }
 
         if (chosenSupport == null) {
@@ -422,19 +602,19 @@ public class TaskExecutor {
         int maxDepth = extendSupportColumn ? 24 : 8;
         for (int depth = 2; depth <= maxDepth; depth++) {
             BlockPos supportPos = pos.down(depth);
-            BlockState existing = world.getBlockState(supportPos);
+            BlockState existing = sink.getBlockState(supportPos);
             if (!existing.isAir() && existing.getFluidState().isEmpty()) {
                 break;
             }
-            world.setBlockState(supportPos, chosenSupport, Block.NOTIFY_LISTENERS);
+            sink.setBlockState(supportPos, chosenSupport, Block.NOTIFY_LISTENERS);
         }
     }
 
-    private boolean placeRail(ServerWorld world, BlockPos pos, List<RailPoint> path, int index, RailSegmentDefinition segment, boolean powered) {
+    private boolean placeRail(BlockSink sink, BlockPos pos, List<RailPoint> path, int index, RailSegmentDefinition segment, boolean powered) {
         Direction forward = getForwardDirection(path, index);
         BlockState railState = powered ? Blocks.POWERED_RAIL.getDefaultState() : Blocks.RAIL.getDefaultState();
         railState = applyRailShape(railState, path, index, forward);
-        world.setBlockState(pos, railState, Block.NOTIFY_ALL);
+        sink.setBlockState(pos, railState, Block.NOTIFY_ALL);
         return powered;
     }
 

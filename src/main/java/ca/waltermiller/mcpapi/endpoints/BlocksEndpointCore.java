@@ -1,5 +1,7 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.preview.BlockSink;
+import ca.waltermiller.mcpapi.preview.WorldBlockSink;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.registry.Registries;
@@ -45,73 +47,74 @@ public class BlocksEndpointCore {
      */
     public CompletableFuture<BlockSetResult> setBlocks(BlockSetRequest request) {
         CompletableFuture<BlockSetResult> future = new CompletableFuture<>();
-        
+
         // Validate world
         RegistryKey<World> worldKey = request.world != null
             ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
             : World.OVERWORLD;
-        
+
         ServerWorld world = server.getWorld(worldKey);
         if (world == null) {
             future.complete(new BlockSetResult(false, "Unknown world: " + worldKey, 0, 0, null));
             return future;
         }
-        
-        logger.info("Setting blocks in world {} starting at ({}, {}, {})", 
+
+        logger.info("Setting blocks in world {} starting at ({}, {}, {})",
             worldKey.getValue(), request.start_x, request.start_y, request.start_z);
-        
+
         // Execute on server thread
-        server.execute(() -> {
-            try {
-                int blocksSet = 0;
-                int blocksSkipped = 0;
-                
-                // Iterate through 3D array
-                for (int x = 0; x < request.blocks.length; x++) {
-                    for (int y = 0; y < request.blocks[x].length; y++) {
-                        for (int z = 0; z < request.blocks[x][y].length; z++) {
-                            BlockData blockData = request.blocks[x][y][z];
-                            
-                            // Skip null blocks (no change)
-                            if (blockData == null) {
-                                blocksSkipped++;
-                                continue;
-                            }
-                            
-                            // Convert BlockData to BlockState
-                            BlockState blockState = blockData.toBlockState();
-                            if (blockState == null) {
-                                logger.warn("Invalid block data: {}", blockData.block_name);
-                                blocksSkipped++;
-                                continue;
-                            }
-                            
-                            // Calculate world position
-                            BlockPos pos = new BlockPos(request.start_x + x, request.start_y + y, request.start_z + z);
-                            
-                            // Set block in world
-                            if (world.setBlockState(pos, blockState)) {
-                                blocksSet++;
-                            } else {
-                                logger.warn("Failed to set block {} at {}", blockData.block_name, pos);
-                                blocksSkipped++;
-                            }
+        server.execute(() -> future.complete(setBlocksInto(new WorldBlockSink(world), request, worldKey)));
+
+        return future;
+    }
+
+    /**
+     * Core block-setting loop against a sink. Runs synchronously on the caller's thread —
+     * the sink is responsible for thread-safety if it touches the world. Split from setBlocks
+     * so dry-run callers can pass a recording sink.
+     */
+    public BlockSetResult setBlocksInto(BlockSink sink, BlockSetRequest request, RegistryKey<World> worldKey) {
+        try {
+            int blocksSet = 0;
+            int blocksSkipped = 0;
+
+            for (int x = 0; x < request.blocks.length; x++) {
+                for (int y = 0; y < request.blocks[x].length; y++) {
+                    for (int z = 0; z < request.blocks[x][y].length; z++) {
+                        BlockData blockData = request.blocks[x][y][z];
+
+                        if (blockData == null) {
+                            blocksSkipped++;
+                            continue;
+                        }
+
+                        BlockState blockState = blockData.toBlockState();
+                        if (blockState == null) {
+                            logger.warn("Invalid block data: {}", blockData.block_name);
+                            blocksSkipped++;
+                            continue;
+                        }
+
+                        BlockPos pos = new BlockPos(request.start_x + x, request.start_y + y, request.start_z + z);
+
+                        if (sink.setBlockState(pos, blockState)) {
+                            blocksSet++;
+                        } else {
+                            logger.warn("Failed to set block {} at {}", blockData.block_name, pos);
+                            blocksSkipped++;
                         }
                     }
                 }
-                
-                logger.info("Block operation completed: {} blocks set, {} blocks skipped", 
-                    blocksSet, blocksSkipped);
-                
-                future.complete(new BlockSetResult(true, null, blocksSet, blocksSkipped, worldKey.getValue().toString()));
-                
-            } catch (Exception e) {
-                logger.error("Error setting blocks", e);
-                future.complete(new BlockSetResult(false, "Exception during block setting: " + e.getMessage(), 0, 0, null));
             }
-        });
-        
-        return future;
+
+            logger.info("Block operation completed: {} blocks set, {} blocks skipped",
+                blocksSet, blocksSkipped);
+
+            return new BlockSetResult(true, null, blocksSet, blocksSkipped, worldKey.getValue().toString());
+        } catch (Exception e) {
+            logger.error("Error setting blocks", e);
+            return new BlockSetResult(false, "Exception during block setting: " + e.getMessage(), 0, 0, null);
+        }
     }
 
     /**
@@ -218,67 +221,64 @@ public class BlocksEndpointCore {
             return future;
         }
         
-        logger.info("Filling box in world {} from ({}, {}, {}) to ({}, {}, {}) with {} blocks of type {}", 
+        logger.info("Filling box in world {} from ({}, {}, {}) to ({}, {}, {}) with {} blocks of type {}",
             worldKey.getValue(), minX, minY, minZ, maxX, maxY, maxZ, totalBlocks, request.block_type);
-        
+
         // Execute on server thread
-        server.execute(() -> {
-            try {
-                // Parse block identifier
-                Identifier blockIdentifier = Identifier.tryParse(request.block_type);
-                if (blockIdentifier == null) {
-                    future.complete(new FillResult(false, "Invalid block identifier: " + request.block_type, 0, 0, 0, null, null));
-                    return;
-                }
-                
-                // Get block from registry
-                Block block = Registries.BLOCK.get(blockIdentifier);
-                if (block == null) {
-                    future.complete(new FillResult(false, "Unknown block: " + request.block_type, 0, 0, 0, null, null));
-                    return;
-                }
-                
-                BlockState blockState = block.getDefaultState();
-                int blocksSet = 0;
-                int blocksFailed = 0;
+        server.execute(() -> future.complete(
+            fillBoxInto(new WorldBlockSink(world), request, worldKey, minX, minY, minZ, maxX, maxY, maxZ, totalBlocks)));
 
-                // Determine flags for setBlockState
-                // Block.NOTIFY_ALL (3) is the default, which includes NOTIFY_NEIGHBORS (1) + NOTIFY_LISTENERS (2)
-                // When notify_neighbors is false, we skip neighbor updates for better performance
-                int flags = request.notify_neighbors ? Block.NOTIFY_ALL : Block.NOTIFY_LISTENERS;
+        return future;
+    }
 
-                // Fill the box
-                for (int x = minX; x <= maxX; x++) {
-                    for (int y = minY; y <= maxY; y++) {
-                        for (int z = minZ; z <= maxZ; z++) {
-                            BlockPos pos = new BlockPos(x, y, z);
+    /**
+     * Core box-fill loop against a sink. Validates block identifier, expands into writes,
+     * returns a FillResult. Runs synchronously on the caller's thread.
+     */
+    public FillResult fillBoxInto(BlockSink sink, FillBoxRequest request, RegistryKey<World> worldKey,
+                                  int minX, int minY, int minZ, int maxX, int maxY, int maxZ, int totalBlocks) {
+        try {
+            Identifier blockIdentifier = Identifier.tryParse(request.block_type);
+            if (blockIdentifier == null) {
+                return new FillResult(false, "Invalid block identifier: " + request.block_type, 0, 0, 0, null, null);
+            }
 
-                            if (world.setBlockState(pos, blockState, flags)) {
-                                blocksSet++;
-                            } else {
-                                blocksFailed++;
-                            }
+            Block block = Registries.BLOCK.get(blockIdentifier);
+            if (block == null) {
+                return new FillResult(false, "Unknown block: " + request.block_type, 0, 0, 0, null, null);
+            }
+
+            BlockState blockState = block.getDefaultState();
+            int blocksSet = 0;
+            int blocksFailed = 0;
+
+            int flags = request.notify_neighbors ? Block.NOTIFY_ALL : Block.NOTIFY_LISTENERS;
+
+            for (int x = minX; x <= maxX; x++) {
+                for (int y = minY; y <= maxY; y++) {
+                    for (int z = minZ; z <= maxZ; z++) {
+                        BlockPos pos = new BlockPos(x, y, z);
+                        if (sink.setBlockState(pos, blockState, flags)) {
+                            blocksSet++;
+                        } else {
+                            blocksFailed++;
                         }
                     }
                 }
-                
-                logger.info("Box fill completed: {} blocks set, {} blocks failed", 
-                    blocksSet, blocksFailed);
-                
-                Map<String, Map<String, Integer>> boxBounds = Map.of(
-                    "min", Map.of("x", minX, "y", minY, "z", minZ),
-                    "max", Map.of("x", maxX, "y", maxY, "z", maxZ)
-                );
-                
-                future.complete(new FillResult(true, null, blocksSet, blocksFailed, totalBlocks, worldKey.getValue().toString(), boxBounds));
-                
-            } catch (Exception e) {
-                logger.error("Error filling box", e);
-                future.complete(new FillResult(false, "Exception during box fill: " + e.getMessage(), 0, 0, 0, null, null));
             }
-        });
-        
-        return future;
+
+            logger.info("Box fill completed: {} blocks set, {} blocks failed", blocksSet, blocksFailed);
+
+            Map<String, Map<String, Integer>> boxBounds = Map.of(
+                "min", Map.of("x", minX, "y", minY, "z", minZ),
+                "max", Map.of("x", maxX, "y", maxY, "z", maxZ)
+            );
+
+            return new FillResult(true, null, blocksSet, blocksFailed, totalBlocks, worldKey.getValue().toString(), boxBounds);
+        } catch (Exception e) {
+            logger.error("Error filling box", e);
+            return new FillResult(false, "Exception during box fill: " + e.getMessage(), 0, 0, 0, null, null);
+        }
     }
 
     /**
