@@ -53,6 +53,10 @@ from .system import (
     handle_test_server_connection
 )
 
+from .effects import (
+    handle_rain_fire
+)
+
 __all__ = [
     # World handlers
     "handle_get_players",
@@ -92,4 +96,6 @@ __all__ = [
     # System handlers
     "handle_teleport_player",
     "handle_test_server_connection",
+    # Effect handlers
+    "handle_rain_fire",
 ]

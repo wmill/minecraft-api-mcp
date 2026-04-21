@@ -1501,6 +1501,51 @@ TOOL_PREVIEW_BUILD = Tool(
     },
 )
 
+TOOL_RAIN_FIRE = Tool(
+    name="rain_fire",
+    description=(
+        "Scatter random fires on the WORLD_SURFACE across a circular area. "
+        "Great for clearing trees from a construction site — fire spreads to "
+        "adjacent leaves and logs and burns them away. Columns over water, lava, "
+        "air, or existing fire are skipped."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "x": {
+                "type": "integer",
+                "description": "Center X coordinate of the circle (east positive, west negative)"
+            },
+            "z": {
+                "type": "integer",
+                "description": "Center Z coordinate of the circle (south positive, north negative)"
+            },
+            "radius": {
+                "type": "integer",
+                "description": "Circle radius in blocks",
+                "minimum": 1,
+                "maximum": 56
+            },
+            "density": {
+                "type": "number",
+                "description": "Probability that each column within the circle receives a fire",
+                "minimum": 0.0,
+                "maximum": 1.0
+            },
+            "seed": {
+                "type": "integer",
+                "description": "Optional random seed for reproducible fire patterns"
+            },
+            "world": {
+                "type": "string",
+                "description": "World name (optional, defaults to minecraft:overworld)",
+                "default": "minecraft:overworld"
+            }
+        },
+        "required": ["x", "z", "radius", "density"]
+    }
+)
+
 #    "handle_coordinate_conventions"
 TOOL_HANDLE_COORDINATE_CONVENTIONS = Tool(
     name = "get_coordinate_conventions",
@@ -1563,4 +1608,6 @@ TOOL_SCHEMAS = [
     TOOL_PLAN_RAIL_ROUTE,
     TOOL_GET_RAIL_PLAN_STATUS,
     TOOL_PREVIEW_BUILD,
+    # Effect tools
+    TOOL_RAIN_FIRE,
 ]

@@ -8,7 +8,7 @@ registry for tool discovery and routing.
 from typing import Callable, Optional
 from mcp.types import CallToolResult
 
-from ..handlers import world, blocks, messages, prefabs, builds, system
+from ..handlers import world, blocks, messages, prefabs, builds, system, effects
 
 
 # Tool handler type
@@ -68,6 +68,9 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "plan_rail_route": builds.handle_plan_rail_route,
     "get_rail_plan_status": builds.handle_get_rail_plan_status,
     "preview_build": builds.handle_preview_build,
+
+    # Effect tools
+    "rain_fire": effects.handle_rain_fire,
 }
 
 

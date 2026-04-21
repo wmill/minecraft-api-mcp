@@ -366,6 +366,48 @@ class MinecraftAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def rain_fire(
+        self,
+        x: int,
+        z: int,
+        radius: int,
+        density: float,
+        seed: Optional[int] = None,
+        world: Optional[str] = None,
+    ) -> dict:
+        """
+        Scatter random fires on the WORLD_SURFACE across a circular area.
+
+        Args:
+            x: Center X coordinate
+            z: Center Z coordinate
+            radius: Circle radius in blocks (1-56)
+            density: Per-column probability of placing a fire (0.0-1.0)
+            seed: Optional random seed for reproducible patterns
+            world: World name (optional, defaults to minecraft:overworld)
+
+        Returns:
+            dict: Response with fires_placed, columns_considered, center, radius, density
+        """
+        payload: Dict[str, Any] = {
+            "x": x,
+            "z": z,
+            "radius": radius,
+            "density": density,
+        }
+        if seed is not None:
+            payload["seed"] = seed
+        if world:
+            payload["world"] = world
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/world/effects/rain-fire",
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def place_nbt_structure(
         self,
         nbt_file_data: str,

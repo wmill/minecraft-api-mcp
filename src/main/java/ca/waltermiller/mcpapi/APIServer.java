@@ -46,7 +46,8 @@ public class APIServer {
         new PlayerTeleportEndpoint(app, server, logger);
         new NBTStructureEndpoint(app, server, logger);
         new PrefabEndpoint(app, server, logger);
-        
+        new RainFireEndpoint(app, server, logger);
+
         // Initialize build task management system
         try {
             initializeBuildTaskSystem(app, server, logger);
