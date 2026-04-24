@@ -33,6 +33,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
     private final LocationQueryService locationQueryService;
     private final RailPlanningService railPlanningService;
     private final TaskExecutor taskExecutor;
+    private final RailRenderInspectionService railRenderInspectionService;
 
     public BuildTaskEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
                            BuildService buildService, LocationQueryService locationQueryService,
@@ -42,6 +43,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
         this.locationQueryService = locationQueryService;
         this.railPlanningService = railPlanningService;
         this.taskExecutor = taskExecutor;
+        this.railRenderInspectionService = new RailRenderInspectionService(taskExecutor);
         init();
     }
 
@@ -629,6 +631,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     ctx.status(404).json(Map.of("error", "Build not found"));
                     return;
                 }
+                Build build = buildOpt.get();
 
                 List<BuildTask> tasks = buildService.getTasks(buildId);
                 List<Map<String, Object>> issues = new ArrayList<>();
@@ -650,6 +653,13 @@ public class BuildTaskEndpoint extends APIEndpoint {
                         checkFillOverwrite(task, taskData, tasks.subList(0, i), issues);
                     }
                 }
+
+                RegistryKey<World> worldKey = build.getWorld() != null
+                    ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(build.getWorld()))
+                    : World.OVERWORLD;
+                ServerWorld serverWorld = server.getWorld(worldKey);
+                RecordingBlockSink railInspectionSink = serverWorld != null ? new RecordingBlockSink(serverWorld) : null;
+                issues.addAll(railRenderInspectionService.inspect(tasks, railInspectionSink));
 
                 int warningCount = (int) issues.stream()
                     .filter(issue -> "warning".equals(issue.get("severity")))

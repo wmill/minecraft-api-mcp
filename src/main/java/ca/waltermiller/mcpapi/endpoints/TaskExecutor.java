@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -502,13 +503,18 @@ public class TaskExecutor {
         for (int i = 0; i < segment.path().size(); i++) {
             RailPoint point = segment.path().get(i);
             BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
-            boolean powered = shouldPlacePoweredRail(segment.path(), i, segment.poweredRailInterval());
 
             if ("tunnel".equals(mode)) {
                 clearTunnel(sink, pos, segment);
             } else {
                 clearHeadroom(sink, pos);
             }
+        }
+
+        for (int i = 0; i < segment.path().size(); i++) {
+            RailPoint point = segment.path().get(i);
+            BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
+            boolean powered = shouldPlacePoweredRail(segment.path(), i, segment.poweredRailInterval());
 
             // NOTE: disabling support for now
             // ensureBase(sink, pos, segment, "bridge".equals(mode), powered);
@@ -520,6 +526,14 @@ public class TaskExecutor {
                 lineTunnel(sink, pos, segment, segment.path(), i);
             }
             railsPlaced++;
+        }
+
+        for (RailPoint point : segment.path()) {
+            BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
+            reconcileRailAt(sink, pos);
+            for (BlockPos neighbor : getConnectedRailNeighbors(sink, pos).values()) {
+                reconcileRailAt(sink, neighbor);
+            }
         }
 
         return new TaskExecutionResult(
@@ -555,9 +569,9 @@ public class TaskExecutor {
 
     private void clearHeadroom(BlockSink sink, BlockPos pos) {
         BlockState air = Blocks.AIR.getDefaultState();
-        sink.setBlockState(pos, air, Block.NOTIFY_LISTENERS);
-        sink.setBlockState(pos.up(), air, Block.NOTIFY_LISTENERS);
-        sink.setBlockState(pos.up(2), air, Block.NOTIFY_LISTENERS);
+        clearUnlessRail(sink, pos, air);
+        clearUnlessRail(sink, pos.up(), air);
+        clearUnlessRail(sink, pos.up(2), air);
     }
 
     private void clearTunnel(BlockSink sink, BlockPos pos, RailSegmentDefinition segment) {
@@ -565,7 +579,7 @@ public class TaskExecutor {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = 0; dy <= 3; dy++) {
                 for (int dz = -1; dz <= 1; dz++) {
-                    sink.setBlockState(pos.add(dx, dy, dz), air, Block.NOTIFY_LISTENERS);
+                    clearUnlessRail(sink, pos.add(dx, dy, dz), air);
                 }
             }
         }
@@ -576,11 +590,31 @@ public class TaskExecutor {
         if (lining == null) {
             return;
         }
-        Direction incoming = getIncomingDirection(path, index);
-        Direction outgoing = getOutgoingDirection(path, index);
-        for (BlockPos offset : tunnelLiningOffsets(incoming, outgoing)) {
-            sink.setBlockState(pos.add(offset), lining, Block.NOTIFY_LISTENERS);
+        Direction previousNeighbor = getPreviousNeighborDirection(path, index);
+        Direction nextNeighbor = getNextNeighborDirection(path, index);
+        for (BlockPos offset : tunnelLiningOffsets(previousNeighbor, nextNeighbor)) {
+            BlockPos target = pos.add(offset);
+            if (isRailState(sink.getBlockState(target))) {
+                continue;
+            }
+            if (overlapsRailClearance(path, index, target)) {
+                continue;
+            }
+            sink.setBlockState(target, lining, Block.NOTIFY_LISTENERS);
         }
+    }
+
+    private boolean overlapsRailClearance(List<RailPoint> path, int index, BlockPos target) {
+        int start = Math.max(0, index - 1);
+        int end = Math.min(path.size() - 1, index + 1);
+        for (int i = start; i <= end; i++) {
+            RailPoint point = path.get(i);
+            if (target.getX() == point.x() && target.getZ() == point.z()
+                && target.getY() >= point.y() && target.getY() <= point.y() + 2) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void ensureBase(BlockSink sink, BlockPos pos, RailSegmentDefinition segment, boolean extendSupportColumn, boolean poweredRail) {
@@ -618,10 +652,23 @@ public class TaskExecutor {
         return powered;
     }
 
+    private void clearUnlessRail(BlockSink sink, BlockPos pos, BlockState replacement) {
+        if (isRailState(sink.getBlockState(pos))) {
+            return;
+        }
+        sink.setBlockState(pos, replacement, Block.NOTIFY_LISTENERS);
+    }
+
     private BlockState applyRailShape(BlockState railState, List<RailPoint> path, int index, Direction forward) {
         RailShape shape = getRailShape(path, index, forward);
         if (railState.contains(PoweredRailBlock.SHAPE)) {
-            railState = railState.with(PoweredRailBlock.SHAPE, shape);
+            if (isCurveShape(shape)) {
+                railState = Blocks.RAIL.getDefaultState();
+            } else {
+                railState = railState.with(PoweredRailBlock.SHAPE, shape);
+            }
+        }
+        if (railState.contains(PoweredRailBlock.SHAPE)) {
             if (railState.contains(PoweredRailBlock.POWERED)) {
                 railState = railState.with(PoweredRailBlock.POWERED, true);
             } else if (railState.contains(Properties.POWERED)) {
@@ -679,6 +726,9 @@ public class TaskExecutor {
         Direction previous = getIncomingDirection(path, index);
         Direction next = getOutgoingDirection(path, index);
         Direction primary = next != null ? next : previous;
+        RailPoint current = path.get(index);
+        RailPoint previousPoint = index > 0 ? path.get(index - 1) : null;
+        RailPoint nextPoint = index + 1 < path.size() ? path.get(index + 1) : null;
         if (primary == null) {
             primary = fallbackForward;
         }
@@ -698,9 +748,45 @@ public class TaskExecutor {
             }
         }
 
+        if (previous != null && next != null && previous.getAxis() == next.getAxis()) {
+            RailShape ascending = getAscendingShape(current, previousPoint, nextPoint, previous.getAxis());
+            if (ascending != null) {
+                return ascending;
+            }
+        } else if (primary != null) {
+            RailShape ascending = getAscendingShape(current, previousPoint, nextPoint, primary.getAxis());
+            if (ascending != null) {
+                return ascending;
+            }
+        }
+
         return (primary == Direction.EAST || primary == Direction.WEST)
             ? RailShape.EAST_WEST
             : RailShape.NORTH_SOUTH;
+    }
+
+    private static RailShape getAscendingShape(RailPoint current, RailPoint previousPoint, RailPoint nextPoint, Direction.Axis axis) {
+        if (axis == Direction.Axis.X) {
+            if (previousPoint != null && previousPoint.x() > current.x() && previousPoint.y() > current.y()
+                || nextPoint != null && nextPoint.x() > current.x() && nextPoint.y() > current.y()) {
+                return RailShape.ASCENDING_EAST;
+            }
+            if (previousPoint != null && previousPoint.x() < current.x() && previousPoint.y() > current.y()
+                || nextPoint != null && nextPoint.x() < current.x() && nextPoint.y() > current.y()) {
+                return RailShape.ASCENDING_WEST;
+            }
+        }
+        if (axis == Direction.Axis.Z) {
+            if (previousPoint != null && previousPoint.z() > current.z() && previousPoint.y() > current.y()
+                || nextPoint != null && nextPoint.z() > current.z() && nextPoint.y() > current.y()) {
+                return RailShape.ASCENDING_SOUTH;
+            }
+            if (previousPoint != null && previousPoint.z() < current.z() && previousPoint.y() > current.y()
+                || nextPoint != null && nextPoint.z() < current.z() && nextPoint.y() > current.y()) {
+                return RailShape.ASCENDING_NORTH;
+            }
+        }
+        return null;
     }
 
     private static boolean matchesCurve(Direction previous, Direction next, Direction first, Direction second) {
@@ -744,6 +830,15 @@ public class TaskExecutor {
         return directionBetween(path.get(index - 1), path.get(index));
     }
 
+    static Direction getPreviousNeighborDirection(List<RailPoint> path, int index) {
+        Direction incoming = getIncomingDirection(path, index);
+        return incoming != null ? incoming.getOpposite() : null;
+    }
+
+    static Direction getNextNeighborDirection(List<RailPoint> path, int index) {
+        return getOutgoingDirection(path, index);
+    }
+
     private static Direction getOutgoingDirection(List<RailPoint> path, int index) {
         if (index >= path.size() - 1) {
             return null;
@@ -769,6 +864,125 @@ public class TaskExecutor {
             return null;
         }
         return Registries.BLOCK.get(identifier).getDefaultState();
+    }
+
+    private void reconcileRailAt(BlockSink sink, BlockPos pos) {
+        BlockState state = sink.getBlockState(pos);
+        if (!isRailState(state)) {
+            return;
+        }
+
+        RailShape shape = determineRenderedRailShape(sink, pos);
+        if (shape == null) {
+            return;
+        }
+
+        BlockState updated = coerceRailStateForShape(state, shape);
+        sink.setBlockState(pos, updated, Block.NOTIFY_ALL);
+    }
+
+    static RailShape determineRenderedRailShape(BlockSink sink, BlockPos pos) {
+        Map<Direction, BlockPos> neighbors = getConnectedRailNeighbors(sink, pos);
+        if (neighbors.isEmpty()) {
+            return null;
+        }
+
+        boolean hasEast = neighbors.containsKey(Direction.EAST);
+        boolean hasWest = neighbors.containsKey(Direction.WEST);
+        boolean hasNorth = neighbors.containsKey(Direction.NORTH);
+        boolean hasSouth = neighbors.containsKey(Direction.SOUTH);
+
+        if ((hasEast || hasWest) && !(hasNorth || hasSouth)) {
+            if (hasEast && neighbors.get(Direction.EAST).getY() > pos.getY()) {
+                return RailShape.ASCENDING_EAST;
+            }
+            if (hasWest && neighbors.get(Direction.WEST).getY() > pos.getY()) {
+                return RailShape.ASCENDING_WEST;
+            }
+            return RailShape.EAST_WEST;
+        }
+
+        if ((hasNorth || hasSouth) && !(hasEast || hasWest)) {
+            if (hasSouth && neighbors.get(Direction.SOUTH).getY() > pos.getY()) {
+                return RailShape.ASCENDING_SOUTH;
+            }
+            if (hasNorth && neighbors.get(Direction.NORTH).getY() > pos.getY()) {
+                return RailShape.ASCENDING_NORTH;
+            }
+            return RailShape.NORTH_SOUTH;
+        }
+
+        if ((hasNorth && hasEast) || (hasEast && hasNorth)) {
+            return RailShape.NORTH_EAST;
+        }
+        if ((hasNorth && hasWest) || (hasWest && hasNorth)) {
+            return RailShape.NORTH_WEST;
+        }
+        if ((hasSouth && hasEast) || (hasEast && hasSouth)) {
+            return RailShape.SOUTH_EAST;
+        }
+        if ((hasSouth && hasWest) || (hasWest && hasSouth)) {
+            return RailShape.SOUTH_WEST;
+        }
+
+        return null;
+    }
+
+    static Map<Direction, BlockPos> getConnectedRailNeighbors(BlockSink sink, BlockPos pos) {
+        Map<Direction, BlockPos> neighbors = new EnumMap<>(Direction.class);
+        for (Direction direction : List.of(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST)) {
+            BlockPos sameLevel = pos.offset(direction);
+            if (isRailState(sink.getBlockState(sameLevel))) {
+                neighbors.put(direction, sameLevel);
+                continue;
+            }
+
+            BlockPos above = sameLevel.up();
+            if (isRailState(sink.getBlockState(above))) {
+                neighbors.put(direction, above);
+                continue;
+            }
+
+            BlockPos below = sameLevel.down();
+            if (isRailState(sink.getBlockState(below))) {
+                neighbors.put(direction, below);
+            }
+        }
+        return neighbors;
+    }
+
+    static boolean isRailState(BlockState state) {
+        return state.isOf(Blocks.RAIL) || state.isOf(Blocks.POWERED_RAIL);
+    }
+
+    private static BlockState coerceRailStateForShape(BlockState state, RailShape shape) {
+        BlockState targetState = state;
+        if (state.isOf(Blocks.POWERED_RAIL) && isCurveShape(shape)) {
+            targetState = Blocks.RAIL.getDefaultState();
+        }
+
+        if (targetState.contains(PoweredRailBlock.SHAPE)) {
+            targetState = targetState.with(PoweredRailBlock.SHAPE, shape);
+            if (targetState.contains(PoweredRailBlock.POWERED)) {
+                targetState = targetState.with(PoweredRailBlock.POWERED, true);
+            } else if (targetState.contains(Properties.POWERED)) {
+                targetState = targetState.with(Properties.POWERED, true);
+            }
+            return targetState;
+        }
+
+        if (targetState.contains(RailBlock.SHAPE)) {
+            return targetState.with(RailBlock.SHAPE, shape);
+        }
+
+        return targetState;
+    }
+
+    private static boolean isCurveShape(RailShape shape) {
+        return shape == RailShape.NORTH_EAST
+            || shape == RailShape.NORTH_WEST
+            || shape == RailShape.SOUTH_EAST
+            || shape == RailShape.SOUTH_WEST;
     }
 
     /**

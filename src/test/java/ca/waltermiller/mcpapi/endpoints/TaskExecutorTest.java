@@ -129,6 +129,28 @@ class TaskExecutorTest {
         assertTrue(result.errorMessage().contains("Task type cannot be null"));
     }
 
+    @Test
+    void ascendingStraightSegmentsUseAscendingShapes() {
+        List<TaskExecutor.RailPoint> path = List.of(
+            new TaskExecutor.RailPoint(0, 64, 0),
+            new TaskExecutor.RailPoint(1, 65, 0),
+            new TaskExecutor.RailPoint(2, 66, 0)
+        );
+
+        assertEquals(RailShape.ASCENDING_EAST, TaskExecutor.getRailShape(path, 1, Direction.EAST));
+    }
+
+    @Test
+    void descendingStraightSegmentsStillResolveToAscendingTowardHigherNeighbor() {
+        List<TaskExecutor.RailPoint> path = List.of(
+            new TaskExecutor.RailPoint(2, 66, 0),
+            new TaskExecutor.RailPoint(1, 65, 0),
+            new TaskExecutor.RailPoint(0, 64, 0)
+        );
+
+        assertEquals(RailShape.ASCENDING_EAST, TaskExecutor.getRailShape(path, 1, Direction.WEST));
+    }
+
     private void assertThatOffsetMissing(List<BlockPos> offsets, BlockPos expectedMissing) {
         assertFalse(offsets.contains(expectedMissing), "Offset should not be lined: " + expectedMissing);
     }

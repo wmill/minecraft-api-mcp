@@ -1,0 +1,314 @@
+package ca.waltermiller.mcpapi.endpoints;
+
+import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
+import ca.waltermiller.mcpapi.buildtask.model.TaskType;
+import ca.waltermiller.mcpapi.preview.BlockSink;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.PoweredRailBlock;
+import net.minecraft.block.RailBlock;
+import net.minecraft.block.enums.RailShape;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+final class RailRenderInspectionService {
+    private final TaskExecutor taskExecutor;
+
+    RailRenderInspectionService(TaskExecutor taskExecutor) {
+        this.taskExecutor = taskExecutor;
+    }
+
+    List<Map<String, Object>> inspect(List<BuildTask> orderedTasks, BlockSink sink) {
+        List<BuildTask> railTasks = orderedTasks.stream()
+            .filter(task -> isRailTask(task.getTaskType()))
+            .toList();
+        if (railTasks.isEmpty()) {
+            return List.of();
+        }
+        Map<BlockPos, List<RailPointOwner>> clearanceOwners = buildClearanceOwners(railTasks);
+
+        List<Map<String, Object>> issues = new ArrayList<>();
+        for (int i = 1; i < railTasks.size(); i++) {
+            checkTaskJoin(railTasks.get(i - 1), railTasks.get(i), issues);
+        }
+
+        if (sink == null) {
+            return issues;
+        }
+        for (BuildTask task : railTasks) {
+            TaskExecutor.TaskExecutionResult result = taskExecutor.executeTask(task, sink);
+            if (!result.success()) {
+                issues.add(issue(
+                    "error",
+                    "rail_dry_run_failed",
+                    "Rail dry-run failed: " + result.errorMessage(),
+                    task
+                ));
+            }
+        }
+
+        for (BuildTask task : railTasks) {
+            inspectRenderedRailTask(task, sink, issues, clearanceOwners);
+        }
+        return issues;
+    }
+
+    private void inspectRenderedRailTask(BuildTask task,
+                                         BlockSink sink,
+                                         List<Map<String, Object>> issues,
+                                         Map<BlockPos, List<RailPointOwner>> clearanceOwners) {
+        List<TaskExecutor.RailPoint> points = parsePath(task);
+        if (points.size() < 2) {
+            return;
+        }
+
+        for (int i = 0; i < points.size(); i++) {
+            TaskExecutor.RailPoint point = points.get(i);
+            BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
+            BlockState state = sink.getBlockState(pos);
+            if (!isRailState(state)) {
+                issues.add(issue(
+                    "error",
+                    "rail_missing_after_render",
+                    "Rendered rail path is missing a rail block at " + formatPos(pos),
+                    task
+                ));
+                continue;
+            }
+
+            RailShape expectedShape = TaskExecutor.determineRenderedRailShape(sink, pos);
+            RailShape actualShape = getRailShape(state);
+            if (expectedShape != null && actualShape != expectedShape) {
+                issues.add(issue(
+                    "error",
+                    "rail_shape_mismatch",
+                    "Rendered rail at " + formatPos(pos) + " has shape " + actualShape + " but expected " + expectedShape,
+                    task
+                ));
+            }
+
+            if (task.getTaskType() == TaskType.RAIL_TUNNEL_SEGMENT) {
+                checkTunnelClearance(task, sink, pos, points, i, issues, clearanceOwners);
+            }
+        }
+    }
+
+    private void checkTunnelClearance(BuildTask task,
+                                      BlockSink sink,
+                                      BlockPos pos,
+                                      List<TaskExecutor.RailPoint> path,
+                                      int index,
+                                      List<Map<String, Object>> issues,
+                                      Map<BlockPos, List<RailPointOwner>> clearanceOwners) {
+        if (isBlockedHeadroomCell(task, pos, pos.up(), sink, clearanceOwners)
+            || isBlockedHeadroomCell(task, pos, pos.up(2), sink, clearanceOwners)) {
+            issues.add(issue(
+                "error",
+                "tunnel_headroom_blocked",
+                "Tunnel headroom is blocked at " + formatPos(pos),
+                task
+            ));
+        }
+
+        checkOpenFace(task, sink, pos, path, index - 1, issues);
+        checkOpenFace(task, sink, pos, path, index + 1, issues);
+    }
+
+    private void checkOpenFace(BuildTask task,
+                               BlockSink sink,
+                               BlockPos pos,
+                               List<TaskExecutor.RailPoint> path,
+                               int neighborIndex,
+                               List<Map<String, Object>> issues) {
+        if (neighborIndex < 0 || neighborIndex >= path.size()) {
+            return;
+        }
+
+        TaskExecutor.RailPoint neighbor = path.get(neighborIndex);
+        if (neighbor.y() != pos.getY()) {
+            return;
+        }
+
+        Direction direction = directionBetween(pos, new BlockPos(neighbor.x(), neighbor.y(), neighbor.z()));
+
+        BlockPos offset = switch (direction) {
+            case NORTH -> new BlockPos(0, 0, -1);
+            case SOUTH -> new BlockPos(0, 0, 1);
+            case EAST -> new BlockPos(1, 0, 0);
+            case WEST -> new BlockPos(-1, 0, 0);
+            default -> null;
+        };
+        if (offset == null) {
+            return;
+        }
+
+        for (int dy = 1; dy <= 2; dy++) {
+            BlockPos facePos = pos.add(offset.getX(), dy, offset.getZ());
+            if (isBlockingTunnelCell(sink.getBlockState(facePos))) {
+                issues.add(issue(
+                    "error",
+                    "tunnel_open_face_blocked",
+                    "Tunnel opening is blocked at " + formatPos(facePos) + " near " + formatPos(pos),
+                    task
+                ));
+                return;
+            }
+        }
+    }
+
+    private void checkTaskJoin(BuildTask previousTask, BuildTask currentTask, List<Map<String, Object>> issues) {
+        List<TaskExecutor.RailPoint> previousPath = parsePath(previousTask);
+        List<TaskExecutor.RailPoint> currentPath = parsePath(currentTask);
+        if (previousPath.size() < 2 || currentPath.size() < 2) {
+            return;
+        }
+
+        if (pathsJoinCleanly(previousPath, currentPath)) {
+            return;
+        }
+
+        Map<String, Object> issue = issue(
+            "error",
+            "rail_segment_disconnected",
+            "Rail segment does not connect cleanly to the previous segment",
+            currentTask
+        );
+        issue.put("related_task_id", previousTask.getId().toString());
+        issue.put("related_task_order", previousTask.getTaskOrder());
+        issues.add(issue);
+    }
+
+    private boolean pathsJoinCleanly(List<TaskExecutor.RailPoint> previousPath, List<TaskExecutor.RailPoint> currentPath) {
+        TaskExecutor.RailPoint previousLast = previousPath.get(previousPath.size() - 1);
+        TaskExecutor.RailPoint currentFirst = currentPath.get(0);
+        if (samePoint(previousLast, currentFirst)) {
+            return true;
+        }
+
+        if (areAdjacent(previousLast, currentFirst)) {
+            return true;
+        }
+
+        return previousPath.size() >= 2
+            && currentPath.size() >= 2
+            && samePoint(previousPath.get(previousPath.size() - 2), currentPath.get(0))
+            && samePoint(previousPath.get(previousPath.size() - 1), currentPath.get(1));
+    }
+
+    private List<TaskExecutor.RailPoint> parsePath(BuildTask task) {
+        List<TaskExecutor.RailPoint> points = new ArrayList<>();
+        if (task.getTaskData() == null || !task.getTaskData().has("path")) {
+            return points;
+        }
+
+        for (var point : task.getTaskData().get("path")) {
+            points.add(new TaskExecutor.RailPoint(
+                point.get("x").asInt(),
+                point.get("y").asInt(),
+                point.get("z").asInt()
+            ));
+        }
+        return points;
+    }
+
+    private static boolean isRailTask(TaskType taskType) {
+        return taskType == TaskType.RAIL_SURFACE_SEGMENT
+            || taskType == TaskType.RAIL_BRIDGE_SEGMENT
+            || taskType == TaskType.RAIL_TUNNEL_SEGMENT;
+    }
+
+    private static boolean isRailState(BlockState state) {
+        return state.isOf(Blocks.RAIL) || state.isOf(Blocks.POWERED_RAIL);
+    }
+
+    private static boolean isBlockingTunnelCell(BlockState state) {
+        return !state.isAir() && !isRailState(state);
+    }
+
+    private boolean isBlockedHeadroomCell(BuildTask task,
+                                          BlockPos currentPos,
+                                          BlockPos headroomPos,
+                                          BlockSink sink,
+                                          Map<BlockPos, List<RailPointOwner>> clearanceOwners) {
+        if (!isBlockingTunnelCell(sink.getBlockState(headroomPos))) {
+            return false;
+        }
+
+        List<RailPointOwner> owners = clearanceOwners.getOrDefault(headroomPos, List.of());
+        for (RailPointOwner owner : owners) {
+            if (!owner.taskId().equals(task.getId()) || !owner.matches(currentPos)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private Map<BlockPos, List<RailPointOwner>> buildClearanceOwners(List<BuildTask> railTasks) {
+        Map<BlockPos, List<RailPointOwner>> owners = new HashMap<>();
+        for (BuildTask task : railTasks) {
+            for (TaskExecutor.RailPoint point : parsePath(task)) {
+                RailPointOwner owner = new RailPointOwner(task.getId(), point.x(), point.y(), point.z());
+                owners.computeIfAbsent(new BlockPos(point.x(), point.y() + 1, point.z()), ignored -> new ArrayList<>()).add(owner);
+                owners.computeIfAbsent(new BlockPos(point.x(), point.y() + 2, point.z()), ignored -> new ArrayList<>()).add(owner);
+            }
+        }
+        return owners;
+    }
+
+    private static Direction directionBetween(BlockPos from, BlockPos to) {
+        int dx = Integer.compare(to.getX(), from.getX());
+        int dz = Integer.compare(to.getZ(), from.getZ());
+        if (Math.abs(dx) >= Math.abs(dz)) {
+            return dx >= 0 ? Direction.EAST : Direction.WEST;
+        }
+        return dz >= 0 ? Direction.SOUTH : Direction.NORTH;
+    }
+
+    private static RailShape getRailShape(BlockState state) {
+        if (state.contains(RailBlock.SHAPE)) {
+            return state.get(RailBlock.SHAPE);
+        }
+        if (state.contains(PoweredRailBlock.SHAPE)) {
+            return state.get(PoweredRailBlock.SHAPE);
+        }
+        return null;
+    }
+
+    private static boolean samePoint(TaskExecutor.RailPoint left, TaskExecutor.RailPoint right) {
+        return left.x() == right.x() && left.y() == right.y() && left.z() == right.z();
+    }
+
+    private static boolean areAdjacent(TaskExecutor.RailPoint left, TaskExecutor.RailPoint right) {
+        int dx = Math.abs(left.x() - right.x());
+        int dy = Math.abs(left.y() - right.y());
+        int dz = Math.abs(left.z() - right.z());
+        return dx + dz == 1 && dy <= 1;
+    }
+
+    private static String formatPos(BlockPos pos) {
+        return "(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+    }
+
+    private static Map<String, Object> issue(String severity, String check, String message, BuildTask task) {
+        Map<String, Object> issue = new LinkedHashMap<>();
+        issue.put("severity", severity);
+        issue.put("task_id", task.getId().toString());
+        issue.put("task_order", task.getTaskOrder());
+        issue.put("check", check);
+        issue.put("message", message);
+        return issue;
+    }
+
+    private record RailPointOwner(UUID taskId, int x, int y, int z) {
+        boolean matches(BlockPos pos) {
+            return x == pos.getX() && y == pos.getY() && z == pos.getZ();
+        }
+    }
+}
