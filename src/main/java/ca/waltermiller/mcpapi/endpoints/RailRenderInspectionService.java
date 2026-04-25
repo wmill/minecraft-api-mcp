@@ -1,5 +1,6 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.buildtask.model.BoundingBox;
 import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
 import ca.waltermiller.mcpapi.buildtask.model.TaskType;
 import ca.waltermiller.mcpapi.preview.BlockSink;
@@ -35,9 +36,13 @@ final class RailRenderInspectionService {
         Map<BlockPos, List<RailPointOwner>> clearanceOwners = buildClearanceOwners(railTasks);
 
         List<Map<String, Object>> issues = new ArrayList<>();
+        for (BuildTask task : railTasks) {
+            checkSlopeStraightness(task, issues);
+        }
         for (int i = 1; i < railTasks.size(); i++) {
             checkTaskJoin(railTasks.get(i - 1), railTasks.get(i), issues);
         }
+        checkOtherTasksBlockingHeadroom(railTasks, orderedTasks, issues);
 
         if (sink == null) {
             return issues;
@@ -161,6 +166,74 @@ final class RailRenderInspectionService {
                 return;
             }
         }
+    }
+
+    private void checkSlopeStraightness(BuildTask task, List<Map<String, Object>> issues) {
+        List<TaskExecutor.RailPoint> path = parsePath(task);
+        for (int i = 1; i < path.size(); i++) {
+            TaskExecutor.RailPoint a = path.get(i - 1);
+            TaskExecutor.RailPoint b = path.get(i);
+            int dx = b.x() - a.x();
+            int dy = b.y() - a.y();
+            int dz = b.z() - a.z();
+            if (dy == 0) {
+                continue;
+            }
+            boolean straightHorizontal = (Math.abs(dx) == 1 && dz == 0)
+                || (dx == 0 && Math.abs(dz) == 1);
+            if (straightHorizontal && Math.abs(dy) == 1) {
+                continue;
+            }
+            issues.add(issue(
+                "error",
+                "rail_sloped_step_not_straight",
+                "Sloped rail step from " + formatPoint(a) + " to " + formatPoint(b)
+                    + " must change Y by exactly 1 along a single horizontal axis",
+                task
+            ));
+        }
+    }
+
+    private void checkOtherTasksBlockingHeadroom(List<BuildTask> railTasks,
+                                                 List<BuildTask> allTasks,
+                                                 List<Map<String, Object>> issues) {
+        List<BuildTask> nonRailTasks = allTasks.stream()
+            .filter(task -> !isRailTask(task.getTaskType()))
+            .toList();
+        if (nonRailTasks.isEmpty()) {
+            return;
+        }
+
+        for (BuildTask railTask : railTasks) {
+            for (TaskExecutor.RailPoint point : parsePath(railTask)) {
+                BoundingBox up1 = headroomCell(point, 1);
+                BoundingBox up2 = headroomCell(point, 2);
+                for (BuildTask other : nonRailTasks) {
+                    BoundingBox otherBox = BoundingBox.fromTaskData(other.getTaskType(), other.getTaskData());
+                    if (otherBox == null) {
+                        continue;
+                    }
+                    if (!otherBox.intersects(up1) && !otherBox.intersects(up2)) {
+                        continue;
+                    }
+                    Map<String, Object> issue = issue(
+                        "error",
+                        "rail_headroom_blocked_by_task",
+                        "Task " + other.getTaskOrder() + " (" + other.getTaskType()
+                            + ") occupies the headroom above rail at " + formatPoint(point),
+                        railTask
+                    );
+                    issue.put("related_task_id", other.getId() != null ? other.getId().toString() : null);
+                    issue.put("related_task_order", other.getTaskOrder());
+                    issues.add(issue);
+                }
+            }
+        }
+    }
+
+    private static BoundingBox headroomCell(TaskExecutor.RailPoint point, int dy) {
+        int y = point.y() + dy;
+        return new BoundingBox(point.x(), y, point.z(), point.x(), y, point.z());
     }
 
     private void checkTaskJoin(BuildTask previousTask, BuildTask currentTask, List<Map<String, Object>> issues) {
@@ -294,6 +367,10 @@ final class RailRenderInspectionService {
 
     private static String formatPos(BlockPos pos) {
         return "(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+    }
+
+    private static String formatPoint(TaskExecutor.RailPoint point) {
+        return "(" + point.x() + ", " + point.y() + ", " + point.z() + ")";
     }
 
     private static Map<String, Object> issue(String severity, String check, String message, BuildTask task) {

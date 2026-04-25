@@ -78,6 +78,192 @@ class RailRenderInspectionServiceTest {
             .contains("rail_segment_disconnected");
     }
 
+    @Test
+    void slopedDiagonalStepIsFlagged() {
+        BuildTask task = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 65, 1)),
+            0
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(task), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .contains("rail_sloped_step_not_straight");
+    }
+
+    @Test
+    void steepSlopedStepIsFlagged() {
+        BuildTask task = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 66, 0)),
+            0
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(task), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .contains("rail_sloped_step_not_straight");
+    }
+
+    @Test
+    void descendingDiagonalStepIsFlagged() {
+        BuildTask task = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(pos(0, 65, 0), pos(1, 64, 1)),
+            0
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(task), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .contains("rail_sloped_step_not_straight");
+    }
+
+    @Test
+    void slopedStepAlongXOnlyIsNotFlagged() {
+        BuildTask task = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 65, 0), pos(2, 65, 0)),
+            0
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(task), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .doesNotContain("rail_sloped_step_not_straight");
+    }
+
+    @Test
+    void slopedStepAlongZOnlyIsNotFlagged() {
+        BuildTask task = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(pos(0, 64, 0), pos(0, 65, 1), pos(0, 65, 2)),
+            0
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(task), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .doesNotContain("rail_sloped_step_not_straight");
+    }
+
+    @Test
+    void flatTurnIsNotFlagged() {
+        BuildTask task = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 64, 0), pos(1, 64, 1)),
+            0
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(task), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .doesNotContain("rail_sloped_step_not_straight");
+    }
+
+    @Test
+    void fillTaskOccupyingDirectHeadroomAboveRailIsFlagged() {
+        BuildTask rail = railTask(
+            TaskType.RAIL_TUNNEL_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 64, 0), pos(2, 64, 0)),
+            0
+        );
+        BuildTask fill = fillTask(1, 65, 0, 1, 65, 0, 1);
+
+        List<Map<String, Object>> issues = service.inspect(List.of(rail, fill), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .contains("rail_headroom_blocked_by_task");
+    }
+
+    @Test
+    void fillTaskOccupyingSecondHeadroomCellAboveRailIsFlagged() {
+        BuildTask rail = railTask(
+            TaskType.RAIL_TUNNEL_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 64, 0), pos(2, 64, 0)),
+            0
+        );
+        BuildTask fill = fillTask(1, 66, 0, 1, 66, 0, 1);
+
+        List<Map<String, Object>> issues = service.inspect(List.of(rail, fill), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .contains("rail_headroom_blocked_by_task");
+    }
+
+    @Test
+    void fillTaskFarFromRailIsNotFlagged() {
+        BuildTask rail = railTask(
+            TaskType.RAIL_TUNNEL_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 64, 0), pos(2, 64, 0)),
+            0
+        );
+        BuildTask fill = fillTask(50, 100, 50, 52, 102, 52, 1);
+
+        List<Map<String, Object>> issues = service.inspect(List.of(rail, fill), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .doesNotContain("rail_headroom_blocked_by_task");
+    }
+
+    @Test
+    void fillTaskBesideRailButNotAboveIsNotFlagged() {
+        BuildTask rail = railTask(
+            TaskType.RAIL_TUNNEL_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 64, 0), pos(2, 64, 0)),
+            0
+        );
+        BuildTask fill = fillTask(1, 64, 1, 1, 64, 1, 1);
+
+        List<Map<String, Object>> issues = service.inspect(List.of(rail, fill), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .doesNotContain("rail_headroom_blocked_by_task");
+    }
+
+    @Test
+    void neighboringRailSegmentDoesNotTriggerHeadroomCheck() {
+        BuildTask first = railTask(
+            TaskType.RAIL_TUNNEL_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 64, 0), pos(2, 64, 0)),
+            0
+        );
+        BuildTask second = railTask(
+            TaskType.RAIL_TUNNEL_SEGMENT,
+            List.of(pos(2, 64, 0), pos(3, 64, 0), pos(4, 64, 0)),
+            1
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(first, second), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .doesNotContain("rail_headroom_blocked_by_task");
+    }
+
+    private BuildTask fillTask(int x1, int y1, int z1, int x2, int y2, int z2, int taskOrder) {
+        ObjectNode data = objectMapper.createObjectNode();
+        data.put("x1", x1);
+        data.put("y1", y1);
+        data.put("z1", z1);
+        data.put("x2", x2);
+        data.put("y2", y2);
+        data.put("z2", z2);
+        data.put("block_type", "minecraft:stone");
+        return new BuildTask(buildId, taskOrder, TaskType.BLOCK_FILL, data, "fill");
+    }
+
     private BuildTask railTask(TaskType type, List<int[]> points, int taskOrder) {
         ObjectNode data = objectMapper.createObjectNode();
         ArrayNode path = data.putArray("path");
