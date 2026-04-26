@@ -151,6 +151,93 @@ class TaskExecutorTest {
         assertEquals(RailShape.ASCENDING_EAST, TaskExecutor.getRailShape(path, 1, Direction.WEST));
     }
 
+    @Test
+    void straightEastWestTunnelBisectionMatchesExpectedCrossSection() {
+        List<BlockPos> offsets = TaskExecutor.tunnelLiningOffsets(Direction.WEST, Direction.EAST);
+
+        // Tunnel rendering does not place a foundation: clearTunnel only clears dy 0..3,
+        // and ensureBase (which would place a rail-bed block at pos.down()) is disabled.
+        // The row at dy=-1 ('~') is preserved terrain, not anything the renderer places.
+        String[] expected = {
+            "###",
+            "#.#",
+            "#.#",
+            "#R#",
+            "~~~"
+        };
+
+        String[] actual = renderCrossSection(offsets, Direction.Axis.X);
+
+        assertArrayEquals(expected, actual,
+            "tunnel cross-section (looking along east-west axis):\n"
+                + "expected:\n" + String.join("\n", expected) + "\n"
+                + "actual:\n" + String.join("\n", actual));
+
+        for (BlockPos offset : offsets) {
+            assertFalse(offset.getY() < 0,
+                "tunnel rendering must not place blocks below the rail (no foundation), found: " + offset);
+        }
+    }
+
+    @Test
+    void straightNorthSouthTunnelBisectionMatchesExpectedCrossSection() {
+        List<BlockPos> offsets = TaskExecutor.tunnelLiningOffsets(Direction.NORTH, Direction.SOUTH);
+
+        String[] expected = {
+            "###",
+            "#.#",
+            "#.#",
+            "#R#",
+            "~~~"
+        };
+
+        String[] actual = renderCrossSection(offsets, Direction.Axis.Z);
+
+        assertArrayEquals(expected, actual,
+            "tunnel cross-section (looking along north-south axis):\n"
+                + "expected:\n" + String.join("\n", expected) + "\n"
+                + "actual:\n" + String.join("\n", actual));
+
+        for (BlockPos offset : offsets) {
+            assertFalse(offset.getY() < 0,
+                "tunnel rendering must not place blocks below the rail (no foundation), found: " + offset);
+        }
+    }
+
+    /**
+     * Projects tunnel lining offsets onto the plane perpendicular to {@code travelAxis}
+     * (the rail's direction of travel). Rows are dy from top (3) down to -1; columns
+     * are the in-plane horizontal coordinate from -1 to 1.
+     *   '#' = lined by the tunnel renderer
+     *   '.' = open interior (cleared to air)
+     *   'R' = the rail position itself
+     *   '~' = untouched terrain below the rail (no foundation is placed)
+     */
+    private String[] renderCrossSection(List<BlockPos> offsets, Direction.Axis travelAxis) {
+        java.util.Set<BlockPos> lined = new java.util.HashSet<>(offsets);
+        String[] rows = new String[5];
+        int rowIndex = 0;
+        for (int dy = 3; dy >= -1; dy--) {
+            StringBuilder row = new StringBuilder(3);
+            for (int column = -1; column <= 1; column++) {
+                BlockPos cell = travelAxis == Direction.Axis.X
+                    ? new BlockPos(0, dy, column)
+                    : new BlockPos(column, dy, 0);
+                if (dy == -1) {
+                    row.append('~');
+                } else if (lined.contains(cell)) {
+                    row.append('#');
+                } else if (dy == 0 && column == 0) {
+                    row.append('R');
+                } else {
+                    row.append('.');
+                }
+            }
+            rows[rowIndex++] = row.toString();
+        }
+        return rows;
+    }
+
     private void assertThatOffsetMissing(List<BlockPos> offsets, BlockPos expectedMissing) {
         assertFalse(offsets.contains(expectedMissing), "Offset should not be lined: " + expectedMissing);
     }
