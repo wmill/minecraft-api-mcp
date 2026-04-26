@@ -166,7 +166,7 @@ class TaskExecutorTest {
             "~~~"
         };
 
-        String[] actual = renderCrossSection(offsets, Direction.Axis.X);
+        String[] actual = renderCrossSection(offsets, tunnelClearedOffsets(), Direction.Axis.X);
 
         assertArrayEquals(expected, actual,
             "tunnel cross-section (looking along east-west axis):\n"
@@ -191,7 +191,7 @@ class TaskExecutorTest {
             "~~~"
         };
 
-        String[] actual = renderCrossSection(offsets, Direction.Axis.Z);
+        String[] actual = renderCrossSection(offsets, tunnelClearedOffsets(), Direction.Axis.Z);
 
         assertArrayEquals(expected, actual,
             "tunnel cross-section (looking along north-south axis):\n"
@@ -204,38 +204,127 @@ class TaskExecutorTest {
         }
     }
 
+    @Test
+    void straightEastWestSurfaceBisectionMatchesExpectedCrossSection() {
+        // Surface segments only clear a 3-tall headroom column at the rail position.
+        // No sides are touched, no foundation is placed; '~' marks preserved terrain.
+        String[] expected = {
+            "~.~",
+            "~.~",
+            "~R~",
+            "~~~"
+        };
+
+        String[] actual = renderCrossSection(
+            List.of(),
+            TaskExecutor.headroomClearedOffsets(),
+            Direction.Axis.X,
+            2
+        );
+
+        assertArrayEquals(expected, actual,
+            "surface cross-section (looking along east-west axis):\n"
+                + "expected:\n" + String.join("\n", expected) + "\n"
+                + "actual:\n" + String.join("\n", actual));
+
+        for (BlockPos offset : TaskExecutor.headroomClearedOffsets()) {
+            assertFalse(offset.getY() < 0,
+                "surface rendering must not clear blocks below the rail (no foundation), found: " + offset);
+        }
+    }
+
+    @Test
+    void straightEastWestBridgeBisectionMatchesExpectedCrossSection() {
+        // Bridge segments share clearHeadroom with surface; ensureBase is disabled,
+        // so a bridge over a gap leaves nothing under the rail. The cross-section is
+        // identical to surface — this test exists to lock that invariant.
+        String[] expected = {
+            "~.~",
+            "~.~",
+            "~R~",
+            "~~~"
+        };
+
+        String[] actual = renderCrossSection(
+            List.of(),
+            TaskExecutor.headroomClearedOffsets(),
+            Direction.Axis.X,
+            2
+        );
+
+        assertArrayEquals(expected, actual,
+            "bridge cross-section (looking along east-west axis):\n"
+                + "expected:\n" + String.join("\n", expected) + "\n"
+                + "actual:\n" + String.join("\n", actual));
+
+        for (BlockPos offset : TaskExecutor.headroomClearedOffsets()) {
+            assertFalse(offset.getY() < 0,
+                "bridge rendering must not place blocks below the rail (no foundation), found: " + offset);
+        }
+    }
+
     /**
-     * Projects tunnel lining offsets onto the plane perpendicular to {@code travelAxis}
-     * (the rail's direction of travel). Rows are dy from top (3) down to -1; columns
-     * are the in-plane horizontal coordinate from -1 to 1.
-     *   '#' = lined by the tunnel renderer
-     *   '.' = open interior (cleared to air)
+     * Projects rail rendering offsets onto the plane perpendicular to {@code travelAxis}.
+     * Rows are dy from {@code topDy} down to -1; columns are the in-plane horizontal
+     * coordinate from -1 to 1.
+     *   '#' = block placed by the renderer (tunnel lining)
+     *   '.' = cleared to air by the renderer
      *   'R' = the rail position itself
-     *   '~' = untouched terrain below the rail (no foundation is placed)
+     *   '~' = untouched terrain (no renderer action — preserved world block)
+     *
+     * Each cell's classification is exact: callers must pass the lined and cleared sets
+     * the renderer actually produces. Cells that appear in neither set render as '~'.
      */
-    private String[] renderCrossSection(List<BlockPos> offsets, Direction.Axis travelAxis) {
-        java.util.Set<BlockPos> lined = new java.util.HashSet<>(offsets);
-        String[] rows = new String[5];
+    private String[] renderCrossSection(
+        List<BlockPos> linedOffsets,
+        List<BlockPos> clearedOffsets,
+        Direction.Axis travelAxis,
+        int topDy
+    ) {
+        java.util.Set<BlockPos> lined = new java.util.HashSet<>(linedOffsets);
+        java.util.Set<BlockPos> cleared = new java.util.HashSet<>(clearedOffsets);
+        String[] rows = new String[topDy + 2];
         int rowIndex = 0;
-        for (int dy = 3; dy >= -1; dy--) {
+        for (int dy = topDy; dy >= -1; dy--) {
             StringBuilder row = new StringBuilder(3);
             for (int column = -1; column <= 1; column++) {
                 BlockPos cell = travelAxis == Direction.Axis.X
                     ? new BlockPos(0, dy, column)
                     : new BlockPos(column, dy, 0);
-                if (dy == -1) {
-                    row.append('~');
+                if (dy == 0 && column == 0) {
+                    row.append('R');
                 } else if (lined.contains(cell)) {
                     row.append('#');
-                } else if (dy == 0 && column == 0) {
-                    row.append('R');
-                } else {
+                } else if (cleared.contains(cell)) {
                     row.append('.');
+                } else {
+                    row.append('~');
                 }
             }
             rows[rowIndex++] = row.toString();
         }
         return rows;
+    }
+
+    private String[] renderCrossSection(List<BlockPos> linedOffsets, List<BlockPos> clearedOffsets, Direction.Axis travelAxis) {
+        return renderCrossSection(linedOffsets, clearedOffsets, travelAxis, 3);
+    }
+
+    /**
+     * Returns every cell in the tunnel clearance envelope (dx -1..1, dy 0..3, dz -1..1) —
+     * mirrors {@code TaskExecutor.clearTunnel}. Used by tunnel cross-section tests so the
+     * helper can render cleared interior as '.' rather than untouched terrain.
+     */
+    private List<BlockPos> tunnelClearedOffsets() {
+        List<BlockPos> cells = new java.util.ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = 0; dy <= 3; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    cells.add(new BlockPos(dx, dy, dz));
+                }
+            }
+        }
+        return cells;
     }
 
     private void assertThatOffsetMissing(List<BlockPos> offsets, BlockPos expectedMissing) {

@@ -569,9 +569,17 @@ public class TaskExecutor {
 
     private void clearHeadroom(BlockSink sink, BlockPos pos) {
         BlockState air = Blocks.AIR.getDefaultState();
-        clearUnlessRail(sink, pos, air);
-        clearUnlessRail(sink, pos.up(), air);
-        clearUnlessRail(sink, pos.up(2), air);
+        for (BlockPos offset : headroomClearedOffsets()) {
+            clearUnlessRail(sink, pos.add(offset), air);
+        }
+    }
+
+    static List<BlockPos> headroomClearedOffsets() {
+        return List.of(
+            new BlockPos(0, 0, 0),
+            new BlockPos(0, 1, 0),
+            new BlockPos(0, 2, 0)
+        );
     }
 
     private void clearTunnel(BlockSink sink, BlockPos pos, RailSegmentDefinition segment) {
