@@ -516,8 +516,7 @@ public class TaskExecutor {
             BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
             boolean powered = shouldPlacePoweredRail(segment.path(), i, segment.poweredRailInterval());
 
-            // NOTE: disabling support for now
-            // ensureBase(sink, pos, segment, "bridge".equals(mode), powered);
+            ensureBase(sink, pos, segment, "bridge".equals(mode), powered);
             if (placeRail(sink, pos, segment.path(), i, segment, powered)) {
                 poweredRailsPlaced++;
             }
@@ -580,6 +579,10 @@ public class TaskExecutor {
             new BlockPos(0, 1, 0),
             new BlockPos(0, 2, 0)
         );
+    }
+
+    static BlockPos foundationOffset() {
+        return new BlockPos(0, -1, 0);
     }
 
     private void clearTunnel(BlockSink sink, BlockPos pos, RailSegmentDefinition segment) {

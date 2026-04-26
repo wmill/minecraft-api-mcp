@@ -153,70 +153,65 @@ class TaskExecutorTest {
 
     @Test
     void straightEastWestTunnelBisectionMatchesExpectedCrossSection() {
-        List<BlockPos> offsets = TaskExecutor.tunnelLiningOffsets(Direction.WEST, Direction.EAST);
+        List<BlockPos> lined = withFoundation(TaskExecutor.tunnelLiningOffsets(Direction.WEST, Direction.EAST));
 
-        // Tunnel rendering does not place a foundation: clearTunnel only clears dy 0..3,
-        // and ensureBase (which would place a rail-bed block at pos.down()) is disabled.
-        // The row at dy=-1 ('~') is preserved terrain, not anything the renderer places.
+        // Every rail tile gets a rail-bed foundation block placed at pos.down() by
+        // ensureBase. The row at dy=-1 shows '#' under the rail to reflect that.
         String[] expected = {
             "###",
             "#.#",
             "#.#",
             "#R#",
-            "~~~"
+            "~#~"
         };
 
-        String[] actual = renderCrossSection(offsets, tunnelClearedOffsets(), Direction.Axis.X);
+        String[] actual = renderCrossSection(lined, tunnelClearedOffsets(), Direction.Axis.X);
 
         assertArrayEquals(expected, actual,
             "tunnel cross-section (looking along east-west axis):\n"
                 + "expected:\n" + String.join("\n", expected) + "\n"
                 + "actual:\n" + String.join("\n", actual));
 
-        for (BlockPos offset : offsets) {
-            assertFalse(offset.getY() < 0,
-                "tunnel rendering must not place blocks below the rail (no foundation), found: " + offset);
-        }
+        assertTrue(lined.contains(TaskExecutor.foundationOffset()),
+            "tunnel rendering must place a foundation block under every rail tile");
     }
 
     @Test
     void straightNorthSouthTunnelBisectionMatchesExpectedCrossSection() {
-        List<BlockPos> offsets = TaskExecutor.tunnelLiningOffsets(Direction.NORTH, Direction.SOUTH);
+        List<BlockPos> lined = withFoundation(TaskExecutor.tunnelLiningOffsets(Direction.NORTH, Direction.SOUTH));
 
         String[] expected = {
             "###",
             "#.#",
             "#.#",
             "#R#",
-            "~~~"
+            "~#~"
         };
 
-        String[] actual = renderCrossSection(offsets, tunnelClearedOffsets(), Direction.Axis.Z);
+        String[] actual = renderCrossSection(lined, tunnelClearedOffsets(), Direction.Axis.Z);
 
         assertArrayEquals(expected, actual,
             "tunnel cross-section (looking along north-south axis):\n"
                 + "expected:\n" + String.join("\n", expected) + "\n"
                 + "actual:\n" + String.join("\n", actual));
 
-        for (BlockPos offset : offsets) {
-            assertFalse(offset.getY() < 0,
-                "tunnel rendering must not place blocks below the rail (no foundation), found: " + offset);
-        }
+        assertTrue(lined.contains(TaskExecutor.foundationOffset()),
+            "tunnel rendering must place a foundation block under every rail tile");
     }
 
     @Test
     void straightEastWestSurfaceBisectionMatchesExpectedCrossSection() {
-        // Surface segments only clear a 3-tall headroom column at the rail position.
-        // No sides are touched, no foundation is placed; '~' marks preserved terrain.
+        // Surface segments clear a 3-tall headroom column at the rail position and
+        // place a rail-bed foundation block at pos.down(). No sides are touched.
         String[] expected = {
             "~.~",
             "~.~",
             "~R~",
-            "~~~"
+            "~#~"
         };
 
         String[] actual = renderCrossSection(
-            List.of(),
+            List.of(TaskExecutor.foundationOffset()),
             TaskExecutor.headroomClearedOffsets(),
             Direction.Axis.X,
             2
@@ -226,27 +221,22 @@ class TaskExecutorTest {
             "surface cross-section (looking along east-west axis):\n"
                 + "expected:\n" + String.join("\n", expected) + "\n"
                 + "actual:\n" + String.join("\n", actual));
-
-        for (BlockPos offset : TaskExecutor.headroomClearedOffsets()) {
-            assertFalse(offset.getY() < 0,
-                "surface rendering must not clear blocks below the rail (no foundation), found: " + offset);
-        }
     }
 
     @Test
     void straightEastWestBridgeBisectionMatchesExpectedCrossSection() {
-        // Bridge segments share clearHeadroom with surface; ensureBase is disabled,
-        // so a bridge over a gap leaves nothing under the rail. The cross-section is
-        // identical to surface — this test exists to lock that invariant.
+        // Bridge segments share clearHeadroom and ensureBase with surface, plus a
+        // deeper support column extending downward. The bisection at the rail tile
+        // matches surface — deeper support cells live at dy < -1 and aren't shown here.
         String[] expected = {
             "~.~",
             "~.~",
             "~R~",
-            "~~~"
+            "~#~"
         };
 
         String[] actual = renderCrossSection(
-            List.of(),
+            List.of(TaskExecutor.foundationOffset()),
             TaskExecutor.headroomClearedOffsets(),
             Direction.Axis.X,
             2
@@ -256,11 +246,6 @@ class TaskExecutorTest {
             "bridge cross-section (looking along east-west axis):\n"
                 + "expected:\n" + String.join("\n", expected) + "\n"
                 + "actual:\n" + String.join("\n", actual));
-
-        for (BlockPos offset : TaskExecutor.headroomClearedOffsets()) {
-            assertFalse(offset.getY() < 0,
-                "bridge rendering must not place blocks below the rail (no foundation), found: " + offset);
-        }
     }
 
     /**
@@ -329,5 +314,11 @@ class TaskExecutorTest {
 
     private void assertThatOffsetMissing(List<BlockPos> offsets, BlockPos expectedMissing) {
         assertFalse(offsets.contains(expectedMissing), "Offset should not be lined: " + expectedMissing);
+    }
+
+    private List<BlockPos> withFoundation(List<BlockPos> linedOffsets) {
+        List<BlockPos> combined = new java.util.ArrayList<>(linedOffsets);
+        combined.add(TaskExecutor.foundationOffset());
+        return combined;
     }
 }
