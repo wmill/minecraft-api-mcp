@@ -181,17 +181,58 @@ final class RailRenderInspectionService {
             }
             boolean straightHorizontal = (Math.abs(dx) == 1 && dz == 0)
                 || (dx == 0 && Math.abs(dz) == 1);
-            if (straightHorizontal && Math.abs(dy) == 1) {
+            if (!straightHorizontal || Math.abs(dy) != 1) {
+                issues.add(issue(
+                    "error",
+                    "rail_sloped_step_not_straight",
+                    "Sloped rail step from " + formatPoint(a) + " to " + formatPoint(b)
+                        + " must change Y by exactly 1 along a single horizontal axis",
+                    task
+                ));
                 continue;
             }
-            issues.add(issue(
-                "error",
-                "rail_sloped_step_not_straight",
-                "Sloped rail step from " + formatPoint(a) + " to " + formatPoint(b)
-                    + " must change Y by exactly 1 along a single horizontal axis",
-                task
-            ));
+            if (isCornerTile(path, i - 1)) {
+                issues.add(issue(
+                    "error",
+                    "rail_sloped_step_at_corner",
+                    "Sloped rail step from " + formatPoint(a) + " to " + formatPoint(b)
+                        + " starts at corner tile " + formatPoint(a)
+                        + "; sloped rails must lie on straight sections",
+                    task
+                ));
+            }
+            if (isCornerTile(path, i)) {
+                issues.add(issue(
+                    "error",
+                    "rail_sloped_step_at_corner",
+                    "Sloped rail step from " + formatPoint(a) + " to " + formatPoint(b)
+                        + " ends at corner tile " + formatPoint(b)
+                        + "; sloped rails must lie on straight sections",
+                    task
+                ));
+            }
         }
+    }
+
+    private static boolean isCornerTile(List<TaskExecutor.RailPoint> path, int index) {
+        if (index <= 0 || index >= path.size() - 1) {
+            return false;
+        }
+        Direction.Axis incoming = horizontalAxis(path.get(index - 1), path.get(index));
+        Direction.Axis outgoing = horizontalAxis(path.get(index), path.get(index + 1));
+        return incoming != null && outgoing != null && incoming != outgoing;
+    }
+
+    private static Direction.Axis horizontalAxis(TaskExecutor.RailPoint from, TaskExecutor.RailPoint to) {
+        int dx = to.x() - from.x();
+        int dz = to.z() - from.z();
+        if (dx != 0 && dz == 0) {
+            return Direction.Axis.X;
+        }
+        if (dx == 0 && dz != 0) {
+            return Direction.Axis.Z;
+        }
+        return null;
     }
 
     private void checkOtherTasksBlockingHeadroom(List<BuildTask> railTasks,

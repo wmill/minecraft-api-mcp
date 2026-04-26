@@ -214,6 +214,52 @@ class TaskExecutorTest {
         assertBaseBlocksMatchPoweredRailPattern("tunnel");
     }
 
+    @Test
+    void straightSurfaceSegmentPlacesPoweredRailsAtIntervalIndices() {
+        assertPoweredRailIntervalsMatchExpected("surface");
+    }
+
+    @Test
+    void straightBridgeSegmentPlacesPoweredRailsAtIntervalIndices() {
+        assertPoweredRailIntervalsMatchExpected("bridge");
+    }
+
+    @Test
+    void straightTunnelSegmentPlacesPoweredRailsAtIntervalIndices() {
+        assertPoweredRailIntervalsMatchExpected("tunnel");
+    }
+
+    /**
+     * Walks a 9-tile straight east-west path with poweredRailInterval=4 and verifies
+     * that {@code shouldPlacePoweredRail} returns true at exactly indices {3, 7} —
+     * one powered rail every 4 straight segments. The mode parameter is documentation:
+     * the powered-rail decision is mode-independent in the executor's loop, so the
+     * three tests exist to lock that invariant per mode.
+     */
+    private void assertPoweredRailIntervalsMatchExpected(String mode) {
+        List<TaskExecutor.RailPoint> path = List.of(
+            new TaskExecutor.RailPoint(0, 64, 0),
+            new TaskExecutor.RailPoint(1, 64, 0),
+            new TaskExecutor.RailPoint(2, 64, 0),
+            new TaskExecutor.RailPoint(3, 64, 0),
+            new TaskExecutor.RailPoint(4, 64, 0),
+            new TaskExecutor.RailPoint(5, 64, 0),
+            new TaskExecutor.RailPoint(6, 64, 0),
+            new TaskExecutor.RailPoint(7, 64, 0),
+            new TaskExecutor.RailPoint(8, 64, 0)
+        );
+        int interval = 4;
+        java.util.Set<Integer> expectedPoweredIndices = java.util.Set.of(3, 7);
+        java.util.Set<Integer> actualPoweredIndices = new java.util.HashSet<>();
+        for (int i = 0; i < path.size(); i++) {
+            if (TaskExecutor.shouldPlacePoweredRail(path, i, interval)) {
+                actualPoweredIndices.add(i);
+            }
+        }
+        assertEquals(expectedPoweredIndices, actualPoweredIndices,
+            mode + " segment: powered rail indices on a 9-tile straight path with interval=4 mismatch");
+    }
+
     /**
      * Walks a 9-tile straight east-west path and verifies that for every index i,
      * {@code chooseTopSupportBlockId} matches the rule: power_block when the tile

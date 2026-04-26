@@ -154,6 +154,51 @@ class RailRenderInspectionServiceTest {
     }
 
     @Test
+    void slopedStepEndingAtCornerIsFlagged() {
+        BuildTask task = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 65, 0), pos(1, 65, 1)),
+            0
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(task), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .contains("rail_sloped_step_at_corner");
+    }
+
+    @Test
+    void slopedStepStartingAtCornerIsFlagged() {
+        BuildTask task = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 64, 0), pos(1, 65, 1)),
+            0
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(task), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .contains("rail_sloped_step_at_corner");
+    }
+
+    @Test
+    void slopedStepBetweenStraightTilesIsNotFlaggedAsCorner() {
+        BuildTask task = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(pos(0, 64, 0), pos(1, 65, 0), pos(2, 65, 0)),
+            0
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(task), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .doesNotContain("rail_sloped_step_at_corner");
+    }
+
+    @Test
     void flatTurnIsNotFlagged() {
         BuildTask task = railTask(
             TaskType.RAIL_SURFACE_SEGMENT,
