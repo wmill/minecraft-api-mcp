@@ -200,6 +200,62 @@ class TaskExecutorTest {
     }
 
     @Test
+    void straightSurfaceSegmentPlacesPowerBlockUnderPoweredRailTilesOnly() {
+        assertBaseBlocksMatchPoweredRailPattern("surface");
+    }
+
+    @Test
+    void straightBridgeSegmentPlacesPowerBlockUnderPoweredRailTilesOnly() {
+        assertBaseBlocksMatchPoweredRailPattern("bridge");
+    }
+
+    @Test
+    void straightTunnelSegmentPlacesPowerBlockUnderPoweredRailTilesOnly() {
+        assertBaseBlocksMatchPoweredRailPattern("tunnel");
+    }
+
+    /**
+     * Walks a 9-tile straight east-west path and verifies that for every index i,
+     * {@code chooseTopSupportBlockId} matches the rule: power_block when the tile
+     * is powered (per {@code shouldPlacePoweredRail}), rail_bed_block otherwise.
+     *
+     * The mode parameter is documentation: surface/bridge/tunnel all call ensureBase
+     * with the same powered flag, so the base-block choice is mode-independent. These
+     * three tests exist to lock that invariant per mode.
+     */
+    private void assertBaseBlocksMatchPoweredRailPattern(String mode) {
+        List<TaskExecutor.RailPoint> path = List.of(
+            new TaskExecutor.RailPoint(0, 64, 0),
+            new TaskExecutor.RailPoint(1, 64, 0),
+            new TaskExecutor.RailPoint(2, 64, 0),
+            new TaskExecutor.RailPoint(3, 64, 0),
+            new TaskExecutor.RailPoint(4, 64, 0),
+            new TaskExecutor.RailPoint(5, 64, 0),
+            new TaskExecutor.RailPoint(6, 64, 0),
+            new TaskExecutor.RailPoint(7, 64, 0),
+            new TaskExecutor.RailPoint(8, 64, 0)
+        );
+        int interval = 4;
+        TaskExecutor.RailSegmentDefinition segment = new TaskExecutor.RailSegmentDefinition(
+            path,
+            "minecraft:overworld",
+            "minecraft:stone",
+            "minecraft:stone_bricks",
+            "minecraft:redstone_block",
+            "minecraft:stone_bricks",
+            interval
+        );
+
+        for (int i = 0; i < path.size(); i++) {
+            boolean powered = TaskExecutor.shouldPlacePoweredRail(path, i, interval);
+            String expected = powered ? "minecraft:redstone_block" : "minecraft:stone";
+            String actual = TaskExecutor.chooseTopSupportBlockId(segment, powered);
+            assertEquals(expected, actual,
+                mode + " segment, tile " + i + " (powered=" + powered + ") base block mismatch");
+        }
+    }
+
+    @Test
     void straightEastWestSurfaceBisectionMatchesExpectedCrossSection() {
         // Surface segments clear a 3-tall headroom column at the rail position and
         // place a rail-bed foundation block at pos.down(). No sides are touched.

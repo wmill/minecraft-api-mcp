@@ -628,14 +628,18 @@ public class TaskExecutor {
         return false;
     }
 
+    static String chooseTopSupportBlockId(RailSegmentDefinition segment, boolean poweredRail) {
+        if (poweredRail && segment.powerBlock() != null) {
+            return segment.powerBlock();
+        }
+        return segment.railBedBlock();
+    }
+
     private void ensureBase(BlockSink sink, BlockPos pos, RailSegmentDefinition segment, boolean extendSupportColumn, boolean poweredRail) {
-        BlockState bed = getBlockState(segment.railBedBlock());
         BlockState support = getBlockState(segment.supportBlock());
         BlockState power = getBlockState(segment.powerBlock());
         BlockState chosenSupport = support != null ? support : power;
-        // BlockState topSupport = poweredRail && power != null ? power : bed;
-        // FIXME: skipping powered rail redstone as it is unneded
-        BlockState topSupport = bed;
+        BlockState topSupport = getBlockState(chooseTopSupportBlockId(segment, poweredRail));
         if (topSupport != null) {
             sink.setBlockState(pos.down(), topSupport, Block.NOTIFY_LISTENERS);
         }
