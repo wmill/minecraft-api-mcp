@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.math.Direction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -297,6 +298,70 @@ class RailRenderInspectionServiceTest {
             .doesNotContain("rail_headroom_blocked_by_task");
     }
 
+    @Test
+    void shortTunnelBetweenSurfaceSegmentsDoesNotFlagPortalJoinAsBlocked() {
+        List<TaskExecutor.RailPoint> tunnelPath = List.of(
+            point(524, 80, -103),
+            point(525, 80, -103),
+            point(526, 80, -103),
+            point(527, 80, -103),
+            point(528, 80, -103),
+            point(529, 80, -103)
+        );
+
+        assertThat(RailRenderInspectionService.getPortalDirection(tunnelPath, 0)).isEqualTo(Direction.WEST);
+        assertThat(RailRenderInspectionService.getPortalDirection(tunnelPath, 1)).isNull();
+        assertThat(RailRenderInspectionService.getPortalDirection(tunnelPath, tunnelPath.size() - 2)).isNull();
+        assertThat(RailRenderInspectionService.getPortalDirection(tunnelPath, tunnelPath.size() - 1)).isEqualTo(Direction.EAST);
+    }
+
+    @Test
+    void overlappingSurfaceTunnelSurfaceJoinStillJoinsCleanly() {
+        BuildTask surfaceBefore = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(
+                pos(518, 80, -103),
+                pos(519, 80, -103),
+                pos(520, 80, -103),
+                pos(521, 80, -103),
+                pos(522, 80, -103),
+                pos(523, 80, -103),
+                pos(524, 80, -103),
+                pos(525, 80, -103)
+            ),
+            13
+        );
+        BuildTask tunnel = railTask(
+            TaskType.RAIL_TUNNEL_SEGMENT,
+            List.of(
+                pos(524, 80, -103),
+                pos(525, 80, -103),
+                pos(526, 80, -103),
+                pos(527, 80, -103),
+                pos(528, 80, -103),
+                pos(529, 80, -103)
+            ),
+            14
+        );
+        BuildTask surfaceAfter = railTask(
+            TaskType.RAIL_SURFACE_SEGMENT,
+            List.of(
+                pos(528, 80, -103),
+                pos(529, 80, -103),
+                pos(530, 80, -103),
+                pos(530, 80, -104),
+                pos(530, 80, -105)
+            ),
+            15
+        );
+
+        List<Map<String, Object>> issues = service.inspect(List.of(surfaceBefore, tunnel, surfaceAfter), null);
+
+        assertThat(issues)
+            .extracting(issue -> issue.get("check"))
+            .doesNotContain("rail_segment_disconnected");
+    }
+
     private BuildTask fillTask(int x1, int y1, int z1, int x2, int y2, int z2, int taskOrder) {
         ObjectNode data = objectMapper.createObjectNode();
         data.put("x1", x1);
@@ -329,5 +394,9 @@ class RailRenderInspectionServiceTest {
 
     private int[] pos(int x, int y, int z) {
         return new int[]{x, y, z};
+    }
+
+    private TaskExecutor.RailPoint point(int x, int y, int z) {
+        return new TaskExecutor.RailPoint(x, y, z);
     }
 }

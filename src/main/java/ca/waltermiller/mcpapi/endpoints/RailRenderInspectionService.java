@@ -122,27 +122,17 @@ final class RailRenderInspectionService {
             ));
         }
 
-        checkOpenFace(task, sink, pos, path, index - 1, issues);
-        checkOpenFace(task, sink, pos, path, index + 1, issues);
+        Direction portalDirection = getPortalDirection(path, index);
+        if (portalDirection != null) {
+            checkOpenFace(task, sink, pos, portalDirection, issues);
+        }
     }
 
     private void checkOpenFace(BuildTask task,
                                BlockSink sink,
                                BlockPos pos,
-                               List<TaskExecutor.RailPoint> path,
-                               int neighborIndex,
+                               Direction direction,
                                List<Map<String, Object>> issues) {
-        if (neighborIndex < 0 || neighborIndex >= path.size()) {
-            return;
-        }
-
-        TaskExecutor.RailPoint neighbor = path.get(neighborIndex);
-        if (neighbor.y() != pos.getY()) {
-            return;
-        }
-
-        Direction direction = directionBetween(pos, new BlockPos(neighbor.x(), neighbor.y(), neighbor.z()));
-
         BlockPos offset = switch (direction) {
             case NORTH -> new BlockPos(0, 0, -1);
             case SOUTH -> new BlockPos(0, 0, 1);
@@ -166,6 +156,38 @@ final class RailRenderInspectionService {
                 return;
             }
         }
+    }
+
+    static Direction getPortalDirection(List<TaskExecutor.RailPoint> path, int index) {
+        if (path.size() < 2) {
+            return null;
+        }
+
+        if (index == 0) {
+            TaskExecutor.RailPoint current = path.get(0);
+            TaskExecutor.RailPoint next = path.get(1);
+            if (next.y() != current.y()) {
+                return null;
+            }
+            return directionBetween(
+                new BlockPos(current.x(), current.y(), current.z()),
+                new BlockPos(next.x(), next.y(), next.z())
+            ).getOpposite();
+        }
+
+        if (index == path.size() - 1) {
+            TaskExecutor.RailPoint previous = path.get(index - 1);
+            TaskExecutor.RailPoint current = path.get(index);
+            if (previous.y() != current.y()) {
+                return null;
+            }
+            return directionBetween(
+                new BlockPos(previous.x(), previous.y(), previous.z()),
+                new BlockPos(current.x(), current.y(), current.z())
+            );
+        }
+
+        return null;
     }
 
     private void checkSlopeStraightness(BuildTask task, List<Map<String, Object>> issues) {
