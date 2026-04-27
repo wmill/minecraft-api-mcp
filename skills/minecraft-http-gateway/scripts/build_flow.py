@@ -18,7 +18,12 @@ def request_json(method: str, url: str, payload: dict | None = None) -> object:
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
     with urllib.request.urlopen(request) as response:
         raw = response.read().decode("utf-8")
-        return json.loads(raw) if raw else {}
+        if not raw:
+            return {}
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
 
 
 def main() -> int:
@@ -63,6 +68,9 @@ def main() -> int:
 
     rail_status = subparsers.add_parser("rail-status")
     rail_status.add_argument("--job-id", required=True)
+
+    audit = subparsers.add_parser("audit")
+    audit.add_argument("--build-id", required=True)
 
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
@@ -120,6 +128,8 @@ def main() -> int:
             if args.weight_overrides:
                 payload["weight_overrides"] = json.loads(args.weight_overrides)
             result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/plan-rail", payload)
+        elif args.command == "audit":
+            result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/audit")
         else:
             result = request_json("GET", f"{base_url}/api/rail-plans/{args.job_id}")
 

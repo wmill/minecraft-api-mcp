@@ -24,6 +24,8 @@ The server interface is the Fabric mod HTTP API on `http://localhost:7070` by de
   Use for common read operations such as players, entities, heightmaps, block lists, and block chunks.
 - `scripts/build_flow.py`
   Use for build-system operations such as create build, add common tasks, execute builds, get build status, and start or poll rail planning.
+- `scripts/rail_debug_e2e.py`
+  Use for the manual end-to-end rail planning debug loop: start the local server, create a build, plan rail, poll the job, and audit the result.
 
 ## Base URL
 

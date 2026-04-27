@@ -42,3 +42,22 @@ Visual Studio Code was able to use the Claude Desktop settings after going throu
 First you'll need the postgres image up and running `docker compose up -d postgres`
 
 After that the gradle runServer command worked for me. Kudos to the fabric devs.
+
+## Rail planning debug loop
+
+For a manual end-to-end rail planning regression check, run:
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/rail_debug_e2e.py \
+  --start-x 0 --start-y 64 --start-z 0 \
+  --end-x 200 --end-y 64 --end-z 200
+```
+
+The harness will:
+- start `docker compose up -d postgres` unless `--skip-postgres` is passed
+- start `./gradlew runServer` unless `--reuse-server` is passed
+- wait for `http://localhost:7070/api/test`
+- create a build, run `plan-rail`, poll until the planning job completes, then audit the build
+- exit non-zero if planning fails or audit reports any errors
+
+It writes diagnostics to `logs/rail-debug/<timestamp>/summary.json` and `server.log`.

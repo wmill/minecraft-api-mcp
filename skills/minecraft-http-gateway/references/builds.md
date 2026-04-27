@@ -36,6 +36,20 @@ Poll the planning job:
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py rail-status --job-id <uuid>
 ```
 
+Audit the resulting build:
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py audit --build-id <uuid>
+```
+
+Run the full local debug loop:
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/rail_debug_e2e.py \
+  --start-x 0 --start-y 64 --start-z 0 \
+  --end-x 200 --end-y 64 --end-z 200
+```
+
 ## When To Use Raw API
 
 If a task type is not wrapped by `build_flow.py`, call:
