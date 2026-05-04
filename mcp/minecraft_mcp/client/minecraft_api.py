@@ -1044,6 +1044,8 @@ class MinecraftAPIClient:
         self,
         build_id: str,
         iso_scale: Optional[int] = None,
+        terrain_margin: Optional[int] = None,
+        view_direction: Optional[str] = None,
     ) -> dict:
         """
         Fetch an isometric PNG preview of a build (dry-run; no blocks placed).
@@ -1051,6 +1053,8 @@ class MinecraftAPIClient:
         Args:
             build_id: Build UUID
             iso_scale: Optional renderer scale (1-32, default 6)
+            terrain_margin: Optional local terrain buffer around the placed footprint (0-8)
+            view_direction: Optional preview direction: south, west, north, or east
 
         Returns:
             dict with keys:
@@ -1064,6 +1068,10 @@ class MinecraftAPIClient:
         params = {}
         if iso_scale is not None:
             params["iso_scale"] = iso_scale
+        if terrain_margin is not None:
+            params["terrain_margin"] = terrain_margin
+        if view_direction is not None:
+            params["view_direction"] = view_direction
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{self.base_url}/api/builds/{build_id}/preview",

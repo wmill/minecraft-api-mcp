@@ -55,4 +55,21 @@ class IsoRendererTest {
         BufferedImage decoded = ImageIO.read(new ByteArrayInputStream(png));
         assertThat(decoded).isNotNull();
     }
+
+    @Test
+    void rendersDifferentImageForDifferentViewDirection() throws Exception {
+        Map<BlockPos, String> cells = new HashMap<>();
+        cells.put(new BlockPos(0, 0, 0), "minecraft:stone");
+        cells.put(new BlockPos(2, 0, 0), "minecraft:gold_block");
+        cells.put(new BlockPos(0, 1, 1), "minecraft:oak_planks");
+
+        BlockGrid grid = new BlockGrid(cells, 0, 0, 0, 2, 1, 1);
+
+        byte[] south = IsoRenderer.renderPng(grid, 4, PreviewViewDirection.SOUTH);
+        byte[] west = IsoRenderer.renderPng(grid, 4, PreviewViewDirection.WEST);
+        byte[] north = IsoRenderer.renderPng(grid, 4, PreviewViewDirection.NORTH);
+
+        assertThat(south).isNotEqualTo(west);
+        assertThat(west).isNotEqualTo(north);
+    }
 }

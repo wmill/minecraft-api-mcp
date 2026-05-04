@@ -1078,6 +1078,8 @@ async def handle_preview_build(
     api_client: MinecraftAPIClient,
     build_id: str,
     iso_scale: Optional[int] = None,
+    terrain_margin: Optional[int] = None,
+    view_direction: Optional[str] = None,
     **arguments,
 ) -> CallToolResult:
     """
@@ -1085,7 +1087,12 @@ async def handle_preview_build(
     the world).
     """
     try:
-        result = await api_client.preview_build(build_id, iso_scale=iso_scale)
+        result = await api_client.preview_build(
+            build_id,
+            iso_scale=iso_scale,
+            terrain_margin=terrain_margin,
+            view_direction=view_direction,
+        )
 
         if result.get("empty"):
             return CallToolResult(

@@ -28,6 +28,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -229,6 +230,34 @@ class BuildTaskEndpointTest {
         JsonNode json = objectMapper.readTree(response.body());
         assertThat(json.get("summary").get("errors").asInt()).isGreaterThan(0);
         assertThat(json.get("issues").toString()).contains("rail_segment_disconnected");
+    }
+
+    @Test
+    void previewBuildRejectsInvalidTerrainMargin() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("preview", "desc", "minecraft:overworld");
+        build.setId(buildId);
+        when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
+
+        HttpResponse<String> response = send("GET", "/api/builds/" + buildId + "/preview?terrain_margin=abc", null);
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(objectMapper.readTree(response.body())).isEqualTo(objectMapper.valueToTree(
+            Map.of("error", "terrain_margin must be an integer")));
+    }
+
+    @Test
+    void previewBuildRejectsInvalidViewDirection() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("preview", "desc", "minecraft:overworld");
+        build.setId(buildId);
+        when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
+
+        HttpResponse<String> response = send("GET", "/api/builds/" + buildId + "/preview?view_direction=northeast", null);
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(objectMapper.readTree(response.body())).isEqualTo(objectMapper.valueToTree(
+            Map.of("error", "view_direction must be one of: south, west, north, east")));
     }
 
     private HttpResponse<String> sendJson(String method, String path, String json) throws IOException, InterruptedException {

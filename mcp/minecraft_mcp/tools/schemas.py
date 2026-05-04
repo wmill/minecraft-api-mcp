@@ -1496,6 +1496,17 @@ TOOL_PREVIEW_BUILD = Tool(
                 "minimum": 1,
                 "maximum": 32,
             },
+            "terrain_margin": {
+                "type": "integer",
+                "description": "Optional local terrain buffer around the dry-run build footprint (0-8). Use 3 to show nearby ground without expanding to the full corridor.",
+                "minimum": 0,
+                "maximum": 8,
+            },
+            "view_direction": {
+                "type": "string",
+                "description": "Optional preview direction. `south` preserves the legacy default view.",
+                "enum": ["south", "west", "north", "east"],
+            },
         },
         "required": ["build_id"],
     },

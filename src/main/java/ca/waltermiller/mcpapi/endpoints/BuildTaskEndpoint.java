@@ -9,6 +9,7 @@ import ca.waltermiller.mcpapi.buildtask.service.LocationQueryService;
 import ca.waltermiller.mcpapi.buildtask.service.RailPlanningService;
 import ca.waltermiller.mcpapi.preview.BlockGrid;
 import ca.waltermiller.mcpapi.preview.IsoRenderer;
+import ca.waltermiller.mcpapi.preview.PreviewViewDirection;
 import ca.waltermiller.mcpapi.preview.RecordingBlockSink;
 import io.javalin.Javalin;
 import net.minecraft.registry.RegistryKey;
@@ -742,6 +743,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 Build build = buildOpt.get();
 
                 int scale = IsoRenderer.DEFAULT_SCALE;
+                int terrainMargin = 0;
+                PreviewViewDirection viewDirection = PreviewViewDirection.SOUTH;
                 String scaleParam = ctx.queryParam("iso_scale");
                 if (scaleParam != null && !scaleParam.isBlank()) {
                     try {
@@ -752,6 +755,30 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     }
                     if (scale < 1 || scale > 32) {
                         ctx.status(400).json(Map.of("error", "iso_scale must be between 1 and 32"));
+                        return;
+                    }
+                }
+
+                String terrainMarginParam = ctx.queryParam("terrain_margin");
+                if (terrainMarginParam != null && !terrainMarginParam.isBlank()) {
+                    try {
+                        terrainMargin = Integer.parseInt(terrainMarginParam);
+                    } catch (NumberFormatException e) {
+                        ctx.status(400).json(Map.of("error", "terrain_margin must be an integer"));
+                        return;
+                    }
+                    if (terrainMargin < 0 || terrainMargin > 8) {
+                        ctx.status(400).json(Map.of("error", "terrain_margin must be between 0 and 8"));
+                        return;
+                    }
+                }
+
+                String viewDirectionParam = ctx.queryParam("view_direction");
+                if (viewDirectionParam != null && !viewDirectionParam.isBlank()) {
+                    try {
+                        viewDirection = PreviewViewDirection.fromQueryParam(viewDirectionParam);
+                    } catch (IllegalArgumentException e) {
+                        ctx.status(400).json(Map.of("error", "view_direction must be one of: south, west, north, east"));
                         return;
                     }
                 }
@@ -770,6 +797,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
 
                 RecordingBlockSink sink = new RecordingBlockSink(serverWorld);
                 int finalScale = scale;
+                int finalTerrainMargin = terrainMargin;
+                PreviewViewDirection finalViewDirection = viewDirection;
                 CompletableFuture<Boolean> allOk = CompletableFuture.supplyAsync(() -> {
                     boolean partial = false;
                     for (BuildTask task : tasks) {
@@ -791,21 +820,21 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     return;
                 }
 
-                BlockGrid grid = BlockGrid.from(sink.placedBlocks());
+                BlockGrid grid = BlockGrid.from(sink.placedBlocks(), serverWorld, finalTerrainMargin);
                 if (grid.isEmpty()) {
                     ctx.status(204);
                     return;
                 }
 
-                byte[] png = IsoRenderer.renderPng(grid, finalScale);
+                byte[] png = IsoRenderer.renderPng(grid, finalScale, finalViewDirection);
                 ctx.contentType("image/png");
                 if (!ok) {
                     ctx.header("X-Preview-Partial", "true");
                 }
                 ctx.result(png);
 
-                LOGGER.info("Rendered preview for build {} ({} recorded blocks, scale {})",
-                        buildId, sink.placedBlocks().size(), finalScale);
+                LOGGER.info("Rendered preview for build {} ({} recorded blocks, scale {}, terrain margin {}, view {})",
+                        buildId, sink.placedBlocks().size(), finalScale, finalTerrainMargin, finalViewDirection);
             } catch (SQLException e) {
                 LOGGER.error("Database error rendering preview", e);
                 ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
