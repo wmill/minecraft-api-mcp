@@ -222,7 +222,45 @@ TOOL_FILL_BOX = Tool(
 
 TOOL_GET_HEIGHTMAP = Tool(
     name="get_heightmap",
-    description="Get topographical heightmap for a rectangular area - useful for building placement and terrain analysis",
+    description="Get raw topographical heightmap data for a rectangular area, including bounds, size, height range, and the full 2D heights grid.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "x1": {
+                "type": "integer",
+                "description": "First corner X coordinate (east positive, west negative)"
+            },
+            "z1": {
+                "type": "integer",
+                "description": "First corner Z coordinate (south positive, north negative)"
+            },
+            "x2": {
+                "type": "integer",
+                "description": "Second corner X coordinate (east positive, west negative)"
+            },
+            "z2": {
+                "type": "integer",
+                "description": "Second corner Z coordinate (south positive, north negative)"
+            },
+            "heightmap_type": {
+                "type": "string",
+                "description": "Type of heightmap to generate",
+                "enum": ["WORLD_SURFACE", "MOTION_BLOCKING", "MOTION_BLOCKING_NO_LEAVES", "OCEAN_FLOOR"],
+                "default": "WORLD_SURFACE"
+            },
+            "world": {
+                "type": "string",
+                "description": "World name (optional, defaults to minecraft:overworld)",
+                "default": "minecraft:overworld"
+            }
+        },
+        "required": ["x1", "z1", "x2", "z2"]
+    }
+)
+
+TOOL_SUMMARIZE_HEIGHTMAP = Tool(
+    name="summarize_heightmap",
+    description="Get a summarized terrain analysis for a rectangular heightmap area, including basic elevation statistics for quick assessment.",
     inputSchema={
         "type": "object",
         "properties": {
@@ -1598,6 +1636,7 @@ TOOL_SCHEMAS = [
     TOOL_GET_BLOCKS_CHUNK,
     TOOL_FILL_BOX,
     TOOL_GET_HEIGHTMAP,
+    TOOL_SUMMARIZE_HEIGHTMAP,
     # Message tools
     TOOL_BROADCAST_MESSAGE,
     TOOL_SEND_MESSAGE_TO_PLAYER,

@@ -207,24 +207,51 @@ async def handle_get_heightmap(
         **arguments: Additional arguments (ignored)
         
     Returns:
-        CallToolResult with heightmap data
+        CallToolResult with raw heightmap JSON data
     """
     try:
         result = await api_client.get_heightmap(x1, z1, x2, z2, heightmap_type, world)
-        
+
         if result.get("success"):
-            heightmap = result.get("heights") or result.get("heightmap") or []
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(result, indent=2))]
+            )
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to get heightmap: {result}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "getting heightmap")
+
+
+async def handle_summarize_heightmap(
+    api_client: MinecraftAPIClient,
+    x1: int,
+    z1: int,
+    x2: int,
+    z2: int,
+    heightmap_type: str = "WORLD_SURFACE",
+    world: str = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Get a summarized terrain analysis for a rectangular heightmap area.
+    """
+    try:
+        result = await api_client.get_heightmap(x1, z1, x2, z2, heightmap_type, world)
+
+        if result.get("success"):
+            heightmap = result.get("heights") or []
             size = result.get("size") or {}
             width = size.get("x", len(heightmap))
             length = size.get("z", len(heightmap[0]) if heightmap else 0)
 
-            # Calculate statistics
             all_heights = [h for row in heightmap for h in row]
             min_height = min(all_heights) if all_heights else None
             max_height = max(all_heights) if all_heights else None
             avg_height = (sum(all_heights) / len(all_heights)) if all_heights else None
 
-            response_text = f"**Heightmap Data ({width}x{length}):**\n"
+            response_text = f"**Heightmap Summary ({width}x{length}):**\n"
             response_text += f"World: {result.get('world', world)}\n"
             response_text += f"Type: {result.get('heightmap_type', heightmap_type)}\n"
 
@@ -246,11 +273,11 @@ async def handle_get_heightmap(
             response_text += f"- Minimum: {range_min if range_min is not None else 'n/a'}\n"
             response_text += f"- Maximum: {range_max if range_max is not None else 'n/a'}\n"
             response_text += f"- Average: {avg_height:.1f}\n" if avg_height is not None else "- Average: n/a\n"
-            
+
             return format_success_response(response_text)
         else:
             return CallToolResult(
-                content=[TextContent(type="text", text=f"❌ Failed to get heightmap: {result}")]
+                content=[TextContent(type="text", text=f"❌ Failed to summarize heightmap: {result}")]
             )
     except Exception as e:
-        return format_error_response(e, "getting heightmap")
+        return format_error_response(e, "summarizing heightmap")

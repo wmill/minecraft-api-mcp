@@ -49,6 +49,7 @@ def test_tool_names():
         "get_blocks_chunk",
         "fill_box",
         "get_heightmap",
+        "summarize_heightmap",
         # Message tools
         "broadcast_message",
         "send_message_to_player",

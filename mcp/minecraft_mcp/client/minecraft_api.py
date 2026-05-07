@@ -292,6 +292,34 @@ class MinecraftAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def summarize_heightmap(
+        self,
+        x1: int,
+        z1: int,
+        x2: int,
+        z2: int,
+        heightmap_type: str = "WORLD_SURFACE",
+        world: Optional[str] = None
+    ) -> dict:
+        """
+        Fetch the raw heightmap data used by the summarize_heightmap MCP tool.
+
+        Args:
+            x1: First corner X coordinate
+            z1: First corner Z coordinate
+            x2: Second corner X coordinate
+            z2: Second corner Z coordinate
+            heightmap_type: Type of heightmap (WORLD_SURFACE, MOTION_BLOCKING, etc.)
+            world: World name (optional, defaults to minecraft:overworld)
+
+        Returns:
+            dict: Response containing raw heightmap data
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        return await self.get_heightmap(x1, z1, x2, z2, heightmap_type, world)
+
     async def broadcast_message(
         self,
         message: str,

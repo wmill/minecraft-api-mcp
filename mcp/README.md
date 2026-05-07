@@ -18,7 +18,8 @@ The MCP server provides the following tools:
 - `set_blocks` - Set blocks in the world using 3D arrays
 - `get_blocks_chunk` - Get a chunk of blocks from the world
 - `fill_box` - Fill a cuboid/box with a specific block type between two coordinates
-- `get_heightmap` - Get topographical heightmap for terrain analysis and building placement
+- `get_heightmap` - Get raw topographical heightmap data for terrain analysis and building placement
+- `summarize_heightmap` - Get a concise terrain summary derived from a heightmap
 
 ### Messaging
 - `broadcast_message` - Send messages to all players on the server
@@ -40,15 +41,18 @@ Each unit equals one block (1 cubic meter in real-world terms).
 The `fill_box` tool allows you to quickly create large structures by filling rectangular areas with any block type. Simply specify two corner coordinates and the desired block type. The tool automatically handles coordinate ordering and includes safety limits to prevent excessive server load.
 
 ### Terrain Analysis
-The `get_heightmap` tool provides comprehensive topographical analysis including:
+The `get_heightmap` tool returns the raw heightmap payload including:
+- **World and bounds metadata** - World name, queried bounds, and grid size
+- **Height range** - Server-provided minimum and maximum elevations
+- **Full height grid** - The complete 2D `heights` array for downstream reasoning
+
+The `summarize_heightmap` tool provides a concise terrain summary including:
 - **Height mapping** with multiple detection types:
   - `WORLD_SURFACE` - Surface level including trees, buildings
   - `MOTION_BLOCKING` - Solid blocks that block movement  
   - `MOTION_BLOCKING_NO_LEAVES` - Solid ground ignoring leaves
   - `OCEAN_FLOOR` - Solid ground ignoring water
-- **Terrain statistics** - Percentage of flat, steep, and moderate terrain
-- **Building recommendations** - Automated assessment of construction difficulty
-- **Visual height grid** - For areas 20x20 blocks or smaller
+- **Basic terrain statistics** - Minimum, maximum, and average height
 
 ### Player Communication
 Advanced messaging system with:
@@ -193,10 +197,24 @@ The MCP server can be integrated with various MCP clients depending on the trans
 }
 ```
 
-**Get Heightmap for Terrain Analysis:**
+**Get Raw Heightmap Data:**
 ```json
 {
   "name": "get_heightmap",
+  "arguments": {
+    "x1": 0,
+    "z1": 0,
+    "x2": 50,
+    "z2": 50,
+    "heightmap_type": "WORLD_SURFACE"
+  }
+}
+```
+
+**Get Heightmap Summary:**
+```json
+{
+  "name": "summarize_heightmap",
   "arguments": {
     "x1": 0,
     "z1": 0,

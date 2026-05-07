@@ -14,7 +14,8 @@ from .blocks import (
     handle_set_blocks,
     handle_get_blocks_chunk,
     handle_fill_box,
-    handle_get_heightmap
+    handle_get_heightmap,
+    handle_summarize_heightmap
 )
 
 from .messages import (
@@ -69,6 +70,7 @@ __all__ = [
     "handle_get_blocks_chunk",
     "handle_fill_box",
     "handle_get_heightmap",
+    "handle_summarize_heightmap",
     # Message handlers
     "handle_broadcast_message",
     "handle_send_message_to_player",
