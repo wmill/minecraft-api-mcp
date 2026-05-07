@@ -14,6 +14,9 @@ import java.io.IOException;
  * faces per cube: top (+Y), left (+Z), right (+X). Painter's order iterates y
  * ascending so higher voxels paint over lower ones; within a layer the 2:1
  * projection guarantees no overlap.
+ *
+ * Non-south views are handled by rotating the BlockGrid around Y before rendering,
+ * so the projection always treats the grid as if viewed from the south.
  */
 public final class IsoRenderer {
 
@@ -26,20 +29,13 @@ public final class IsoRenderer {
     }
 
     public static byte[] renderPng(BlockGrid grid, int scale, PreviewViewDirection viewDirection) throws IOException {
-        BufferedImage img = render(grid, scale, viewDirection);
-        if (viewDirection != PreviewViewDirection.SOUTH) {
-            img = render(grid, scale, viewDirection);
-        }
+        BufferedImage img = render(grid.rotated(viewDirection), scale);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         ImageIO.write(img, "PNG", baos);
         return baos.toByteArray();
     }
 
     static BufferedImage render(BlockGrid grid, int scale) {
-        return render(grid, scale, PreviewViewDirection.SOUTH);
-    }
-
-    static BufferedImage render(BlockGrid grid, int scale, PreviewViewDirection viewDirection) {
         int w = Math.max(grid.width(), 1);
         int h = Math.max(grid.height(), 1);
         int d = Math.max(grid.depth(), 1);
@@ -71,14 +67,14 @@ public final class IsoRenderer {
                         Color leftC = scaleColor(rgb, 0.85);
                         Color rightC = scaleColor(rgb, 0.65);
 
-                        int[] bbl = project(x, y, z, w, d, viewDirection, offX, offY, scale);
-                        int[] bbr = project(x + 1, y, z, w, d, viewDirection, offX, offY, scale);
-                        int[] bfl = project(x, y, z + 1, w, d, viewDirection, offX, offY, scale);
-                        int[] bfr = project(x + 1, y, z + 1, w, d, viewDirection, offX, offY, scale);
-                        int[] tbl = project(x, y + 1, z, w, d, viewDirection, offX, offY, scale);
-                        int[] tbr = project(x + 1, y + 1, z, w, d, viewDirection, offX, offY, scale);
-                        int[] tfl = project(x, y + 1, z + 1, w, d, viewDirection, offX, offY, scale);
-                        int[] tfr = project(x + 1, y + 1, z + 1, w, d, viewDirection, offX, offY, scale);
+                        int[] bbl = project(x, y, z, offX, offY, scale);
+                        int[] bbr = project(x + 1, y, z, offX, offY, scale);
+                        int[] bfl = project(x, y, z + 1, offX, offY, scale);
+                        int[] bfr = project(x + 1, y, z + 1, offX, offY, scale);
+                        int[] tbl = project(x, y + 1, z, offX, offY, scale);
+                        int[] tbr = project(x + 1, y + 1, z, offX, offY, scale);
+                        int[] tfl = project(x, y + 1, z + 1, offX, offY, scale);
+                        int[] tfr = project(x + 1, y + 1, z + 1, offX, offY, scale);
 
                         if (grid.isAir(grid.minX() + x, grid.minY() + y + 1, grid.minZ() + z)) {
                             g.setColor(topC);
@@ -101,33 +97,10 @@ public final class IsoRenderer {
         return img;
     }
 
-    private static int[] project(
-            int px,
-            int py,
-            int pz,
-            int width,
-            int depth,
-            PreviewViewDirection viewDirection,
-            int offX,
-            int offY,
-            int scale) {
-        int[] rotated = rotate(px, pz, width, depth, viewDirection);
-        return project(rotated[0], py, rotated[1], offX, offY, scale);
-    }
-
     private static int[] project(int px, int py, int pz, int offX, int offY, int scale) {
         int sx = (px - pz) * 2 + offX;
         int sy = (px + pz) - 2 * py + offY;
         return new int[] {sx * scale, sy * scale};
-    }
-
-    private static int[] rotate(int px, int pz, int width, int depth, PreviewViewDirection viewDirection) {
-        return switch (viewDirection) {
-            case SOUTH -> new int[] {px, pz};
-            case WEST -> new int[] {pz, width - px};
-            case NORTH -> new int[] {width - px, depth - pz};
-            case EAST -> new int[] {depth - pz, px};
-        };
     }
 
     private static void fillPoly(Graphics2D g, int[]... points) {

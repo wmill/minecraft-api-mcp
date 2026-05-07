@@ -81,6 +81,38 @@ public final class BlockGrid {
         return cells.isEmpty();
     }
 
+    /**
+     * Returns a copy of this grid rotated 0/90/180/270° around the Y axis so that the
+     * requested view direction projects correctly under the renderer's south-facing
+     * iso projection. Cells are renormalized to origin (0, minY, 0).
+     */
+    public BlockGrid rotated(PreviewViewDirection viewDirection) {
+        if (viewDirection == PreviewViewDirection.SOUTH || isEmpty()) {
+            return this;
+        }
+        int w = width();
+        int d = depth();
+        int newWidth = viewDirection == PreviewViewDirection.NORTH ? w : d;
+        int newDepth = viewDirection == PreviewViewDirection.NORTH ? d : w;
+
+        Map<BlockPos, String> rotatedCells = new HashMap<>(cells.size());
+        for (Map.Entry<BlockPos, String> entry : cells.entrySet()) {
+            BlockPos pos = entry.getKey();
+            int cx = pos.getX() - minX;
+            int cz = pos.getZ() - minZ;
+            int rx;
+            int rz;
+            switch (viewDirection) {
+                case WEST -> { rx = cz;          rz = w - 1 - cx; }
+                case NORTH -> { rx = w - 1 - cx; rz = d - 1 - cz; }
+                case EAST -> { rx = d - 1 - cz;  rz = cx; }
+                default -> throw new IllegalStateException("unreachable");
+            }
+            rotatedCells.put(new BlockPos(rx, pos.getY(), rz), entry.getValue());
+        }
+        return new BlockGrid(rotatedCells, 0, minY, 0, newWidth - 1, maxY, newDepth - 1);
+    }
+
     public String blockAt(int x, int y, int z) {
         return cells.get(new BlockPos(x, y, z));
     }
