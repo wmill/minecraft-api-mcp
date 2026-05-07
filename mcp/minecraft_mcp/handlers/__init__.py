@@ -44,6 +44,7 @@ from .builds import (
     handle_add_build_task_prefab_sign,
     handle_add_build_task_prefab_ladder,
     handle_execute_build,
+    handle_replay_build,
     handle_query_builds_by_location,
     handle_get_build_status
 )
@@ -91,6 +92,7 @@ __all__ = [
     "handle_add_build_task_prefab_sign",
     "handle_add_build_task_prefab_ladder",
     "handle_execute_build",
+    "handle_replay_build",
     "handle_query_builds_by_location",
     "handle_get_build_status",
     # System handlers

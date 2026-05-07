@@ -966,6 +966,29 @@ class MinecraftAPIClient:
             )
             response.raise_for_status()
             return response.json()
+
+    async def replay_build(
+        self,
+        build_id: str
+    ) -> dict:
+        """
+        Replay a completed or failed build by resetting task state and re-executing.
+
+        Args:
+            build_id: Build UUID
+
+        Returns:
+            dict: Response containing replay acceptance status
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/builds/{build_id}/replay"
+            )
+            response.raise_for_status()
+            return response.json()
     
     async def query_builds_by_location(
         self,

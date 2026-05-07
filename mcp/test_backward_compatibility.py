@@ -73,6 +73,7 @@ def test_tool_names():
         "add_build_task_prefab_torch",
         "add_build_task_prefab_sign",
         "execute_build",
+        "replay_build",
         "query_builds_by_location",
         "get_build_status",
     ]

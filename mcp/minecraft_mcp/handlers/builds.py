@@ -736,6 +736,39 @@ async def handle_execute_build(
         return format_error_response(e, "executing build")
 
 
+async def handle_replay_build(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    **arguments
+) -> CallToolResult:
+    """
+    Replay a completed or failed build.
+
+    Args:
+        api_client: The Minecraft API client
+        build_id: Build UUID
+        **arguments: Additional arguments (ignored)
+
+    Returns:
+        CallToolResult with replay start result
+    """
+    try:
+        result = await api_client.replay_build(build_id)
+
+        if result.get("success"):
+            response_text = f"Replay started for build {result.get('build_id', build_id)}\n"
+            response_text += f"Success: {result['success']}\n"
+            response_text += f"Message: {result['message']}\n"
+            response_text += f"Build status: {result['status']}\n"
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to replay build: {result.get('error', 'Unknown error')}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "replaying build")
+
+
 async def handle_query_builds_by_location(
     api_client: MinecraftAPIClient,
     min_x: int,

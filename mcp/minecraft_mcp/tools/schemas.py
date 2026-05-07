@@ -1320,6 +1320,21 @@ TOOL_EXECUTE_BUILD = Tool(
     }
 )
 
+TOOL_REPLAY_BUILD = Tool(
+    name="replay_build",
+    description="Replay a completed or failed build by resetting its tasks and re-executing them.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {
+                "type": "string",
+                "description": "Build UUID"
+            }
+        },
+        "required": ["build_id"]
+    }
+)
+
 TOOL_QUERY_BUILDS_BY_LOCATION = Tool(
     name="query_builds_by_location",
     description="Find builds that intersect with a specified area. Useful to review and build upon existing builds.",
@@ -1611,6 +1626,7 @@ TOOL_SCHEMAS = [
     TOOL_ADD_BUILD_TASK_PREFAB_SIGN,
     TOOL_ADD_BUILD_TASK_PREFAB_LADDER,
     TOOL_EXECUTE_BUILD,
+    TOOL_REPLAY_BUILD,
     TOOL_QUERY_BUILDS_BY_LOCATION,
     TOOL_GET_BUILD_STATUS,
     TOOL_AUDIT_BUILD,

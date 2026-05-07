@@ -108,6 +108,7 @@ async def test_api_client_methods():
             "create_build",
             "add_build_task",
             "execute_build",
+            "replay_build",
             "query_builds_by_location",
             "get_build_status",
             "teleport_player",
