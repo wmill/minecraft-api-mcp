@@ -26,7 +26,7 @@ public final class IsoRenderer {
     }
 
     public static byte[] renderPng(BlockGrid grid, int scale, PreviewViewDirection viewDirection) throws IOException {
-        BufferedImage img = render(grid, scale);
+        BufferedImage img = render(grid, scale, viewDirection);
         if (viewDirection != PreviewViewDirection.SOUTH) {
             img = render(grid, scale, viewDirection);
         }
