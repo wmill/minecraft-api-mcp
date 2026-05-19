@@ -98,6 +98,7 @@ async def test_api_client_methods():
             "fill_box",
             "get_heightmap",
             "summarize_heightmap",
+            "preview_heightmap",
             "broadcast_message",
             "send_message_to_player",
             "place_nbt_structure",

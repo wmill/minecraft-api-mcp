@@ -296,6 +296,59 @@ TOOL_SUMMARIZE_HEIGHTMAP = Tool(
     }
 )
 
+TOOL_PREVIEW_HEIGHTMAP = Tool(
+    name="preview_heightmap",
+    description=(
+        "Render a flat-shaded isometric PNG terrain preview from sampled "
+        "heightmap data. This is a surface-only preview derived from the "
+        "selected heightmap type, not a textured world render."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "x1": {
+                "type": "integer",
+                "description": "First corner X coordinate (east positive, west negative)"
+            },
+            "z1": {
+                "type": "integer",
+                "description": "First corner Z coordinate (south positive, north negative)"
+            },
+            "x2": {
+                "type": "integer",
+                "description": "Second corner X coordinate (east positive, west negative)"
+            },
+            "z2": {
+                "type": "integer",
+                "description": "Second corner Z coordinate (south positive, north negative)"
+            },
+            "world": {
+                "type": "string",
+                "description": "World name (optional, defaults to minecraft:overworld)",
+                "default": "minecraft:overworld"
+            },
+            "heightmap_type": {
+                "type": "string",
+                "description": "Type of heightmap to generate",
+                "enum": ["WORLD_SURFACE", "MOTION_BLOCKING", "MOTION_BLOCKING_NO_LEAVES", "OCEAN_FLOOR"],
+                "default": "WORLD_SURFACE"
+            },
+            "iso_scale": {
+                "type": "integer",
+                "description": "Pixels per voxel edge unit (1-32). Default 6.",
+                "minimum": 1,
+                "maximum": 32
+            },
+            "view_direction": {
+                "type": "string",
+                "description": "Optional preview direction. `south` preserves the default view.",
+                "enum": ["south", "west", "north", "east"]
+            }
+        },
+        "required": ["x1", "z1", "x2", "z2"]
+    }
+)
+
 
 # Message Tools
 TOOL_BROADCAST_MESSAGE = Tool(
@@ -1637,6 +1690,7 @@ TOOL_SCHEMAS = [
     TOOL_FILL_BOX,
     TOOL_GET_HEIGHTMAP,
     TOOL_SUMMARIZE_HEIGHTMAP,
+    TOOL_PREVIEW_HEIGHTMAP,
     # Message tools
     TOOL_BROADCAST_MESSAGE,
     TOOL_SEND_MESSAGE_TO_PLAYER,

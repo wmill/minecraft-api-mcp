@@ -29,6 +29,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "fill_box": blocks.handle_fill_box,
     "get_heightmap": blocks.handle_get_heightmap,
     "summarize_heightmap": blocks.handle_summarize_heightmap,
+    "preview_heightmap": blocks.handle_preview_heightmap,
     
     # Message tools
     "broadcast_message": messages.handle_broadcast_message,

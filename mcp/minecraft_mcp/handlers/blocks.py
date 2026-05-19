@@ -4,9 +4,10 @@ Block-related tool handlers for the Minecraft MCP server.
 Handles tools for block manipulation, querying, and heightmaps.
 """
 
+import base64
 import json
 from typing import Any, Dict, List, Optional
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult, ImageContent, TextContent
 
 from ..client.minecraft_api import MinecraftAPIClient
 from ..utils.formatting import (
@@ -281,3 +282,56 @@ async def handle_summarize_heightmap(
             )
     except Exception as e:
         return format_error_response(e, "summarizing heightmap")
+
+
+HEIGHTMAP_PREVIEW_ADVISORY = (
+    "This is a flat-shaded isometric surface preview derived from the selected "
+    "heightmap. It is not a textured world render, and it only shows one "
+    "surface voxel per sampled column."
+)
+
+
+async def handle_preview_heightmap(
+    api_client: MinecraftAPIClient,
+    x1: int,
+    z1: int,
+    x2: int,
+    z2: int,
+    heightmap_type: str = "WORLD_SURFACE",
+    world: str = None,
+    iso_scale: Optional[int] = None,
+    view_direction: Optional[str] = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Render an isometric PNG terrain preview derived from sampled heightmap data.
+    """
+    try:
+        result = await api_client.preview_heightmap(
+            x1,
+            z1,
+            x2,
+            z2,
+            heightmap_type=heightmap_type,
+            world=world,
+            iso_scale=iso_scale,
+            view_direction=view_direction,
+        )
+
+        if result.get("status_code") != 200 or "png_bytes" not in result:
+            return CallToolResult(
+                content=[TextContent(
+                    type="text",
+                    text=f"❌ Heightmap preview failed: {result.get('error', 'Unknown error')}"
+                )]
+            )
+
+        encoded = base64.b64encode(result["png_bytes"]).decode("ascii")
+        return CallToolResult(
+            content=[
+                ImageContent(type="image", mimeType="image/png", data=encoded),
+                TextContent(type="text", text=HEIGHTMAP_PREVIEW_ADVISORY),
+            ]
+        )
+    except Exception as e:
+        return format_error_response(e, "rendering heightmap preview")

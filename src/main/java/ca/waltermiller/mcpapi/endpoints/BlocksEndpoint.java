@@ -1,5 +1,9 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.preview.BlockGrid;
+import ca.waltermiller.mcpapi.preview.IsoRenderer;
+import ca.waltermiller.mcpapi.preview.PreviewViewDirection;
+import ca.waltermiller.mcpapi.preview.TerrainHeightmapGridAdapter;
 import io.javalin.Javalin;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -17,8 +21,12 @@ public class BlocksEndpoint extends APIEndpoint {
     private final BlocksEndpointCore core;
     
     public BlocksEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
+        this(app, server, logger, new BlocksEndpointCore(server, logger));
+    }
+
+    BlocksEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger, BlocksEndpointCore core) {
         super(app, server, logger);
-        this.core = new BlocksEndpointCore(server, logger);
+        this.core = core;
         init();
     }
 
@@ -146,6 +154,59 @@ public class BlocksEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });
+
+        app.post("/api/world/blocks/heightmap/preview", ctx -> {
+            HeightmapPreviewRequest req = ctx.bodyAsClass(HeightmapPreviewRequest.class);
+
+            int scale = IsoRenderer.DEFAULT_SCALE;
+            if (req.iso_scale != null) {
+                if (req.iso_scale < 1 || req.iso_scale > 32) {
+                    ctx.status(400).json(Map.of("error", "iso_scale must be between 1 and 32"));
+                    return;
+                }
+                scale = req.iso_scale;
+            }
+
+            PreviewViewDirection viewDirection;
+            try {
+                viewDirection = PreviewViewDirection.fromQueryParam(req.view_direction);
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).json(Map.of("error", "view_direction must be one of: south, west, north, east"));
+                return;
+            }
+
+            HeightmapRequest heightmapRequest = new HeightmapRequest();
+            heightmapRequest.world = req.world;
+            heightmapRequest.x1 = req.x1;
+            heightmapRequest.z1 = req.z1;
+            heightmapRequest.x2 = req.x2;
+            heightmapRequest.z2 = req.z2;
+            heightmapRequest.heightmap_type = req.heightmap_type;
+
+            CompletableFuture<HeightmapResult> future = core.getHeightmap(heightmapRequest);
+
+            try {
+                HeightmapResult result = future.get(30, TimeUnit.SECONDS);
+                if (!result.success()) {
+                    ctx.status(isClientError(result.error()) ? 400 : 500).json(Map.of("error", result.error()));
+                    return;
+                }
+
+                BlockGrid grid = TerrainHeightmapGridAdapter.fromHeights(result.heights());
+                if (grid.isEmpty()) {
+                    ctx.status(400).json(Map.of("error", "Heightmap preview area produced no renderable terrain"));
+                    return;
+                }
+
+                byte[] png = IsoRenderer.renderPng(grid, scale, viewDirection);
+                ctx.contentType("image/png");
+                ctx.result(png);
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for heightmap preview operation"));
+            } catch (Exception e) {
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
     }
 
     /**
@@ -153,6 +214,15 @@ public class BlocksEndpoint extends APIEndpoint {
      */
     public BlocksEndpointCore getCore() {
         return core;
+    }
+
+    private static boolean isClientError(String error) {
+        if (error == null) {
+            return false;
+        }
+        return error.startsWith("Invalid")
+            || error.startsWith("Area too large")
+            || error.startsWith("Unknown world");
     }
 }
 
@@ -252,4 +322,9 @@ class HeightmapRequest {
     public int x2, z2; // second corner coordinate (only X and Z needed for heightmap)
     public String heightmap_type; // optional, defaults to WORLD_SURFACE
     // Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR
+}
+
+class HeightmapPreviewRequest extends HeightmapRequest {
+    public Integer iso_scale; // optional, defaults to 6
+    public String view_direction; // optional, defaults to south
 }

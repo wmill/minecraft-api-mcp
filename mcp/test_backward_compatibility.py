@@ -50,6 +50,7 @@ def test_tool_names():
         "fill_box",
         "get_heightmap",
         "summarize_heightmap",
+        "preview_heightmap",
         # Message tools
         "broadcast_message",
         "send_message_to_player",

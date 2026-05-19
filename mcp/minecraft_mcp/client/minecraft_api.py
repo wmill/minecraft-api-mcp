@@ -320,6 +320,59 @@ class MinecraftAPIClient:
         """
         return await self.get_heightmap(x1, z1, x2, z2, heightmap_type, world)
 
+    async def preview_heightmap(
+        self,
+        x1: int,
+        z1: int,
+        x2: int,
+        z2: int,
+        heightmap_type: str = "WORLD_SURFACE",
+        world: Optional[str] = None,
+        iso_scale: Optional[int] = None,
+        view_direction: Optional[str] = None,
+    ) -> dict:
+        """
+        Fetch a flat-shaded isometric PNG terrain preview derived from a heightmap.
+
+        Returns:
+            dict with keys:
+              - status_code: HTTP status
+              - content_type: response Content-Type
+              - png_bytes: raw PNG bytes (present when status=200)
+              - error: error message when non-200
+        """
+        payload = {
+            "x1": x1,
+            "z1": z1,
+            "x2": x2,
+            "z2": z2,
+            "heightmap_type": heightmap_type,
+        }
+        if world:
+            payload["world"] = world
+        if iso_scale is not None:
+            payload["iso_scale"] = iso_scale
+        if view_direction is not None:
+            payload["view_direction"] = view_direction
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/world/blocks/heightmap/preview",
+                json=payload,
+            )
+            result: dict = {
+                "status_code": response.status_code,
+                "content_type": response.headers.get("content-type", ""),
+            }
+            if response.status_code == 200:
+                result["png_bytes"] = response.content
+            else:
+                try:
+                    result["error"] = response.json().get("error", response.text)
+                except Exception:
+                    result["error"] = response.text or f"HTTP {response.status_code}"
+            return result
+
     async def broadcast_message(
         self,
         message: str,
