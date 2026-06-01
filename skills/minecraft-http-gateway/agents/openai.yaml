@@ -1,7 +1,7 @@
 interface:
   display_name: "Minecraft HTTP Gateway"
-  short_description: "Use the Minecraft API without MCP."
-  default_prompt: "Use $minecraft-http-gateway to inspect the server or perform Minecraft API actions through the bundled HTTP helper scripts."
+  short_description: "Use this repo's Minecraft HTTP API without MCP."
+  default_prompt: "Use $minecraft-http-gateway to inspect or modify the Minecraft server through the repo's HTTP helper scripts. Prefer read/queue/audit/execute/verify for non-trivial changes."
 
 policy:
   allow_implicit_invocation: true

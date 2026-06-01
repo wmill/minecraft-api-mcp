@@ -1,62 +1,61 @@
 # Build System Flows
 
-## Build Lifecycle
+Use `build_flow.py` for queued, auditable, replayable mutations.
 
-Use `build_flow.py` for the common build workflow:
-
-1. `create`
-2. `add-single-block` or `add-fill`
-3. `status`
-4. `execute`
-
-Examples:
+## Lifecycle
 
 ```bash
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py create --name "test build"
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py add-single-block --build-id <uuid> --x 0 --y 64 --z 0 --block-name minecraft:stone
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py status --build-id <uuid>
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py audit --build-id <uuid>
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py execute --build-id <uuid>
+```
+
+## Common Task Commands
+
+- `add-single-block`
+- `add-block-set`
+- `add-fill`
+- `add-door`
+- `add-stairs`
+- `add-window`
+- `add-torch`
+- `add-sign`
+- `add-ladder`
+
+Use `--task-order` on add commands to insert at a specific queue position.
+
+## Queue Maintenance
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py tasks --build-id <uuid>
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py update-task --build-id <uuid> --task-id <task> --description "new text"
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py delete-task --build-id <uuid> --task-id <task>
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py reorder --build-id <uuid> --task-id <first> --task-id <second>
+```
+
+## Preview
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py preview \
+  --build-id <uuid> \
+  --terrain-margin 3 \
+  --output /tmp/build-preview.png
 ```
 
 ## Rail Planning
 
-The rail planner is asynchronous.
-
-Start a plan:
+The rail planner is asynchronous:
 
 ```bash
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py plan-rail \
   --build-id <uuid> \
   --start-x 0 --start-y 64 --start-z 0 \
   --end-x 200 --end-y 64 --end-z 200
-```
 
-Poll the planning job:
-
-```bash
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py rail-status --job-id <uuid>
-```
-
-Audit the resulting build:
-
-```bash
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py audit --build-id <uuid>
 ```
 
-Run the full local debug loop:
-
-```bash
-uv run python skills/minecraft-http-gateway/scripts/rail_debug_e2e.py \
-  --start-x 0 --start-y 64 --start-z 0 \
-  --end-x 200 --end-y 64 --end-z 200
-```
-
-## When To Use Raw API
-
-If a task type is not wrapped by `build_flow.py`, call:
-
-- `POST /api/builds/{id}/tasks`
-- `PATCH /api/builds/{id}/tasks/{taskId}`
-- `DELETE /api/builds/{id}/tasks/{taskId}`
-- `POST /api/builds/{id}/audit`
-
-through `call_api.py`.
+For a full local rail debug loop, use `scripts/rail_debug_e2e.py`.

@@ -31,7 +31,7 @@ def request_json(method: str, url: str, data: str | None) -> object:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Call the Minecraft HTTP API directly.")
-    parser.add_argument("method", choices=["get", "post", "patch", "delete"])
+    parser.add_argument("method", choices=["get", "post", "put", "patch", "delete"])
     parser.add_argument("path", help="HTTP path like /api/world/players")
     parser.add_argument("--data", help="JSON request body")
     parser.add_argument("--query", action="append", default=[], help="Query parameter in key=value form")

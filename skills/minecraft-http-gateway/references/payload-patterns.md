@@ -1,5 +1,7 @@
 # Payload Patterns
 
+Use scripts first. Use `call_api.py` only when a helper does not cover the endpoint or when debugging raw payloads.
+
 ## Raw API Call
 
 ```bash
@@ -9,28 +11,56 @@ uv run python skills/minecraft-http-gateway/scripts/call_api.py \
   --data '{"x1":0,"y1":64,"z1":0,"x2":4,"y2":64,"z2":4,"block_type":"minecraft:stone"}'
 ```
 
-## Add A Single Block Build Task
+## Block Set Payload
 
-```bash
-uv run python skills/minecraft-http-gateway/scripts/build_flow.py add-single-block \
-  --build-id <uuid> \
-  --x 10 --y 64 --z 10 \
-  --block-name minecraft:stone
+The block array is ordered as X, then Y, then Z. Use `null` for no change.
+
+```json
+{
+  "start_x": 10,
+  "start_y": 64,
+  "start_z": 10,
+  "blocks": [
+    [
+      [
+        {
+          "block_name": "minecraft:oak_stairs",
+          "block_states": {
+            "facing": "south"
+          }
+        }
+      ]
+    ]
+  ]
+}
 ```
 
-## Add A Fill Build Task
+## Build Task Payload
 
-```bash
-uv run python skills/minecraft-http-gateway/scripts/build_flow.py add-fill \
-  --build-id <uuid> \
-  --x1 0 --y1 64 --z1 0 \
-  --x2 10 --y2 64 --z2 10 \
-  --block-type minecraft:stone
+```json
+{
+  "task_type": "BLOCK_FILL",
+  "description": "stone pad",
+  "task_data": {
+    "x1": 0,
+    "y1": 64,
+    "z1": 0,
+    "x2": 10,
+    "y2": 64,
+    "z2": 10,
+    "block_type": "minecraft:stone",
+    "notify_neighbors": false
+  }
+}
 ```
 
-## Read A Heightmap
+Common task types:
 
-```bash
-uv run python skills/minecraft-http-gateway/scripts/world_query.py heightmap \
-  --x1 -32 --z1 -32 --x2 32 --z2 32
-```
+- `BLOCK_SET`
+- `BLOCK_FILL`
+- `PREFAB_DOOR`
+- `PREFAB_STAIRS`
+- `PREFAB_WINDOW`
+- `PREFAB_TORCH`
+- `PREFAB_SIGN`
+- `PREFAB_LADDER`
