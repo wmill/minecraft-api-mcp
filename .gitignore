@@ -48,6 +48,8 @@ replay_*.log
 *.jfr
 
 __pycache__
+__pycache__/
+.venv/
 mcp-env
 *.egg-info/
 
@@ -58,3 +60,6 @@ server.properties
 # sample nbt files
 *.nbt
 *.nbt.gz
+
+# schematic service data
+schematic-service-data/
