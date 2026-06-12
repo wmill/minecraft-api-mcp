@@ -8,7 +8,7 @@ registry for tool discovery and routing.
 from typing import Callable, Optional
 from mcp.types import CallToolResult
 
-from ..handlers import world, blocks, messages, prefabs, builds, system, effects
+from ..handlers import world, blocks, messages, prefabs, builds, system, effects, schematics
 
 
 # Tool handler type
@@ -74,6 +74,11 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
 
     # Effect tools
     "rain_fire": effects.handle_rain_fire,
+
+    # Schematic library tools
+    "search_schematics": schematics.handle_search_schematics,
+    "get_schematic": schematics.handle_get_schematic,
+    "place_schematic": schematics.handle_place_schematic,
 }
 
 

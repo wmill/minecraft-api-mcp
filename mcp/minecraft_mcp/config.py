@@ -14,6 +14,7 @@ from dotenv import dotenv_values
 class ServerConfig:
     """Server configuration data."""
     base_url: str
+    schematic_service_url: str
     debug: bool
     script_dir: str
 
@@ -32,6 +33,7 @@ def load_config() -> ServerConfig:
     
     # Local default
     base_url = "http://localhost:7070"
+    schematic_service_url = "http://localhost:7080"
     
     # Read from .env file in the mcp directory
     env_file = os.path.join(script_dir, ".env")
@@ -42,12 +44,15 @@ def load_config() -> ServerConfig:
     
     if "BASE_URL" in config:
         base_url = config["BASE_URL"]
+    if "SCHEMATIC_SERVICE_URL" in config:
+        schematic_service_url = config["SCHEMATIC_SERVICE_URL"]
     
     # Check DEBUG mode
     debug = bool(os.getenv('DEBUG'))
     
     return ServerConfig(
         base_url=base_url,
+        schematic_service_url=schematic_service_url,
         debug=debug,
         script_dir=script_dir
     )
@@ -74,5 +79,6 @@ def setup_debug_mode():
 # Export the configuration for backward compatibility
 _config = load_config()
 BASE_URL = _config.base_url
+SCHEMATIC_SERVICE_URL = _config.schematic_service_url
 SCRIPT_DIR = _config.script_dir
 DEBUG = _config.debug

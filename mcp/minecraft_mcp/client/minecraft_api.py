@@ -5,6 +5,8 @@ HTTP client for communicating with the Minecraft Fabric mod REST API.
 Provides typed methods for each API endpoint with error handling.
 """
 
+import base64
+
 import httpx
 from typing import Any, Dict, List, Optional
 
@@ -521,23 +523,43 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        payload = {
-            "nbt_file_data": nbt_file_data,
-            "filename": filename,
+        nbt_bytes = base64.b64decode(nbt_file_data)
+        return await self.place_nbt_structure_bytes(
+            nbt_bytes, filename, x, y, z, world, rotation, include_entities, replace_blocks
+        )
+
+    async def place_nbt_structure_bytes(
+        self,
+        nbt_file_data: bytes,
+        filename: str,
+        x: int,
+        y: int,
+        z: int,
+        world: Optional[str] = None,
+        rotation: str = "NONE",
+        include_entities: bool = True,
+        replace_blocks: bool = True
+    ) -> dict:
+        data = {
             "x": x,
             "y": y,
             "z": z,
             "rotation": rotation,
-            "include_entities": include_entities,
-            "replace_blocks": replace_blocks
+            "include_entities": str(include_entities).lower(),
+            "replace_blocks": str(replace_blocks).lower()
         }
         if world:
-            payload["world"] = world
+            data["world"] = world
+
+        files = {
+            "nbt_file": (filename, nbt_file_data, "application/octet-stream")
+        }
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/structure/place",
-                json=payload
+                data=data,
+                files=files
             )
             response.raise_for_status()
             return response.json()

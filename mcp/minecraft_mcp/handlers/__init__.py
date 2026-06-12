@@ -60,6 +60,12 @@ from .effects import (
     handle_rain_fire
 )
 
+from .schematics import (
+    handle_search_schematics,
+    handle_get_schematic,
+    handle_place_schematic
+)
+
 __all__ = [
     # World handlers
     "handle_get_players",
@@ -104,4 +110,8 @@ __all__ = [
     "handle_test_server_connection",
     # Effect handlers
     "handle_rain_fire",
+    # Schematic handlers
+    "handle_search_schematics",
+    "handle_get_schematic",
+    "handle_place_schematic",
 ]

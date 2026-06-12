@@ -1663,6 +1663,108 @@ TOOL_RAIN_FIRE = Tool(
     }
 )
 
+# Schematic Library Tools
+TOOL_SEARCH_SCHEMATICS = Tool(
+    name="search_schematics",
+    description="Search the optional local schematic library for converted, placeable NBT prefabs",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Search text such as castle, tower, rustic cottage, bridge, or material names"
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum number of results",
+                "minimum": 1,
+                "maximum": 50,
+                "default": 10
+            },
+            "structure_type": {
+                "type": "string",
+                "description": "Optional exact structure type filter, such as tower, building, castle, or bridge"
+            },
+            "style": {
+                "type": "string",
+                "description": "Optional exact style filter, such as medieval or rustic"
+            },
+            "size_category": {
+                "type": "string",
+                "description": "Optional exact size category filter, such as small, medium, or large"
+            },
+            "has_interior": {
+                "type": "boolean",
+                "description": "Optional filter for schematics that have an interior"
+            }
+        },
+        "required": ["query"]
+    }
+)
+
+TOOL_GET_SCHEMATIC = Tool(
+    name="get_schematic",
+    description="Get metadata for one schematic from the optional local schematic library",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "schematic_id": {
+                "type": "string",
+                "description": "Numeric schematic ID"
+            }
+        },
+        "required": ["schematic_id"]
+    }
+)
+
+TOOL_PLACE_SCHEMATIC = Tool(
+    name="place_schematic",
+    description="Place a converted NBT schematic from the optional local schematic library",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "schematic_id": {
+                "type": "string",
+                "description": "Numeric schematic ID to place"
+            },
+            "x": {
+                "type": "integer",
+                "description": "X coordinate to place structure (east positive, west negative)"
+            },
+            "y": {
+                "type": "integer",
+                "description": "Y coordinate to place structure (elevation: -64 to 320, sea level at 63)"
+            },
+            "z": {
+                "type": "integer",
+                "description": "Z coordinate to place structure (south positive, north negative)"
+            },
+            "world": {
+                "type": "string",
+                "description": "World name (optional, defaults to minecraft:overworld)",
+                "default": "minecraft:overworld"
+            },
+            "rotation": {
+                "type": "string",
+                "description": "Structure rotation",
+                "enum": ["NONE", "CLOCKWISE_90", "CLOCKWISE_180", "COUNTERCLOCKWISE_90"],
+                "default": "NONE"
+            },
+            "include_entities": {
+                "type": "boolean",
+                "description": "Whether to include entities from the NBT structure",
+                "default": True
+            },
+            "replace_blocks": {
+                "type": "boolean",
+                "description": "Whether to replace existing blocks",
+                "default": True
+            }
+        },
+        "required": ["schematic_id", "x", "y", "z"]
+    }
+)
+
 #    "handle_coordinate_conventions"
 TOOL_HANDLE_COORDINATE_CONVENTIONS = Tool(
     name = "get_coordinate_conventions",
@@ -1730,4 +1832,8 @@ TOOL_SCHEMAS = [
     TOOL_PREVIEW_BUILD,
     # Effect tools
     TOOL_RAIN_FIRE,
+    # Schematic library tools
+    TOOL_SEARCH_SCHEMATICS,
+    TOOL_GET_SCHEMATIC,
+    TOOL_PLACE_SCHEMATIC,
 ]

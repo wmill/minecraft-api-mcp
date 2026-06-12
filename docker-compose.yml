@@ -108,6 +108,40 @@ services:
       - minecraft
     restart: unless-stopped
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    container_name: minecraft-schematic-elasticsearch
+    profiles:
+      - schematics
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - schematic_elasticsearch_data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+
+  schematic-service:
+    build:
+      context: ./schematic-service
+      dockerfile: Dockerfile
+    image: ghcr.io/wmill/minecraft-schematic-service:latest
+    container_name: minecraft-schematic-service
+    profiles:
+      - schematics
+    ports:
+      - "127.0.0.1:7080:7080"
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - SCHEMATIC_DATA_DIR=/data
+    volumes:
+      - ./schematic-service-data:/data:ro
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local
@@ -116,4 +150,6 @@ volumes:
   letsencrypt:
     driver: local
   certbot_www:
+    driver: local
+  schematic_elasticsearch_data:
     driver: local
