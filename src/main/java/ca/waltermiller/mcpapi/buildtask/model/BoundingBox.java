@@ -288,6 +288,30 @@ public class BoundingBox {
         return new BoundingBox(x, y, z, x, endY, z);
     }
 
+    public static BoundingBox fromNbtStructureRequest(JsonNode taskData) {
+        if (taskData == null) {
+            return null;
+        }
+
+        if (!(taskData.has("x") && taskData.has("y") && taskData.has("z") &&
+              taskData.has("size_x") && taskData.has("size_y") && taskData.has("size_z"))) {
+            return null;
+        }
+
+        int x = taskData.get("x").asInt();
+        int y = taskData.get("y").asInt();
+        int z = taskData.get("z").asInt();
+        int sizeX = taskData.get("size_x").asInt();
+        int sizeY = taskData.get("size_y").asInt();
+        int sizeZ = taskData.get("size_z").asInt();
+
+        if (sizeX <= 0 || sizeY <= 0 || sizeZ <= 0) {
+            return null;
+        }
+
+        return new BoundingBox(x, y, z, x + sizeX - 1, y + sizeY - 1, z + sizeZ - 1);
+    }
+
     public static BoundingBox fromRailSegmentRequest(JsonNode taskData) {
         if (taskData == null || !taskData.has("path") || !taskData.get("path").isArray()) {
             return null;
@@ -349,6 +373,8 @@ public class BoundingBox {
             case RAIL_BRIDGE_SEGMENT:
             case RAIL_TUNNEL_SEGMENT:
                 return fromRailSegmentRequest(taskData);
+            case NBT_STRUCTURE:
+                return fromNbtStructureRequest(taskData);
             default:
                 return null;
         }

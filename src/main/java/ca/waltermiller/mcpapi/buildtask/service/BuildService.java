@@ -4,6 +4,8 @@ import ca.waltermiller.mcpapi.buildtask.model.*;
 import ca.waltermiller.mcpapi.buildtask.repository.BuildRepository;
 import ca.waltermiller.mcpapi.buildtask.repository.TaskRepository;
 import ca.waltermiller.mcpapi.endpoints.TaskExecutor;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +55,33 @@ public class BuildService {
         Build savedBuild = buildRepository.create(build);
         
         logger.info("Created build with ID: {}", savedBuild.getId());
+        return savedBuild;
+    }
+
+    /**
+     * Records a completed NBT structure placement as a build entry for spatial awareness.
+     * The build and its single task are immediately marked COMPLETED — no execution needed.
+     */
+    public Build recordNbtPlacement(String filename, String world, int x, int y, int z,
+                                    int sizeX, int sizeY, int sizeZ, String rotation) throws SQLException {
+        Build build = new Build("NBT: " + filename, "Auto-recorded NBT structure placement", world);
+        Build savedBuild = buildRepository.create(build);
+
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode taskData = mapper.createObjectNode()
+            .put("x", x).put("y", y).put("z", z)
+            .put("size_x", sizeX).put("size_y", sizeY).put("size_z", sizeZ)
+            .put("filename", filename).put("rotation", rotation);
+
+        BuildTask task = new BuildTask(savedBuild.getId(), 0, TaskType.NBT_STRUCTURE, taskData,
+            "NBT structure placement");
+        task.markCompleted();
+        taskRepository.create(task);
+
+        savedBuild.setStatus(BuildStatus.COMPLETED);
+        buildRepository.update(savedBuild);
+
+        logger.info("Recorded NBT placement '{}' at ({},{},{}) as build {}", filename, x, y, z, savedBuild.getId());
         return savedBuild;
     }
 
@@ -274,9 +303,12 @@ public class BuildService {
                 build.setStatus(BuildStatus.CREATED);
                 buildRepository.update(build);
 
-                // Reset all task statuses to PENDING
+                // Reset all task statuses to QUEUED, except NBT_STRUCTURE which cannot be replayed
                 List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
                 for (BuildTask task : tasks) {
+                    if (task.getTaskType() == TaskType.NBT_STRUCTURE) {
+                        continue;
+                    }
                     task.resetForReplay();
                     taskRepository.update(task);
                 }

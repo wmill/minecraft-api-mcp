@@ -15,5 +15,6 @@ public enum TaskType {
     PREFAB_LADDER,  // Uses PrefabEndpoint.ladder
     RAIL_SURFACE_SEGMENT,
     RAIL_BRIDGE_SEGMENT,
-    RAIL_TUNNEL_SEGMENT
+    RAIL_TUNNEL_SEGMENT,
+    NBT_STRUCTURE
 }

@@ -44,13 +44,13 @@ public class APIServer {
         new PlayersEndpoint(app, server, logger);
         new MessageEndpoint(app, server, logger);
         new PlayerTeleportEndpoint(app, server, logger);
-        new NBTStructureEndpoint(app, server, logger);
+        NBTStructureEndpoint nbtEndpoint = new NBTStructureEndpoint(app, server, logger);
         new PrefabEndpoint(app, server, logger);
         new RainFireEndpoint(app, server, logger);
 
         // Initialize build task management system
         try {
-            initializeBuildTaskSystem(app, server, logger);
+            initializeBuildTaskSystem(app, server, logger, nbtEndpoint);
         } catch (SQLException | RuntimeException e) {
             logger.error("Failed to initialize build task system", e);
             // Continue without build task system if database is not available
@@ -58,7 +58,8 @@ public class APIServer {
         }
     }
     
-    private static void initializeBuildTaskSystem(Javalin app, MinecraftServer server, org.slf4j.Logger logger) throws SQLException {
+    private static void initializeBuildTaskSystem(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
+                                                   NBTStructureEndpoint nbtEndpoint) throws SQLException {
         logger.info("Initializing build task management system...");
         
         // Initialize database
@@ -79,9 +80,12 @@ public class APIServer {
         RailPlanningService railPlanningService = new RailPlanningService(
             buildRepository, buildService, railPlanningJobRepository, server, logger);
         
+        // Wire build service into NBT endpoint for spatial record-keeping
+        nbtEndpoint.setBuildService(buildService);
+
         // Create and register build task endpoint
         new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, railPlanningService, taskExecutor);
-        
+
         logger.info("Build task management system initialized successfully");
     }
 }

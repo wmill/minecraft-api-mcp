@@ -56,8 +56,10 @@ async def handle_place_nbt_structure(
         
         if result.get("success"):
             position = {"x": x, "y": y, "z": z}
-            extra_info = f"Filename: {filename}\nRotation: {rotation}"
-            return format_success_with_position("placed", "NBT structure", position, extra_info)
+            extra_parts = [f"Filename: {filename}", f"Rotation: {rotation}"]
+            if result.get("build_id"):
+                extra_parts.append(f"Recorded as build: {result['build_id']}")
+            return format_success_with_position("placed", "NBT structure", position, "\n".join(extra_parts))
         else:
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to place NBT structure: {result}")]

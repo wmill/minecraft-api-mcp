@@ -1,5 +1,7 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.buildtask.model.Build;
+import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import io.javalin.Javalin;
 import io.javalin.http.UploadedFile;
 import net.minecraft.nbt.NbtCompound;
@@ -18,6 +20,7 @@ import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
 
 import java.io.*;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -27,9 +30,15 @@ import org.jetbrains.annotations.NotNull;
 
 public class NBTStructureEndpoint extends APIEndpoint {
 
+    private BuildService buildService;
+
     public NBTStructureEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
         super(app, server, logger);
         registerEndpoints();
+    }
+
+    public void setBuildService(BuildService buildService) {
+        this.buildService = buildService;
     }
 
     protected void registerEndpoints() {
@@ -149,17 +158,29 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         LOGGER.info("Successfully placed NBT structure '{}' ({}x{}x{}) at ({}, {}, {})",
                             nbtFile.filename(), size.getX(), size.getY(), size.getZ(), x, y, z);
 
-                        future.complete(Map.of(
-                            "success", true,
-                            "message", "Structure placed successfully",
-                            "filename", nbtFile.filename(),
-                            "position", Map.of("x", x, "y", y, "z", z),
-                            "world", worldName,
-                            "structure_size", Map.of("x", size.getX(), "y", size.getY(), "z", size.getZ()),
-                            "rotation", rotation.toString(),
-                            "include_entities", includeEntities,
-                            "replace_blocks", replaceBlocks
-                        ));
+                        Map<String, Object> response = new HashMap<>();
+                        response.put("success", true);
+                        response.put("message", "Structure placed successfully");
+                        response.put("filename", nbtFile.filename());
+                        response.put("position", Map.of("x", x, "y", y, "z", z));
+                        response.put("world", worldName);
+                        response.put("structure_size", Map.of("x", size.getX(), "y", size.getY(), "z", size.getZ()));
+                        response.put("rotation", rotation.toString());
+                        response.put("include_entities", includeEntities);
+                        response.put("replace_blocks", replaceBlocks);
+
+                        if (buildService != null) {
+                            try {
+                                Build recorded = buildService.recordNbtPlacement(
+                                    nbtFile.filename(), worldName, x, y, z,
+                                    size.getX(), size.getY(), size.getZ(), rotation.toString());
+                                response.put("build_id", recorded.getId().toString());
+                            } catch (Exception e) {
+                                LOGGER.warn("Failed to record NBT placement in build system: {}", e.getMessage());
+                            }
+                        }
+
+                        future.complete(response);
                     } else {
                         LOGGER.warn("Failed to place NBT structure '{}' at ({}, {}, {})",
                             nbtFile.filename(), x, y, z);

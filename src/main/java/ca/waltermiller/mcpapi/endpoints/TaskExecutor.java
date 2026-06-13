@@ -92,6 +92,8 @@ public class TaskExecutor {
                 case RAIL_SURFACE_SEGMENT -> executeRailSegmentTask(task, "surface");
                 case RAIL_BRIDGE_SEGMENT -> executeRailSegmentTask(task, "bridge");
                 case RAIL_TUNNEL_SEGMENT -> executeRailSegmentTask(task, "tunnel");
+                case NBT_STRUCTURE -> CompletableFuture.completedFuture(
+                    new TaskExecutionResult(false, "NBT_STRUCTURE tasks cannot be replayed — NBT data is not stored", null));
                 default -> CompletableFuture.completedFuture(
                     new TaskExecutionResult(false, "Unknown task type: " + task.getTaskType(), null));
             };
@@ -146,6 +148,8 @@ public class TaskExecutor {
                 case RAIL_SURFACE_SEGMENT -> dispatchRailSegmentInto(task, sink, "surface");
                 case RAIL_BRIDGE_SEGMENT -> dispatchRailSegmentInto(task, sink, "bridge");
                 case RAIL_TUNNEL_SEGMENT -> dispatchRailSegmentInto(task, sink, "tunnel");
+                case NBT_STRUCTURE ->
+                    new TaskExecutionResult(false, "NBT_STRUCTURE tasks cannot be replayed — NBT data is not stored", null);
                 default -> new TaskExecutionResult(false, "Unknown task type: " + task.getTaskType(), null);
             };
         } catch (Exception e) {

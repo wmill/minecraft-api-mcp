@@ -154,6 +154,7 @@ async def handle_place_schematic(
         )
 
     title = metadata.get("title", f"Schematic {schematic_id}")
-    return format_success_response(
-        f"Placed schematic {schematic_id} ({title}) at ({x}, {y}, {z}) with rotation {rotation}."
-    )
+    msg = f"Placed schematic {schematic_id} ({title}) at ({x}, {y}, {z}) with rotation {rotation}."
+    if result.get("build_id"):
+        msg += f"\nRecorded as build: {result['build_id']}"
+    return format_success_response(msg)
