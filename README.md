@@ -1,25 +1,31 @@
 # Minecraft API and MCP
 
-Adds a rest api to minecraft and implements an MCP server so that you can play around with it in Claude Desktop or other LLMs.
+Adds a REST API to Minecraft and implements an MCP server so that you can play around with it in Claude Desktop or other LLMs.
 
 # Basics and setup
 
-So there are MCP clinets like Claude Desktop or Goose which connect to the LLM and run MCP commands with the server.
+There are MCP clients like Claude Desktop or Goose which connect to the LLM and run MCP commands with the server.
 
-Next there is the MCP server, which for this project runs locally from the `mcp` dicrectory. 
+Next there is the MCP server, which for this project runs locally from the `mcp` directory.
 
 ## MCP Server Config
 
-I'm running evertying with uv. You should be able to do a `uv sync` then `uv run minecraft_mcp.py` to start it up.
+I'm running everything with uv. You should be able to do a `uv sync` then `uv run minecraft_mcp.py` to start it up.
 You can also start it in sse mode with `uv run minecraft_mcp.py --transport sse --port 3001`.
 
 I'm using python `3.13.9`. Some of the dependencies don't support 3.14 yet.
 
 Try `npx @modelcontextprotocol/inspector uv run  minecraft_mcp.py` to make sure it's listing tools. 
 
-The mcp server will aim at localhost:7070 by default.
+The MCP server will aim at localhost:7070 by default.
 
 You can change this with `mcp/.env`, it will check the BASE_URL value, eg `BASE_URL="http://localhost:7070"`
+
+The optional schematic service defaults to `http://localhost:7080`. Override it in `mcp/.env` with:
+
+```bash
+SCHEMATIC_SERVICE_URL="http://localhost:7080"
+```
 
 ## MCP Client config
 
@@ -35,13 +41,53 @@ cd -
 
 Then tell it to run the script.
 
-Visual Studio Code was able to use the Claude Desktop settings after going through some conifg options.
+Visual Studio Code was able to use the Claude Desktop settings after going through some config options.
 
 ## Minecraft Server setup
 
 First you'll need the postgres image up and running `docker compose up -d postgres`
 
 After that the gradle runServer command worked for me. Kudos to the fabric devs.
+
+## Schematic service
+
+There is an optional schematic catalog service in `schematic-service/`. It searches metadata from local schematic analysis and serves converted vanilla NBT files so MCP can place them through the existing `/api/world/structure/place` endpoint.
+
+The local data lives under `schematic-service-data/` and is intentionally ignored by git. Current expected inputs are:
+
+- `schematic-service-data/schematic_catalog_gemma3.json` - primary AI-generated catalog
+- `schematic-service-data/Schematics-nbt/{schematic_id}.nbt` - converted vanilla NBT files
+- `schematic-service-data/schematic-images/{schematic_id}/meta.json` - image/conversion metadata used for enrichment
+
+Start the optional stack with:
+
+```bash
+docker compose --profile schematics up -d elasticsearch schematic-service
+curl -X POST http://localhost:7080/index/rebuild
+```
+
+The schematic service is not required for normal Minecraft development. You can still run only Postgres and the Minecraft server; schematic MCP tools will report that the service is unavailable.
+
+For local service development:
+
+```bash
+cd schematic-service
+uv run uvicorn schematic_service.app:app --host 0.0.0.0 --port 7080
+```
+
+Useful endpoints:
+
+- `GET http://localhost:7080/health`
+- `POST http://localhost:7080/index/rebuild`
+- `GET http://localhost:7080/schematics/search?q=tower&limit=5`
+- `GET http://localhost:7080/schematics/2`
+- `GET http://localhost:7080/schematics/2/nbt`
+
+MCP tools added for this flow:
+
+- `search_schematics`
+- `get_schematic`
+- `place_schematic`
 
 ## Rail planning debug loop
 

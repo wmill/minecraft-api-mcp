@@ -10,6 +10,8 @@ This is a Minecraft 1.21.7 Fabric mod combined with a Python Model Context Proto
 - Java Fabric mod with Javalin REST API server
 - Python MCP server with stdio and SSE transport support
 - PostgreSQL database for persistent build task management
+- Optional Python schematic catalog service on port 7080
+- Optional Elasticsearch-backed schematic search index
 - Docker containerization for deployment
 
 ## Build and Development Commands
@@ -61,6 +63,10 @@ open build/reports/tests/test/index.html  # View test report
 docker-compose up -d      # Start all services
 docker-compose logs -f minecraft  # Follow logs
 docker-compose down       # Stop all services
+
+# Optional schematic catalog/search stack
+docker compose --profile schematics up -d elasticsearch schematic-service
+curl -X POST http://localhost:7080/index/rebuild
 ```
 
 ### Python MCP Server
@@ -73,6 +79,17 @@ uv run minecraft_mcp.py
 
 # Run with SSE transport (web clients, Claude API)
 uv run minecraft_mcp.py --transport sse --host 0.0.0.0 --port 3000
+```
+
+### Python Schematic Service
+```bash
+cd schematic-service
+
+# Run the optional schematic catalog API locally
+uv run uvicorn schematic_service.app:app --host 0.0.0.0 --port 7080
+
+# Smoke-check local catalog loading
+uv run python -c "from schematic_service.config import load_config; from schematic_service.catalog import load_catalog; c=load_config(); docs=load_catalog(c.catalog_path,c.nbt_dir,c.images_dir); print(len(docs), sum(1 for d in docs if d['placeable']))"
 ```
 
 ## Architecture
@@ -162,6 +179,7 @@ DB_PASSWORD=your_password
 
 #### API Client
 - **`client/minecraft_api.py`**: `MinecraftAPIClient` - Async HTTP client using httpx for all Minecraft REST endpoints
+- **`client/schematic_service.py`**: `SchematicServiceClient` - Async HTTP client for the optional schematic catalog service
 
 #### Tool System
 - **`handlers/`**: Tool handler functions organized by domain:
@@ -171,6 +189,7 @@ DB_PASSWORD=your_password
   - `prefabs.py` - Prefab placement tools
   - `builds.py` - Build task management tools (create builds, add tasks, execute, audit, query by location, get status, rail planning)
   - `system.py` - System tools
+  - `schematics.py` - Optional schematic search, metadata lookup, and NBT placement orchestration
 
 - **`tools/`**: Tool definitions and registry:
   - `registry.py` - Maps tool names to handler functions
@@ -179,6 +198,37 @@ DB_PASSWORD=your_password
 - **`utils/`**: Shared utilities:
   - `formatting.py` - Response formatting helpers
   - `helpers.py` - General helper utilities
+
+### Optional Schematic Service Architecture
+
+**Location**: `/schematic-service/`
+
+This service is intentionally separate from the Minecraft mod. The Minecraft server must start and run normally when Elasticsearch and the schematic service are unavailable.
+
+**Data inputs** live under `schematic-service-data/`, which is ignored by git:
+- `schematic_catalog_gemma3.json` - primary AI-generated searchable catalog
+- `Schematics-nbt/{schematic_id}.nbt` - converted vanilla NBT files that can be placed
+- `schematic-images/{schematic_id}/meta.json` - conversion/image metadata used for enrichment
+
+**Service modules:**
+- `app.py` - FastAPI routes for health, search, metadata, NBT download, and index rebuild
+- `catalog.py` - Catalog normalization and metadata enrichment; strips local `source` paths from public responses
+- `search.py` - Elasticsearch indexing/search plus local fallback search
+- `config.py` - Environment-driven paths and Elasticsearch URL
+
+**HTTP API:**
+- `GET /health`
+- `POST /index/rebuild`
+- `GET /schematics/search?q=...&limit=...`
+- `GET /schematics/{schematic_id}`
+- `GET /schematics/{schematic_id}/nbt`
+
+**MCP tools using this service:**
+- `search_schematics`
+- `get_schematic`
+- `place_schematic`
+
+`place_schematic` fetches NBT bytes from the schematic service, then calls the Minecraft NBT placement endpoint via multipart upload. Keep this orchestration in MCP unless there is a strong reason to couple the Minecraft mod directly to the schematic service.
 
 ### Key Patterns
 
@@ -189,6 +239,7 @@ DB_PASSWORD=your_password
 5. **Async Operations**: Use `CompletableFuture` for non-blocking build task execution
 6. **Error Handling**: Return proper HTTP status codes with JSON error objects
 7. **MCP Tool Design**: Each tool handler returns `CallToolResult` with formatted text content
+8. **Optional Services**: Schematic service and Elasticsearch must fail gracefully from MCP and must not affect Minecraft startup
 
 ### Dependencies
 
@@ -209,6 +260,12 @@ DB_PASSWORD=your_password
 - uvicorn >= 0.23.0 - ASGI server
 - debugpy >= 1.8.19 - Debugging support
 - requests >= 2.32.5 - Synchronous HTTP (used in some utilities)
+
+**Schematic Service (`schematic-service/pyproject.toml`):**
+- fastapi - HTTP API
+- httpx - Elasticsearch HTTP client
+- python-dotenv - Environment configuration
+- uvicorn - ASGI server
 
 ### Resource Structure
 
@@ -235,6 +292,11 @@ DB_PASSWORD=your_password
 - `test_stdio_transport.py` - Stdio transport tests
 - `test_debug_mode.py` - Debug mode tests
 - `test_final_verification.py` - Final verification tests
+- `test_schematic_tools.py` - Schematic MCP tool registration/config tests
+
+**Schematic Service Tests** (`schematic-service/`):
+- `test_catalog.py` - Catalog normalization and metadata sanitization
+- `test_search.py` - Local fallback search behavior
 
 **Testing Best Practices** (see TESTING.md):
 - Extract pure logic from endpoints into testable helper methods
@@ -255,9 +317,12 @@ Minecraft uses a right-handed 3D coordinate system:
 
 - Mod ID is "mcpapi" (defined in `ExampleMod.MOD_ID`)
 - Web API server runs on port 7070, starts automatically with Minecraft server
+- Optional schematic service runs on port 7080 when started
 - Database schema auto-creates on first server start
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
 - Build tasks are executed asynchronously and can be queried by location for spatial awareness
+- Run Python commands from the relevant Python project with `uv run`
+- Keep `schematic-service-data/` local-only; do not commit converted NBT files, source schematics, rendered images, or generated catalog data
 - MCP server uses stdio transport by default (for Claude Desktop) but supports SSE for web clients
 - Fat JAR includes all dependencies; remapped JAR is for distribution to other servers
 - Container deployment requires setting `eula=true` in eula.txt and downloading Fabric server JAR
@@ -275,6 +340,8 @@ The project includes full Docker containerization with PostgreSQL:
 - `postgres` - PostgreSQL 16 database on port 5432
 - `minecraft` - Fabric server with mod on ports 25565 (game) and 7070 (API)
 - `nginx` - Optional reverse proxy with basic auth support
+- `elasticsearch` - Optional schematic search index, enabled by the `schematics` profile
+- `schematic-service` - Optional schematic catalog/NBT service on port 7080, enabled by the `schematics` profile
 
 **Database access:**
 ```bash
