@@ -63,8 +63,11 @@ Start the optional stack with:
 
 ```bash
 docker compose --profile schematics up -d elasticsearch schematic-service
+curl http://localhost:7080/health
 curl -X POST http://localhost:7080/index/rebuild
 ```
+
+The `index/rebuild` call initializes the Elasticsearch index from `schematic_catalog_gemma3.json`. Run it after starting the schematic service for the first time, and run it again whenever the catalog, converted NBT files, or image metadata changes. If Elasticsearch is still starting, wait until `/health` reports it as available and retry the rebuild.
 
 The schematic service is not required for normal Minecraft development. You can still run only Postgres and the Minecraft server; schematic MCP tools will report that the service is unavailable.
 
