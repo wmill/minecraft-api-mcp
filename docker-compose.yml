@@ -122,6 +122,12 @@ services:
     volumes:
       - schematic_elasticsearch_data:/usr/share/elasticsearch/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health?wait_for_status=yellow || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   schematic-service:
     build:
@@ -139,7 +145,8 @@ services:
     volumes:
       - ./schematic-service-data:/data:ro
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

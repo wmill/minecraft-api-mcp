@@ -1,0 +1,334 @@
+openapi: 3.1.0
+info:
+  title: Minecraft Schematic Service
+  description: Optional catalog and search service for Minecraft schematics, running on port 7080. Provides AI-generated searchable metadata, NBT file downloads, and Elasticsearch-backed search with local fallback.
+  version: 0.0.1
+
+servers:
+  - url: http://localhost:7080
+    description: Local schematic service
+
+tags:
+  - name: system
+    description: Health and index management
+  - name: schematics
+    description: Schematic search, metadata, and NBT download
+
+paths:
+
+  /health:
+    get:
+      tags: [system]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /index/rebuild:
+    post:
+      tags: [system]
+      summary: Rebuild the Elasticsearch search index from the catalog
+      operationId: rebuildIndex
+      responses:
+        "200":
+          description: Index rebuilt successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RebuildResponse"
+        "503":
+          description: Elasticsearch unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /schematics/search:
+    get:
+      tags: [schematics]
+      summary: Search schematics by text and optional filters
+      operationId: searchSchematics
+      parameters:
+        - name: q
+          in: query
+          description: Search query text
+          schema:
+            type: string
+            default: ""
+        - name: limit
+          in: query
+          description: Maximum number of results (1–50)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: structure_type
+          in: query
+          description: Filter by structure type (e.g. tower, building, bridge)
+          schema:
+            type: string
+        - name: style
+          in: query
+          description: Filter by architectural style (e.g. medieval, rustic, modern)
+          schema:
+            type: string
+        - name: size_category
+          in: query
+          description: Filter by size category
+          schema:
+            type: string
+        - name: has_interior
+          in: query
+          description: Filter by whether the schematic has an interior
+          schema:
+            type: boolean
+        - name: placeable
+          in: query
+          description: Only return schematics with an NBT file available for placement
+          schema:
+            type: boolean
+            default: true
+        - name: fallback
+          in: query
+          description: Fall back to local search when Elasticsearch is unavailable
+          schema:
+            type: boolean
+            default: true
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "503":
+          description: Elasticsearch unavailable and fallback=false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /schematics/{schematic_id}:
+    get:
+      tags: [schematics]
+      summary: Get schematic metadata by ID
+      operationId: getSchematic
+      parameters:
+        - $ref: "#/components/parameters/SchematicId"
+      responses:
+        "200":
+          description: Schematic metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchematicDocument"
+        "404":
+          description: Schematic not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Catalog data unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /schematics/{schematic_id}/nbt:
+    get:
+      tags: [schematics]
+      summary: Download the NBT file for a schematic
+      operationId: getSchematicNbt
+      parameters:
+        - $ref: "#/components/parameters/SchematicId"
+      responses:
+        "200":
+          description: NBT binary file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid schematic_id (must be numeric)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: NBT file not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Catalog data unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+
+  parameters:
+    SchematicId:
+      name: schematic_id
+      in: path
+      required: true
+      description: Numeric schematic identifier
+      schema:
+        type: string
+        example: "12345"
+
+  schemas:
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        catalog_exists:
+          type: boolean
+        nbt_dir_exists:
+          type: boolean
+        elasticsearch:
+          type: object
+          properties:
+            available:
+              type: boolean
+            elasticsearch:
+              type: object
+              description: Cluster health info from Elasticsearch
+              nullable: true
+            error:
+              type: string
+              nullable: true
+      required: [ok, catalog_exists, nbt_dir_exists, elasticsearch]
+
+    RebuildResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        indexed:
+          type: integer
+          description: Number of documents indexed
+      required: [success, indexed]
+
+    SchematicDocument:
+      type: object
+      description: Catalog entry for a single schematic
+      properties:
+        schematic_id:
+          type: string
+          description: Numeric identifier
+          example: "12345"
+        title:
+          type: string
+          example: Medieval Watchtower
+        description:
+          type: string
+        keywords:
+          type: string
+          description: Space-separated searchable keywords
+        structure_type:
+          type: string
+          example: tower
+        style:
+          type: string
+          example: medieval
+        placement:
+          type: object
+          description: Placement notes and constraints
+          properties:
+            notes:
+              type: string
+        size_category:
+          type: string
+          example: medium
+        has_interior:
+          type: boolean
+          nullable: true
+        confidence:
+          type: number
+          format: float
+          nullable: true
+          description: Catalog generation confidence score
+        size:
+          type: object
+          description: Bounding box dimensions in blocks
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+            length:
+              type: integer
+        non_air_block_count:
+          type: integer
+          nullable: true
+        placeable:
+          type: boolean
+          description: Whether an NBT file is available for placement
+        nbt_filename:
+          type: string
+          nullable: true
+          description: Filename of the NBT file if placeable
+        image_metadata:
+          type: object
+          description: Subset of image conversion metadata (size, non_air_block_count, non_air_bbox, placement, top_blocks)
+        search_text:
+          type: string
+          description: Concatenated searchable text used for local fallback search
+      required:
+        - schematic_id
+        - title
+        - description
+        - keywords
+        - structure_type
+        - style
+        - placement
+        - size_category
+        - size
+        - placeable
+        - image_metadata
+        - search_text
+
+    SearchResult:
+      allOf:
+        - $ref: "#/components/schemas/SchematicDocument"
+        - type: object
+          properties:
+            score:
+              type: number
+              format: float
+              description: Relevance score from search engine
+          required: [score]
+
+    SearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        count:
+          type: integer
+        source:
+          type: string
+          enum: [elasticsearch, local]
+          description: Which search backend served this response
+      required: [results, count, source]

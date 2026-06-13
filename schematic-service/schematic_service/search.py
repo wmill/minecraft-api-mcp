@@ -23,7 +23,7 @@ class SchematicSearchIndex:
                 response.raise_for_status()
                 return {"available": True, "elasticsearch": response.json()}
         except Exception as exc:
-            return {"available": False, "error": str(exc)}
+            return {"available": False, "error": repr(exc)}
 
     async def rebuild(self, docs: list[dict[str, Any]]) -> dict[str, Any]:
         mapping = {
@@ -72,7 +72,7 @@ class SchematicSearchIndex:
                 refresh_response.raise_for_status()
                 return {"indexed": len(docs)}
         except Exception as exc:
-            raise SearchUnavailable(str(exc)) from exc
+            raise SearchUnavailable(repr(exc)) from exc
 
     async def search(
         self,
@@ -106,7 +106,7 @@ class SchematicSearchIndex:
                 hits = response.json().get("hits", {}).get("hits", [])
                 return [hit.get("_source", {}) | {"score": hit.get("_score")} for hit in hits]
         except Exception as exc:
-            raise SearchUnavailable(str(exc)) from exc
+            raise SearchUnavailable(repr(exc)) from exc
 
 
 def json_dumps(value: Any) -> str:

@@ -86,7 +86,8 @@ uv run minecraft_mcp.py --transport sse --host 0.0.0.0 --port 3000
 cd schematic-service
 
 # Run the optional schematic catalog API locally
-uv run uvicorn schematic_service.app:app --host 0.0.0.0 --port 7080
+uv run schematic-service                                      # uses main.py entrypoint (port 7080)
+uv run uvicorn schematic_service.app:app --host 0.0.0.0 --port 7080  # equivalent direct form
 
 # Smoke-check local catalog loading
 uv run python -c "from schematic_service.config import load_config; from schematic_service.catalog import load_catalog; c=load_config(); docs=load_catalog(c.catalog_path,c.nbt_dir,c.images_dir); print(len(docs), sum(1 for d in docs if d['placeable']))"
@@ -212,14 +213,25 @@ This service is intentionally separate from the Minecraft mod. The Minecraft ser
 
 **Service modules:**
 - `app.py` - FastAPI routes for health, search, metadata, NBT download, and index rebuild
-- `catalog.py` - Catalog normalization and metadata enrichment; strips local `source` paths from public responses
+- `catalog.py` - Catalog normalization and metadata enrichment; restricts which meta.json fields are exposed publicly via `PUBLIC_META_KEYS`
 - `search.py` - Elasticsearch indexing/search plus local fallback search
 - `config.py` - Environment-driven paths and Elasticsearch URL
+- `main.py` - CLI entrypoint invoked by the `schematic-service` script
+
+**Configuration via environment variables (or `.env` in `schematic-service/`):**
+```bash
+SCHEMATIC_DATA_DIR=../schematic-service-data   # root data directory
+SCHEMATIC_CATALOG_PATH=...                     # path to schematic_catalog_gemma3.json
+SCHEMATIC_NBT_DIR=...                          # path to Schematics-nbt/
+SCHEMATIC_IMAGES_DIR=...                       # path to schematic-images/
+ELASTICSEARCH_URL=http://localhost:9200
+SCHEMATIC_INDEX=minecraft_schematics
+```
 
 **HTTP API:**
 - `GET /health`
 - `POST /index/rebuild`
-- `GET /schematics/search?q=...&limit=...`
+- `GET /schematics/search?q=...&limit=...&structure_type=...&style=...&size_category=...&has_interior=...&placeable=true&fallback=true`
 - `GET /schematics/{schematic_id}`
 - `GET /schematics/{schematic_id}/nbt`
 
@@ -262,10 +274,10 @@ This service is intentionally separate from the Minecraft mod. The Minecraft ser
 - requests >= 2.32.5 - Synchronous HTTP (used in some utilities)
 
 **Schematic Service (`schematic-service/pyproject.toml`):**
-- fastapi - HTTP API
-- httpx - Elasticsearch HTTP client
-- python-dotenv - Environment configuration
-- uvicorn - ASGI server
+- fastapi >= 0.115.0 - HTTP API
+- httpx >= 0.27.0 - Elasticsearch HTTP client
+- python-dotenv >= 1.0.0 - Environment configuration
+- uvicorn >= 0.30.0 - ASGI server
 
 ### Resource Structure
 

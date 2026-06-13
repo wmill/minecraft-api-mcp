@@ -1,0 +1,1995 @@
+openapi: 3.1.0
+info:
+  title: Minecraft MCP API
+  description: REST API exposed by the Minecraft Fabric mod on port 7070. Wraps world manipulation, build task management, and prefab placement.
+  version: 0.0.1
+
+servers:
+  - url: http://localhost:7070
+    description: Local Minecraft server
+
+tags:
+  - name: system
+    description: Health and connectivity
+  - name: players
+    description: Player queries and teleportation
+  - name: entities
+    description: Entity listing and spawning
+  - name: blocks
+    description: Block read/write, fill, and heightmap
+  - name: messages
+    description: Broadcast and targeted messages
+  - name: prefabs
+    description: Prefab structure placement (doors, stairs, windows, etc.)
+  - name: structures
+    description: NBT structure placement
+  - name: effects
+    description: World effects
+  - name: builds
+    description: Build task CRUD, execution, audit, preview, and rail planning
+
+paths:
+
+  # ── System ──────────────────────────────────────────────────────────────────
+
+  /api/test:
+    get:
+      tags: [system]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Server is running
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Server is running
+
+  # ── Players ─────────────────────────────────────────────────────────────────
+
+  /api/world/players:
+    get:
+      tags: [players]
+      summary: List online players
+      operationId: getPlayers
+      responses:
+        "200":
+          description: Array of online players with positions and rotations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlayerInfo"
+
+  /api/players/teleport:
+    post:
+      tags: [players]
+      summary: Teleport a player
+      operationId: teleportPlayer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeleportRequest"
+      responses:
+        "200":
+          description: Teleport successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeleportResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Player not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ── Entities ─────────────────────────────────────────────────────────────────
+
+  /api/world/entities:
+    get:
+      tags: [entities]
+      summary: List available entity types
+      operationId: getEntities
+      responses:
+        "200":
+          description: Array of entity types
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EntityInfo"
+
+  /api/world/entities/spawn:
+    post:
+      tags: [entities]
+      summary: Spawn an entity
+      operationId: spawnEntity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitySpawnRequest"
+      responses:
+        "200":
+          description: Entity spawned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitySpawnResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ── Blocks ───────────────────────────────────────────────────────────────────
+
+  /api/world/blocks/list:
+    get:
+      tags: [blocks]
+      summary: List available block types
+      operationId: listBlocks
+      responses:
+        "200":
+          description: Array of block types
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlockInfo"
+
+  /api/world/blocks/set:
+    post:
+      tags: [blocks]
+      summary: Set a 3-D array of blocks
+      operationId: setBlocks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlockSetRequest"
+      responses:
+        "200":
+          description: Blocks placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockSetResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/blocks/chunk:
+    post:
+      tags: [blocks]
+      summary: Read a 3-D chunk of blocks
+      operationId: getBlocksChunk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChunkRequest"
+      responses:
+        "200":
+          description: Block chunk data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChunkResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/blocks/fill:
+    post:
+      tags: [blocks]
+      summary: Fill a rectangular region with a single block type
+      operationId: fillBox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FillBoxRequest"
+      responses:
+        "200":
+          description: Fill completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FillResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/blocks/heightmap:
+    post:
+      tags: [blocks]
+      summary: Get heightmap for a region
+      operationId: getHeightmap
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeightmapRequest"
+      responses:
+        "200":
+          description: Heightmap data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeightmapResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/blocks/heightmap/preview:
+    post:
+      tags: [blocks]
+      summary: Render isometric heightmap preview as PNG
+      operationId: previewHeightmap
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeightmapPreviewRequest"
+      responses:
+        "200":
+          description: PNG image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: No blocks in region
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ── Messages ─────────────────────────────────────────────────────────────────
+
+  /api/message/broadcast:
+    post:
+      tags: [messages]
+      summary: Broadcast a message to all players
+      operationId: broadcastMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BroadcastRequest"
+      responses:
+        "200":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BroadcastResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/message/player:
+    post:
+      tags: [messages]
+      summary: Send a message to a specific player
+      operationId: sendMessageToPlayer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerMessageRequest"
+      responses:
+        "200":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerMessageResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ── Prefabs ──────────────────────────────────────────────────────────────────
+
+  /api/world/prefabs/door:
+    post:
+      tags: [prefabs]
+      summary: Place one or more doors
+      operationId: placeDoor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoorRequest"
+      responses:
+        "200":
+          description: Doors placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DoorResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/prefabs/stairs:
+    post:
+      tags: [prefabs]
+      summary: Build a staircase
+      operationId: placeStairs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StairsRequest"
+      responses:
+        "200":
+          description: Staircase placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StairsResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/prefabs/window-pane:
+    post:
+      tags: [prefabs]
+      summary: Place a wall of window panes
+      operationId: placeWindowPane
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WindowPaneRequest"
+      responses:
+        "200":
+          description: Window panes placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WindowPaneResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/prefabs/torch:
+    post:
+      tags: [prefabs]
+      summary: Place a torch
+      operationId: placeTorch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TorchRequest"
+      responses:
+        "200":
+          description: Torch placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TorchResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/prefabs/sign:
+    post:
+      tags: [prefabs]
+      summary: Place a sign with text
+      operationId: placeSign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignRequest"
+      responses:
+        "200":
+          description: Sign placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/prefabs/ladder:
+    post:
+      tags: [prefabs]
+      summary: Place a vertical ladder
+      operationId: placeLadder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LadderRequest"
+      responses:
+        "200":
+          description: Ladder placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LadderResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ── Structures ───────────────────────────────────────────────────────────────
+
+  /api/world/structure/place:
+    post:
+      tags: [structures]
+      summary: Place an NBT structure (multipart upload)
+      operationId: placeNbtStructure
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/NbtStructurePlaceRequest"
+      responses:
+        "200":
+          description: Structure placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NbtStructurePlaceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ── Effects ──────────────────────────────────────────────────────────────────
+
+  /api/world/effects/rain-fire:
+    post:
+      tags: [effects]
+      summary: Rain fire over a circular area
+      operationId: rainFire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RainFireRequest"
+      responses:
+        "200":
+          description: Fire placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RainFireResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ── Builds ───────────────────────────────────────────────────────────────────
+
+  /api/builds:
+    post:
+      tags: [builds]
+      summary: Create a new build
+      operationId: createBuild
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBuildRequest"
+      responses:
+        "201":
+          description: Build created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/query-location:
+    post:
+      tags: [builds]
+      summary: Find builds overlapping a bounding box
+      operationId: queryBuildsByLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationQueryRequest"
+      responses:
+        "200":
+          description: Matching builds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationQueryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}:
+    get:
+      tags: [builds]
+      summary: Get build with all tasks
+      operationId: getBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: Build details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildDetailResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}/tasks:
+    get:
+      tags: [builds]
+      summary: List tasks for a build
+      operationId: getBuildTasks
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: Task list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+    post:
+      tags: [builds]
+      summary: Add a task to a build
+      operationId: addBuildTask
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddTaskRequest"
+      responses:
+        "201":
+          description: Task added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+    put:
+      tags: [builds]
+      summary: Reorder all tasks for a build
+      operationId: reorderBuildTasks
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderTasksRequest"
+      responses:
+        "200":
+          description: Tasks reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReorderTasksResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}/tasks/{taskId}:
+    delete:
+      tags: [builds]
+      summary: Delete a task from a build
+      operationId: deleteBuildTask
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Task deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteTaskResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+    patch:
+      tags: [builds]
+      summary: Update a task's data or description
+      operationId: updateBuildTask
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - $ref: "#/components/parameters/TaskId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskRequest"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}/execute:
+    post:
+      tags: [builds]
+      summary: Start executing a build asynchronously
+      operationId: executeBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "202":
+          description: Execution started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AsyncAcceptedResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}/replay:
+    post:
+      tags: [builds]
+      summary: Reset and re-execute all tasks for a build
+      operationId: replayBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "202":
+          description: Replay started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AsyncAcceptedResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}/preview:
+    get:
+      tags: [builds]
+      summary: Render isometric build preview as PNG
+      operationId: previewBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - name: iso_scale
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 32
+            default: 6
+        - name: terrain_margin
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 8
+            default: 0
+        - name: view_direction
+          in: query
+          schema:
+            $ref: "#/components/schemas/ViewDirection"
+      responses:
+        "200":
+          description: PNG image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: No blocks to render
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}/audit:
+    post:
+      tags: [builds]
+      summary: Audit a build for issues
+      operationId: auditBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: Audit results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}/plan-rail:
+    post:
+      tags: [builds]
+      summary: Start async rail route planning
+      operationId: planRail
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartRailPlanningRequest"
+      responses:
+        "202":
+          description: Planning job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RailPlanningJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/rail-plans/{jobId}:
+    get:
+      tags: [builds]
+      summary: Poll rail planning job status
+      operationId: getRailPlanStatus
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Planning job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RailPlanningJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+# ── Components ───────────────────────────────────────────────────────────────
+
+components:
+
+  parameters:
+    BuildId:
+      name: id
+      in: path
+      required: true
+      description: Build UUID
+      schema:
+        type: string
+        format: uuid
+
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      description: Task UUID
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Conflict:
+      description: Operation not allowed in current state
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+
+    # ── Shared primitives ──────────────────────────────────────────────────────
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+    World:
+      type: string
+      default: minecraft:overworld
+      example: minecraft:overworld
+
+    Position3D:
+      type: object
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+        z:
+          type: number
+      required: [x, y, z]
+
+    BlockData:
+      type: object
+      properties:
+        block_name:
+          type: string
+          example: minecraft:stone
+        block_states:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            facing: north
+      required: [block_name]
+
+    BuildStatus:
+      type: string
+      enum: [CREATED, IN_PROGRESS, COMPLETED, FAILED]
+
+    TaskStatus:
+      type: string
+      enum: [QUEUED, EXECUTING, COMPLETED, FAILED]
+
+    TaskType:
+      type: string
+      enum:
+        - BLOCK_SET
+        - BLOCK_FILL
+        - PREFAB_DOOR
+        - PREFAB_STAIRS
+        - PREFAB_WINDOW
+        - PREFAB_TORCH
+        - PREFAB_SIGN
+        - PREFAB_LADDER
+        - RAIL_SURFACE_SEGMENT
+        - RAIL_BRIDGE_SEGMENT
+        - RAIL_TUNNEL_SEGMENT
+
+    HeightmapType:
+      type: string
+      enum: [WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR]
+      default: WORLD_SURFACE
+
+    BlockRotation:
+      type: string
+      enum: [NONE, CLOCKWISE_90, CLOCKWISE_180, COUNTERCLOCKWISE_90]
+      default: NONE
+
+    ViewDirection:
+      type: string
+      enum: [south, west, north, east]
+      default: south
+
+    Build:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        world:
+          $ref: "#/components/schemas/World"
+        status:
+          $ref: "#/components/schemas/BuildStatus"
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+      required: [id, name, world, status, created_at]
+
+    BuildTask:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        build_id:
+          type: string
+          format: uuid
+        task_order:
+          type: integer
+        task_type:
+          $ref: "#/components/schemas/TaskType"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        task_data:
+          type: object
+          description: Task-specific JSON payload
+        description:
+          type: string
+        executed_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+      required: [id, build_id, task_order, task_type, status, task_data]
+
+    # ── Players ───────────────────────────────────────────────────────────────
+
+    PlayerInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        uuid:
+          type: string
+          format: uuid
+        position:
+          $ref: "#/components/schemas/Position3D"
+        rotation:
+          type: object
+          properties:
+            yaw:
+              type: number
+            pitch:
+              type: number
+          required: [yaw, pitch]
+      required: [name, uuid, position, rotation]
+
+    TeleportRequest:
+      type: object
+      properties:
+        player_name:
+          type: string
+        x:
+          type: number
+        y:
+          type: number
+        z:
+          type: number
+        dimension:
+          $ref: "#/components/schemas/World"
+        yaw:
+          type: number
+          default: 0.0
+        pitch:
+          type: number
+          default: 0.0
+      required: [player_name, x, y, z]
+
+    TeleportResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+        player_name:
+          type: string
+        x:
+          type: number
+        y:
+          type: number
+        z:
+          type: number
+        dimension:
+          type: string
+        yaw:
+          type: number
+        pitch:
+          type: number
+
+    # ── Entities ──────────────────────────────────────────────────────────────
+
+    EntityInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          example: minecraft:zombie
+        display_name:
+          type: string
+      required: [id, display_name]
+
+    EntitySpawnRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          example: minecraft:zombie
+        world:
+          $ref: "#/components/schemas/World"
+        x:
+          type: number
+        y:
+          type: number
+        z:
+          type: number
+      required: [type, x, y, z]
+
+    EntitySpawnResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        type:
+          type: string
+        uuid:
+          type: string
+          format: uuid
+        position:
+          $ref: "#/components/schemas/Position3D"
+
+    # ── Blocks ────────────────────────────────────────────────────────────────
+
+    BlockInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          example: minecraft:stone
+        display_name:
+          type: string
+      required: [id, display_name]
+
+    BlockSetRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        start_x:
+          type: integer
+        start_y:
+          type: integer
+        start_z:
+          type: integer
+        blocks:
+          type: array
+          description: 3-D array [x][y][z]; null entries are skipped
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                oneOf:
+                  - $ref: "#/components/schemas/BlockData"
+                  - type: "null"
+      required: [start_x, start_y, start_z, blocks]
+
+    BlockSetResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        blocks_set:
+          type: integer
+        blocks_skipped:
+          type: integer
+        world:
+          type: string
+
+    ChunkRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        start_x:
+          type: integer
+        start_y:
+          type: integer
+        start_z:
+          type: integer
+        size_x:
+          type: integer
+        size_y:
+          type: integer
+        size_z:
+          type: integer
+      required: [start_x, start_y, start_z, size_x, size_y, size_z]
+
+    ChunkResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        start_position:
+          $ref: "#/components/schemas/Position3D"
+        size:
+          $ref: "#/components/schemas/Position3D"
+        blocks:
+          type: array
+          description: 3-D array [x][y][z]
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/BlockData"
+
+    FillBoxRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        x1:
+          type: integer
+        y1:
+          type: integer
+        z1:
+          type: integer
+        x2:
+          type: integer
+        y2:
+          type: integer
+        z2:
+          type: integer
+        block_type:
+          type: string
+          example: minecraft:stone
+        notify_neighbors:
+          type: boolean
+          default: false
+      required: [x1, y1, z1, x2, y2, z2, block_type]
+
+    FillResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        blocks_set:
+          type: integer
+        blocks_failed:
+          type: integer
+        total_blocks:
+          type: integer
+        world:
+          type: string
+        box_bounds:
+          type: object
+
+    HeightmapRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        x1:
+          type: integer
+        z1:
+          type: integer
+        x2:
+          type: integer
+        z2:
+          type: integer
+        heightmap_type:
+          $ref: "#/components/schemas/HeightmapType"
+      required: [x1, z1, x2, z2]
+
+    HeightmapResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        area_bounds:
+          type: object
+        size:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+        heightmap_type:
+          type: string
+        height_range:
+          type: object
+          properties:
+            min:
+              type: integer
+            max:
+              type: integer
+        heights:
+          type: array
+          description: 2-D array of height values
+          items:
+            type: array
+            items:
+              type: integer
+
+    HeightmapPreviewRequest:
+      allOf:
+        - $ref: "#/components/schemas/HeightmapRequest"
+        - type: object
+          properties:
+            iso_scale:
+              type: integer
+              minimum: 1
+              maximum: 32
+              default: 6
+            view_direction:
+              $ref: "#/components/schemas/ViewDirection"
+
+    # ── Messages ──────────────────────────────────────────────────────────────
+
+    BroadcastRequest:
+      type: object
+      properties:
+        message:
+          type: string
+        action_bar:
+          type: boolean
+      required: [message, action_bar]
+
+    BroadcastResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        player_count:
+          type: integer
+
+    PlayerMessageRequest:
+      type: object
+      properties:
+        message:
+          type: string
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        action_bar:
+          type: boolean
+      required: [message, action_bar]
+
+    PlayerMessageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    # ── Prefabs ───────────────────────────────────────────────────────────────
+
+    DoorRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        start_x:
+          type: integer
+        start_y:
+          type: integer
+        start_z:
+          type: integer
+        width:
+          type: integer
+          default: 1
+        facing:
+          type: string
+          example: north
+        block_type:
+          type: string
+          example: minecraft:oak_door
+        hinge:
+          type: string
+          enum: [left, right]
+          default: left
+        open:
+          type: boolean
+          default: false
+        double_doors:
+          type: boolean
+          default: false
+      required: [start_x, start_y, start_z, facing, block_type]
+
+    DoorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        doors_placed:
+          type: integer
+        facing:
+          type: string
+        hinge:
+          type: string
+        open:
+          type: boolean
+
+    StairsRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        start_x:
+          type: integer
+        start_y:
+          type: integer
+        start_z:
+          type: integer
+        end_x:
+          type: integer
+        end_y:
+          type: integer
+        end_z:
+          type: integer
+        block_type:
+          type: string
+          example: minecraft:oak_stairs
+        stair_type:
+          type: string
+        staircase_direction:
+          type: string
+        fill_support:
+          type: boolean
+          default: false
+      required: [start_x, start_y, start_z, end_x, end_y, end_z, block_type, stair_type, staircase_direction]
+
+    StairsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        blocks_placed:
+          type: integer
+        staircase_direction:
+          type: string
+        fill_support:
+          type: boolean
+
+    WindowPaneRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        start_x:
+          type: integer
+        start_y:
+          type: integer
+        start_z:
+          type: integer
+        end_x:
+          type: integer
+        end_z:
+          type: integer
+        height:
+          type: integer
+        block_type:
+          type: string
+          example: minecraft:glass_pane
+        waterlogged:
+          type: boolean
+          default: false
+      required: [start_x, start_y, start_z, end_x, end_z, height, block_type]
+
+    WindowPaneResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        panes_placed:
+          type: integer
+        orientation:
+          type: string
+        waterlogged:
+          type: boolean
+
+    TorchRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        x:
+          type: integer
+        y:
+          type: integer
+        z:
+          type: integer
+        block_type:
+          type: string
+          example: minecraft:torch
+        facing:
+          type: string
+          description: Required for wall torches (north/south/east/west)
+      required: [x, y, z, block_type]
+
+    TorchResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        position:
+          $ref: "#/components/schemas/Position3D"
+        block_type:
+          type: string
+        wall_mounted:
+          type: boolean
+        facing:
+          type: string
+
+    SignRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        x:
+          type: integer
+        y:
+          type: integer
+        z:
+          type: integer
+        block_type:
+          type: string
+          example: minecraft:oak_sign
+        front_lines:
+          type: array
+          maxItems: 4
+          items:
+            type: string
+        back_lines:
+          type: array
+          maxItems: 4
+          items:
+            type: string
+        facing:
+          type: string
+          description: For wall signs
+        rotation:
+          type: integer
+          minimum: 0
+          maximum: 15
+          description: For standing signs
+        glowing:
+          type: boolean
+          default: false
+      required: [x, y, z, block_type]
+
+    SignResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        position:
+          $ref: "#/components/schemas/Position3D"
+        block_type:
+          type: string
+        sign_type:
+          type: string
+          enum: [wall, standing]
+        glowing:
+          type: boolean
+        facing:
+          type: string
+        rotation:
+          type: integer
+
+    LadderRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        x:
+          type: integer
+        y:
+          type: integer
+        z:
+          type: integer
+        height:
+          type: integer
+        block_type:
+          type: string
+          example: minecraft:ladder
+        facing:
+          type: string
+      required: [x, y, z, height, block_type]
+
+    LadderResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        blocks_placed:
+          type: integer
+        facing:
+          type: string
+        start_position:
+          $ref: "#/components/schemas/Position3D"
+        end_position:
+          $ref: "#/components/schemas/Position3D"
+
+    # ── Structures ────────────────────────────────────────────────────────────
+
+    NbtStructurePlaceRequest:
+      type: object
+      properties:
+        nbt_file:
+          type: string
+          format: binary
+          description: NBT structure file
+        world:
+          type: string
+          default: minecraft:overworld
+        x:
+          type: integer
+          default: 0
+        y:
+          type: integer
+          default: 64
+        z:
+          type: integer
+          default: 0
+        rotation:
+          $ref: "#/components/schemas/BlockRotation"
+        include_entities:
+          type: string
+          enum: ["true", "false"]
+          default: "true"
+        replace_blocks:
+          type: string
+          enum: ["true", "false"]
+          default: "true"
+      required: [nbt_file]
+
+    NbtStructurePlaceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        filename:
+          type: string
+        position:
+          $ref: "#/components/schemas/Position3D"
+        world:
+          type: string
+        structure_size:
+          $ref: "#/components/schemas/Position3D"
+        rotation:
+          type: string
+        include_entities:
+          type: boolean
+        replace_blocks:
+          type: boolean
+
+    # ── Effects ───────────────────────────────────────────────────────────────
+
+    RainFireRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        x:
+          type: integer
+          description: Center X
+        z:
+          type: integer
+          description: Center Z
+        radius:
+          type: integer
+          minimum: 1
+          maximum: 56
+        density:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+        seed:
+          type: integer
+          format: int64
+      required: [x, z, radius, density]
+
+    RainFireResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        fires_placed:
+          type: integer
+        columns_considered:
+          type: integer
+        center:
+          type: object
+          properties:
+            x:
+              type: integer
+            z:
+              type: integer
+        radius:
+          type: integer
+        density:
+          type: number
+
+    # ── Builds ────────────────────────────────────────────────────────────────
+
+    CreateBuildRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        world:
+          $ref: "#/components/schemas/World"
+      required: [name]
+
+    BuildResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        build:
+          $ref: "#/components/schemas/Build"
+
+    BuildDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        build:
+          $ref: "#/components/schemas/Build"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuildTask"
+
+    TaskResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        task:
+          $ref: "#/components/schemas/BuildTask"
+
+    TaskListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        build_id:
+          type: string
+          format: uuid
+        task_count:
+          type: integer
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuildTask"
+
+    AddTaskRequest:
+      type: object
+      properties:
+        task_type:
+          $ref: "#/components/schemas/TaskType"
+        task_data:
+          type: object
+          description: Task-specific JSON payload
+        description:
+          type: string
+        task_order:
+          type: integer
+          description: Insert at this position; appended if omitted
+      required: [task_type, task_data]
+
+    ReorderTasksRequest:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuildTask"
+      required: [tasks]
+
+    ReorderTasksResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        build_id:
+          type: string
+          format: uuid
+        task_count:
+          type: integer
+        message:
+          type: string
+
+    DeleteTaskResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        build_id:
+          type: string
+          format: uuid
+        deleted_task_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+
+    UpdateTaskRequest:
+      type: object
+      properties:
+        task_data:
+          type: object
+        description:
+          type: string
+
+    AsyncAcceptedResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        build_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+        status:
+          type: string
+          example: accepted
+
+    AuditResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        build_id:
+          type: string
+          format: uuid
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                type: string
+                enum: [warning, error]
+              task_id:
+                type: string
+                format: uuid
+              task_order:
+                type: integer
+              check:
+                type: string
+              message:
+                type: string
+        summary:
+          type: object
+          properties:
+            warnings:
+              type: integer
+            errors:
+              type: integer
+
+    LocationQueryRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        min_x:
+          type: integer
+        min_y:
+          type: integer
+        min_z:
+          type: integer
+        max_x:
+          type: integer
+        max_y:
+          type: integer
+        max_z:
+          type: integer
+        include_in_progress:
+          type: boolean
+          default: false
+      required: [min_x, min_y, min_z, max_x, max_y, max_z]
+
+    LocationQueryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        query_area:
+          type: object
+          properties:
+            min_x:
+              type: integer
+            min_y:
+              type: integer
+            min_z:
+              type: integer
+            max_x:
+              type: integer
+            max_y:
+              type: integer
+            max_z:
+              type: integer
+            world:
+              type: string
+        build_count:
+          type: integer
+        total_task_count:
+          type: integer
+        builds:
+          type: array
+          items:
+            type: object
+
+    StartRailPlanningRequest:
+      type: object
+      properties:
+        world:
+          $ref: "#/components/schemas/World"
+        start_x:
+          type: integer
+        start_y:
+          type: integer
+        start_z:
+          type: integer
+        end_x:
+          type: integer
+        end_y:
+          type: integer
+        end_z:
+          type: integer
+        weight_overrides:
+          type: object
+          additionalProperties:
+            type: number
+        rail_bed_block:
+          type: string
+          default: minecraft:stone
+        support_block:
+          type: string
+          default: minecraft:stone_bricks
+        power_block:
+          type: string
+          default: minecraft:redstone_block
+        tunnel_lining_block:
+          type: string
+          default: minecraft:stone_bricks
+      required: [start_x, start_y, start_z, end_x, end_y, end_z]
+
+    RailPlanningJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        build_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PLANNING, COMPLETED, FAILED]
+        phase:
+          type: string
+        sampled_area_count:
+          type: integer
+        route_length:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+        result:
+          type: object
+
+    RailPlanningJobResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        planning_job:
+          $ref: "#/components/schemas/RailPlanningJob"
