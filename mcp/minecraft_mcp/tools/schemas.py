@@ -1664,6 +1664,24 @@ TOOL_RAIN_FIRE = Tool(
 )
 
 # Schematic Library Tools
+TOOL_GET_SCHEMATIC_TAGS = Tool(
+    name="get_schematic_tags",
+    description="List top available tags and filters from the optional local schematic library",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "limit": {
+                "type": "integer",
+                "description": "Maximum number of tags and facet values to return",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 20
+            }
+        },
+        "required": []
+    }
+)
+
 TOOL_SEARCH_SCHEMATICS = Tool(
     name="search_schematics",
     description="Search the optional local schematic library for converted, placeable NBT prefabs",
@@ -1833,6 +1851,7 @@ TOOL_SCHEMAS = [
     # Effect tools
     TOOL_RAIN_FIRE,
     # Schematic library tools
+    TOOL_GET_SCHEMATIC_TAGS,
     TOOL_SEARCH_SCHEMATICS,
     TOOL_GET_SCHEMATIC,
     TOOL_PLACE_SCHEMATIC,

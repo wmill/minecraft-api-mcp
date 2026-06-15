@@ -31,6 +31,42 @@ def _unavailable(error: Exception) -> CallToolResult:
     )
 
 
+async def handle_get_schematic_tags(
+    api_client: MinecraftAPIClient,
+    limit: int = 20,
+    **arguments,
+) -> CallToolResult:
+    try:
+        result = await _schematic_client().get_schematic_tags(limit=limit)
+    except httpx.HTTPError as exc:
+        return _unavailable(exc)
+    except Exception as exc:
+        return format_error_response(exc, "getting schematic tags")
+
+    def format_items(items: list[dict], key: str) -> str:
+        return ", ".join(f"{item.get(key)} ({item.get('count', 0)})" for item in items if item.get(key))
+
+    facets = result.get("facets") or {}
+    lines = [f"Available placeable schematic hints via {result.get('source', 'service')}:"]
+
+    tag_text = format_items(result.get("tags") or [], "tag")
+    if tag_text:
+        lines.append(f"Top tags: {tag_text}")
+
+    for label, name in (
+        ("Structure types", "structure_type"),
+        ("Styles", "style"),
+        ("Sizes", "size_category"),
+    ):
+        text = format_items(facets.get(name) or [], "value")
+        if text:
+            lines.append(f"{label}: {text}")
+
+    if len(lines) == 1:
+        return format_success_response("No placeable schematic tags found.")
+    return format_success_response("\n".join(lines))
+
+
 async def handle_search_schematics(
     api_client: MinecraftAPIClient,
     query: str,

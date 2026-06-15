@@ -76,6 +76,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "rain_fire": effects.handle_rain_fire,
 
     # Schematic library tools
+    "get_schematic_tags": schematics.handle_get_schematic_tags,
     "search_schematics": schematics.handle_search_schematics,
     "get_schematic": schematics.handle_get_schematic,
     "place_schematic": schematics.handle_place_schematic,

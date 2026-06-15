@@ -11,6 +11,15 @@ class SchematicServiceClient:
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
 
+    async def get_schematic_tags(self, limit: int = 20) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"{self.base_url}/schematics/tags",
+                params={"limit": limit, "placeable": True},
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def search_schematics(
         self,
         query: str,

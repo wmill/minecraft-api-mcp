@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 
 from .catalog import load_catalog
 from .config import ServiceConfig, load_config
-from .search import SchematicSearchIndex, SearchUnavailable, local_search
+from .search import SchematicSearchIndex, SearchUnavailable, local_search, local_top_tags
 
 
 def create_app(config: ServiceConfig | None = None) -> FastAPI:
@@ -74,6 +74,23 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             results = local_search(catalog_docs(), q, limit, filters)
             source = "local"
         return {"results": results, "count": len(results), "source": source}
+
+    @app.get("/schematics/tags")
+    async def get_schematic_tags(
+        limit: int = Query(20, ge=1, le=100),
+        placeable: bool | None = True,
+        fallback: bool = True,
+    ) -> dict[str, Any]:
+        filters = {"placeable": placeable}
+        try:
+            result = await search_index.top_tags(limit, filters)
+            source = "elasticsearch"
+        except SearchUnavailable as exc:
+            if not fallback:
+                raise HTTPException(status_code=503, detail=f"elasticsearch unavailable: {exc}") from exc
+            result = local_top_tags(catalog_docs(), limit, filters)
+            source = "local"
+        return {**result, "source": source}
 
     @app.get("/schematics/{schematic_id}")
     async def get_schematic(schematic_id: str) -> dict[str, Any]:

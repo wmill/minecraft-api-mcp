@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 import httpx
@@ -33,6 +34,7 @@ class SchematicSearchIndex:
                     "title": {"type": "text"},
                     "description": {"type": "text"},
                     "keywords": {"type": "text"},
+                    "keyword_tags": {"type": "keyword"},
                     "search_text": {"type": "text"},
                     "structure_type": {"type": "keyword"},
                     "style": {"type": "keyword"},
@@ -71,6 +73,32 @@ class SchematicSearchIndex:
                 refresh_response = await client.post(f"{self.elasticsearch_url}/{self.index_name}/_refresh")
                 refresh_response.raise_for_status()
                 return {"indexed": len(docs)}
+        except Exception as exc:
+            raise SearchUnavailable(repr(exc)) from exc
+
+    async def top_tags(
+        self,
+        limit: int,
+        filters: dict[str, Any],
+    ) -> dict[str, Any]:
+        size = max(1, min(limit, 100))
+        filter_clauses = [{"term": {key: value}} for key, value in filters.items() if value is not None]
+        body = {
+            "query": {"bool": {"filter": filter_clauses}},
+            "size": 0,
+            "aggs": {
+                "tags": {"terms": {"field": "keyword_tags", "size": size}},
+                "structure_type": {"terms": {"field": "structure_type", "size": size}},
+                "style": {"terms": {"field": "style", "size": size}},
+                "size_category": {"terms": {"field": "size_category", "size": size}},
+            },
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(f"{self.elasticsearch_url}/{self.index_name}/_search", json=body)
+                response.raise_for_status()
+                return format_top_tags(response.json().get("aggregations", {}))
         except Exception as exc:
             raise SearchUnavailable(repr(exc)) from exc
 
@@ -113,6 +141,59 @@ def json_dumps(value: Any) -> str:
     import json
 
     return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+
+
+def format_top_tags(aggregations: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "tags": [
+            {"tag": bucket.get("key"), "count": bucket.get("doc_count", 0)}
+            for bucket in aggregations.get("tags", {}).get("buckets", [])
+        ],
+        "facets": {
+            name: [
+                {"value": bucket.get("key"), "count": bucket.get("doc_count", 0)}
+                for bucket in aggregations.get(name, {}).get("buckets", [])
+            ]
+            for name in ("structure_type", "style", "size_category")
+        },
+    }
+
+
+def local_top_tags(
+    docs: list[dict[str, Any]],
+    limit: int,
+    filters: dict[str, Any],
+) -> dict[str, Any]:
+    size = max(1, min(limit, 100))
+
+    def matches(doc: dict[str, Any]) -> bool:
+        for key, value in filters.items():
+            if value is not None and doc.get(key) != value:
+                return False
+        return True
+
+    matching = [doc for doc in docs if matches(doc)]
+    tag_counts: Counter[str] = Counter()
+    facet_counts: dict[str, Counter[str]] = {
+        "structure_type": Counter(),
+        "style": Counter(),
+        "size_category": Counter(),
+    }
+
+    for doc in matching:
+        tag_counts.update(tag for tag in doc.get("keyword_tags", []) if tag)
+        for name, counter in facet_counts.items():
+            value = doc.get(name)
+            if value:
+                counter[str(value)] += 1
+
+    return {
+        "tags": [{"tag": tag, "count": count} for tag, count in tag_counts.most_common(size)],
+        "facets": {
+            name: [{"value": value, "count": count} for value, count in counter.most_common(size)]
+            for name, counter in facet_counts.items()
+        },
+    }
 
 
 def local_search(

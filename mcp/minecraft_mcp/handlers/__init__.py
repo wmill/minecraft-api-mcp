@@ -61,6 +61,7 @@ from .effects import (
 )
 
 from .schematics import (
+    handle_get_schematic_tags,
     handle_search_schematics,
     handle_get_schematic,
     handle_place_schematic
@@ -111,6 +112,7 @@ __all__ = [
     # Effect handlers
     "handle_rain_fire",
     # Schematic handlers
+    "handle_get_schematic_tags",
     "handle_search_schematics",
     "handle_get_schematic",
     "handle_place_schematic",

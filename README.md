@@ -83,11 +83,13 @@ Useful endpoints:
 - `GET http://localhost:7080/health`
 - `POST http://localhost:7080/index/rebuild`
 - `GET http://localhost:7080/schematics/search?q=tower&limit=5`
+- `GET http://localhost:7080/schematics/tags?limit=20`
 - `GET http://localhost:7080/schematics/2`
 - `GET http://localhost:7080/schematics/2/nbt`
 
 MCP tools added for this flow:
 
+- `get_schematic_tags`
 - `search_schematics`
 - `get_schematic`
 - `place_schematic`

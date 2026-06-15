@@ -114,6 +114,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /schematics/tags:
+    get:
+      tags: [schematics]
+      summary: List top available schematic tags and facets
+      operationId: getSchematicTags
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of tags and facet values per group (1-100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: placeable
+          in: query
+          description: Only count schematics with an NBT file available for placement
+          schema:
+            type: boolean
+            default: true
+        - name: fallback
+          in: query
+          description: Fall back to local catalog aggregation when Elasticsearch is unavailable
+          schema:
+            type: boolean
+            default: true
+      responses:
+        "200":
+          description: Top tags and facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagsResponse"
+        "503":
+          description: Elasticsearch unavailable and fallback=false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /schematics/{schematic_id}:
     get:
       tags: [schematics]
@@ -243,7 +283,12 @@ components:
           type: string
         keywords:
           type: string
-          description: Space-separated searchable keywords
+          description: Comma-separated searchable keyword phrases
+        keyword_tags:
+          type: array
+          description: Normalized comma-separated keyword phrases used for tag discovery
+          items:
+            type: string
         structure_type:
           type: string
           example: tower
@@ -298,6 +343,7 @@ components:
         - title
         - description
         - keywords
+        - keyword_tags
         - structure_type
         - style
         - placement
@@ -332,3 +378,50 @@ components:
           enum: [elasticsearch, local]
           description: Which search backend served this response
       required: [results, count, source]
+
+    TagCount:
+      type: object
+      properties:
+        tag:
+          type: string
+        count:
+          type: integer
+      required: [tag, count]
+
+    FacetCount:
+      type: object
+      properties:
+        value:
+          type: string
+        count:
+          type: integer
+      required: [value, count]
+
+    TagsResponse:
+      type: object
+      properties:
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/TagCount"
+        facets:
+          type: object
+          properties:
+            structure_type:
+              type: array
+              items:
+                $ref: "#/components/schemas/FacetCount"
+            style:
+              type: array
+              items:
+                $ref: "#/components/schemas/FacetCount"
+            size_category:
+              type: array
+              items:
+                $ref: "#/components/schemas/FacetCount"
+          required: [structure_type, style, size_category]
+        source:
+          type: string
+          enum: [elasticsearch, local]
+          description: Which backend served this response
+      required: [tags, facets, source]

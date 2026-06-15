@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from schematic_service.catalog import normalize_catalog_row
+from schematic_service.catalog import normalize_catalog_row, normalize_keyword_tags
+
+
+def test_normalize_keyword_tags_splits_dedupes_and_lowercases():
+    tags = normalize_keyword_tags(" Stone Bricks, tower, stone bricks,  Gable   Roof  , ")
+
+    assert tags == ["stone bricks", "tower", "gable roof"]
 
 
 def test_normalize_enriches_metadata_without_source(tmp_path: Path):

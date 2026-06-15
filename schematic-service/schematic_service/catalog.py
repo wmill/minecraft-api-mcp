@@ -32,6 +32,20 @@ def public_meta(meta: dict[str, Any]) -> dict[str, Any]:
     return {key: meta[key] for key in PUBLIC_META_KEYS if key in meta}
 
 
+def normalize_keyword_tags(keywords: Any) -> list[str]:
+    if not isinstance(keywords, str):
+        return []
+
+    seen: set[str] = set()
+    tags: list[str] = []
+    for value in keywords.split(","):
+        tag = " ".join(value.strip().lower().split())
+        if tag and tag not in seen:
+            seen.add(tag)
+            tags.append(tag)
+    return tags
+
+
 def normalize_catalog_row(row: dict[str, Any], nbt_dir: Path, images_dir: Path) -> dict[str, Any]:
     schematic_id = str(row.get("schematic_id", "")).strip()
     if not schematic_id:
@@ -45,6 +59,7 @@ def normalize_catalog_row(row: dict[str, Any], nbt_dir: Path, images_dir: Path) 
         "title": row.get("title") or f"Schematic {schematic_id}",
         "description": row.get("description") or "",
         "keywords": row.get("keywords") or "",
+        "keyword_tags": normalize_keyword_tags(row.get("keywords")),
         "structure_type": row.get("structure_type") or "unknown",
         "style": row.get("style") or "unknown",
         "placement": row.get("placement") or {},
