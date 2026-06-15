@@ -819,9 +819,9 @@ async def handle_query_builds_by_location(
                 response_text += f"**{build['name']}** (ID: {build['id']})\n"
                 response_text += f"- Status: {build['status']}\n"
                 response_text += f"- Description: {build.get('description', 'No description')}\n"
-                response_text += f"- Created: {build.get('created_at', 'N/A')}\n"
-                if build.get('completed_at'):
-                    response_text += f"- Completed: {build['completed_at']}\n"
+                response_text += f"- Created: {build.get('createdAt', 'N/A')}\n"
+                if build.get('completedAt'):
+                    response_text += f"- Completed: {build['completedAt']}\n"
                 response_text += f"- Intersecting Tasks: {len(intersecting_tasks)}\n"
                 response_text += f"- World: {build['world']}\n\n"
             
