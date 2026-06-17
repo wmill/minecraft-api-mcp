@@ -1044,7 +1044,43 @@ class MinecraftAPIClient:
             )
             response.raise_for_status()
             return response.json()
-    
+
+    async def translate_build(
+        self,
+        build_id: str,
+        dx: int,
+        dy: int,
+        dz: int
+    ) -> dict:
+        """
+        Shift every task in a build by (dx, dy, dz) before execution.
+
+        Args:
+            build_id: Build UUID
+            dx: X-axis shift
+            dy: Y-axis shift
+            dz: Z-axis shift
+
+        Returns:
+            dict: {"success": True, ...} on success, or {"success": False, "error": "..."} on rejection.
+
+        Raises:
+            httpx.HTTPError: For network-level failures.
+        """
+        payload = {"dx": dx, "dy": dy, "dz": dz}
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/builds/{build_id}/translate",
+                json=payload
+            )
+            if response.status_code == 200:
+                return response.json()
+            try:
+                error_message = response.json().get("error", response.text)
+            except Exception:
+                error_message = response.text or f"HTTP {response.status_code}"
+            return {"success": False, "error": error_message, "status_code": response.status_code}
+
     async def execute_build(
         self,
         build_id: str

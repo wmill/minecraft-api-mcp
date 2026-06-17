@@ -498,6 +498,48 @@ public class BuildService {
     }
 
     /**
+     * Shifts every task in a build by (dx, dy, dz) before execution.
+     * Rejected if the build or any of its tasks has already executed, since that would
+     * misrepresent already-placed blocks as having moved.
+     */
+    public List<BuildTask> translateBuild(UUID buildId, int dx, int dy, int dz) throws SQLException {
+        if (buildId == null) {
+            throw new IllegalArgumentException("Build ID cannot be null");
+        }
+
+        Optional<Build> buildOpt = buildRepository.findById(buildId);
+        if (buildOpt.isEmpty()) {
+            throw new IllegalArgumentException("Build not found: " + buildId);
+        }
+        Build build = buildOpt.get();
+        if (build.getStatus() == BuildStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot translate completed build: " + buildId);
+        }
+
+        List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
+
+        for (BuildTask task : tasks) {
+            if (task.getStatus() == TaskStatus.COMPLETED || task.getStatus() == TaskStatus.EXECUTING) {
+                throw new IllegalStateException(
+                    "Cannot translate build " + buildId + ": task " + task.getId() +
+                    " (order " + task.getTaskOrder() + ") has already " +
+                    (task.getStatus() == TaskStatus.COMPLETED ? "executed" : "started executing"));
+            }
+        }
+
+        for (BuildTask task : tasks) {
+            com.fasterxml.jackson.databind.JsonNode translated =
+                TaskDataTranslator.translate(task.getTaskType(), task.getTaskData(), dx, dy, dz);
+            task.setTaskData(translated);
+        }
+
+        taskRepository.updateAll(tasks);
+
+        logger.info("Translated build {} by ({},{},{})", buildId, dx, dy, dz);
+        return tasks;
+    }
+
+    /**
      * Retrieves a single task by ID, verifying it belongs to the specified build.
      */
     public Optional<BuildTask> getTask(UUID buildId, UUID taskId) throws SQLException {

@@ -58,7 +58,13 @@ public interface TaskRepository {
      * Requirements: 2.5
      */
     void updateTaskQueue(UUID buildId, List<BuildTask> tasks) throws SQLException;
-    
+
+    /**
+     * Atomically updates all given tasks in a single transaction.
+     * Unlike updateTaskQueue, this updates rows in place rather than delete+recreate.
+     */
+    void updateAll(List<BuildTask> tasks) throws SQLException;
+
     /**
      * Get the next task order number for a build.
      */

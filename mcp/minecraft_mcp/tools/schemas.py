@@ -1501,6 +1501,33 @@ TOOL_AUDIT_BUILD = Tool(
     }
 )
 
+TOOL_TRANSLATE_BUILD = Tool(
+    name="translate_build",
+    description="Shift every task in a build by (dx, dy, dz) before execution, to resolve an overlap found by audit_build without re-specifying the whole build. Rejected if the build is completed or any task has already executed/is executing.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {
+                "type": "string",
+                "description": "Build UUID"
+            },
+            "dx": {
+                "type": "integer",
+                "description": "X-axis shift"
+            },
+            "dy": {
+                "type": "integer",
+                "description": "Y-axis shift"
+            },
+            "dz": {
+                "type": "integer",
+                "description": "Z-axis shift"
+            }
+        },
+        "required": ["build_id", "dx", "dy", "dz"]
+    }
+)
+
 TOOL_DELETE_BUILD_TASK = Tool(
     name="delete_build_task",
     description="Delete a task from a build queue. Remaining tasks are automatically reordered.",
@@ -1843,6 +1870,7 @@ TOOL_SCHEMAS = [
     TOOL_QUERY_BUILDS_BY_LOCATION,
     TOOL_GET_BUILD_STATUS,
     TOOL_AUDIT_BUILD,
+    TOOL_TRANSLATE_BUILD,
     TOOL_DELETE_BUILD_TASK,
     TOOL_UPDATE_BUILD_TASK,
     TOOL_PLAN_RAIL_ROUTE,

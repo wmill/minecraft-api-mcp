@@ -944,6 +944,10 @@ async def handle_audit_build(
                     if issue.get('overlaps_task_order'):
                         response_text += f"   Overlaps with task order {issue['overlaps_task_order']}\n"
 
+                    if issue.get('overlaps_build_id'):
+                        build_name = issue.get('overlaps_build_name', 'unknown')
+                        response_text += f"   Overlaps build '{build_name}' ({issue['overlaps_build_id']})\n"
+
                     response_text += "\n"
 
             return format_success_response(response_text)
@@ -953,6 +957,43 @@ async def handle_audit_build(
             )
     except Exception as e:
         return format_error_response(e, "auditing build")
+
+
+async def handle_translate_build(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    dx: int,
+    dy: int,
+    dz: int,
+    **arguments
+) -> CallToolResult:
+    """
+    Shift every task in a build by (dx, dy, dz) before execution.
+
+    Args:
+        api_client: The Minecraft API client
+        build_id: Build UUID
+        dx: X-axis shift
+        dy: Y-axis shift
+        dz: Z-axis shift
+        **arguments: Additional arguments (ignored)
+
+    Returns:
+        CallToolResult confirming the translation or explaining why it was rejected
+    """
+    try:
+        result = await api_client.translate_build(build_id, dx, dy, dz)
+
+        if result.get("success"):
+            response_text = f"✅ Translated build {build_id} by ({dx}, {dy}, {dz})\n"
+            response_text += f"Tasks updated: {result.get('task_count', 'unknown')}\n"
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"❌ Failed to translate build: {result.get('error', 'Unknown error')}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "translating build")
 
 
 async def handle_plan_rail_route(

@@ -107,6 +107,34 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     
     @Override
     public BuildTask update(BuildTask task) throws SQLException {
+        try (Connection conn = databaseConfig.getConnection()) {
+            updateWithConnection(conn, task);
+            return task;
+        }
+    }
+
+    @Override
+    public void updateAll(List<BuildTask> tasks) throws SQLException {
+        Connection conn = databaseConfig.getConnection();
+        try {
+            conn.setAutoCommit(false);
+
+            for (BuildTask task : tasks) {
+                updateWithConnection(conn, task);
+            }
+
+            conn.commit();
+            LOGGER.debug("Updated {} tasks atomically", tasks.size());
+        } catch (SQLException e) {
+            conn.rollback();
+            throw e;
+        } finally {
+            conn.setAutoCommit(true);
+            conn.close();
+        }
+    }
+
+    private void updateWithConnection(Connection conn, BuildTask task) throws SQLException {
         String sql = """
             UPDATE build_tasks
             SET task_order = ?, task_type = ?, task_data = ?::jsonb, status = ?,
@@ -115,8 +143,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
             WHERE id = ?
             """;
 
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setInt(1, task.getTaskOrder());
             stmt.setString(2, task.getTaskType().name());
@@ -153,10 +180,9 @@ public class PostgreSQLTaskRepository implements TaskRepository {
             }
 
             LOGGER.debug("Updated task with ID: {}", task.getId());
-            return task;
         }
     }
-    
+
     @Override
     public boolean deleteById(UUID id) throws SQLException {
         String sql = "DELETE FROM build_tasks WHERE id = ?";

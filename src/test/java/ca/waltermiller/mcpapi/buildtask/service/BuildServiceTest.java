@@ -192,6 +192,61 @@ class BuildServiceTest {
         verify(taskRepository, atLeastOnce()).update(task);
     }
 
+    @Test
+    void translateBuildShiftsTaskCoordinates() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("build", "desc");
+        build.setId(buildId);
+        BuildTask task = new BuildTask(buildId, 0, TaskType.BLOCK_FILL, validFillData(), "fill");
+
+        when(buildRepository.findById(buildId)).thenReturn(Optional.of(build));
+        when(taskRepository.findByBuildIdOrdered(buildId)).thenReturn(List.of(task));
+
+        List<BuildTask> translated = buildService.translateBuild(buildId, 5, -1, 10);
+
+        assertThat(translated).hasSize(1);
+        com.fasterxml.jackson.databind.JsonNode data = translated.get(0).getTaskData();
+        assertThat(data.get("x1").asInt()).isEqualTo(5);
+        assertThat(data.get("y1").asInt()).isEqualTo(63);
+        assertThat(data.get("z1").asInt()).isEqualTo(10);
+        assertThat(data.get("x2").asInt()).isEqualTo(7);
+        assertThat(data.get("y2").asInt()).isEqualTo(63);
+        assertThat(data.get("z2").asInt()).isEqualTo(12);
+        assertThat(translated.get(0).getCoordinates().getMinX()).isEqualTo(5);
+        verify(taskRepository).updateAll(translated);
+    }
+
+    @Test
+    void translateBuildRejectsCompletedBuild() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("done", "desc");
+        build.setId(buildId);
+        build.setStatus(BuildStatus.COMPLETED);
+        when(buildRepository.findById(buildId)).thenReturn(Optional.of(build));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            buildService.translateBuild(buildId, 1, 0, 0));
+
+        assertThat(exception.getMessage()).contains("Cannot translate completed build");
+    }
+
+    @Test
+    void translateBuildRejectsAlreadyExecutedTask() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("build", "desc");
+        build.setId(buildId);
+        BuildTask task = new BuildTask(buildId, 0, TaskType.BLOCK_FILL, validFillData(), "fill");
+        task.markCompleted();
+
+        when(buildRepository.findById(buildId)).thenReturn(Optional.of(build));
+        when(taskRepository.findByBuildIdOrdered(buildId)).thenReturn(List.of(task));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            buildService.translateBuild(buildId, 1, 0, 0));
+
+        assertThat(exception.getMessage()).contains("already executed");
+    }
+
     private ObjectNode validFillData() {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("x1", 0);

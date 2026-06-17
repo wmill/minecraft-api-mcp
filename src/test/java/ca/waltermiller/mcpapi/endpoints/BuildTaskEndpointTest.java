@@ -174,12 +174,47 @@ class BuildTaskEndpointTest {
 
         when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
         when(buildService.getTasks(buildId)).thenReturn(new java.util.ArrayList<>(List.of(fill, structure)));
+        when(locationQueryService.queryBuildsByLocation(any(LocationQueryService.LocationQueryRequest.class)))
+            .thenReturn(new LocationQueryService.LocationQueryResult(List.of(), null));
 
         HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/audit", null);
 
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode json = objectMapper.readTree(response.body());
         assertThat(json.get("summary").get("warnings").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void auditBuildReportsCrossBuildOverlap() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("build", "desc");
+        build.setId(buildId);
+        BuildTask door = new BuildTask(buildId, 0, TaskType.PREFAB_DOOR, prefabDoorData(), "door");
+
+        UUID otherBuildId = UUID.randomUUID();
+        Build otherBuild = new Build("NBT: house.nbt", "Auto-recorded NBT structure placement");
+        otherBuild.setId(otherBuildId);
+        otherBuild.setStatus(ca.waltermiller.mcpapi.buildtask.model.BuildStatus.COMPLETED);
+        BuildTask otherTask = new BuildTask(otherBuildId, 0, TaskType.NBT_STRUCTURE,
+            objectMapper.createObjectNode().put("x", 0).put("y", 64).put("z", 0)
+                .put("size_x", 1).put("size_y", 1).put("size_z", 1)
+                .put("filename", "house.nbt").put("rotation", "NONE"),
+            "NBT structure placement");
+
+        when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
+        when(buildService.getTasks(buildId)).thenReturn(new java.util.ArrayList<>(List.of(door)));
+        when(locationQueryService.queryBuildsByLocation(any(LocationQueryService.LocationQueryRequest.class)))
+            .thenReturn(new LocationQueryService.LocationQueryResult(
+                List.of(new LocationQueryService.BuildLocationResult(otherBuild, List.of(otherTask))), null));
+
+        HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/audit", null);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode json = objectMapper.readTree(response.body());
+        assertThat(json.get("summary").get("errors").asInt()).isGreaterThan(0);
+        String issuesText = json.get("issues").toString();
+        assertThat(issuesText).contains("cross_build_overlap");
+        assertThat(issuesText).contains(otherBuildId.toString());
     }
 
     @Test
@@ -198,6 +233,8 @@ class BuildTaskEndpointTest {
 
         when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
         when(buildService.getTasks(buildId)).thenReturn(new java.util.ArrayList<>(List.of(first, second)));
+        when(locationQueryService.queryBuildsByLocation(any(LocationQueryService.LocationQueryRequest.class)))
+            .thenReturn(new LocationQueryService.LocationQueryResult(List.of(), null));
 
         HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/audit", null);
 
@@ -223,6 +260,8 @@ class BuildTaskEndpointTest {
 
         when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
         when(buildService.getTasks(buildId)).thenReturn(new java.util.ArrayList<>(List.of(first, second)));
+        when(locationQueryService.queryBuildsByLocation(any(LocationQueryService.LocationQueryRequest.class)))
+            .thenReturn(new LocationQueryService.LocationQueryResult(List.of(), null));
 
         HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/audit", null);
 
@@ -230,6 +269,34 @@ class BuildTaskEndpointTest {
         JsonNode json = objectMapper.readTree(response.body());
         assertThat(json.get("summary").get("errors").asInt()).isGreaterThan(0);
         assertThat(json.get("issues").toString()).contains("rail_segment_disconnected");
+    }
+
+    @Test
+    void translateBuildShiftsTasksAndReturnsTaskCount() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        BuildTask task = new BuildTask(buildId, 0, TaskType.BLOCK_FILL, fillData(), "fill");
+        when(buildService.translateBuild(buildId, 5, 0, -5)).thenReturn(List.of(task));
+
+        HttpResponse<String> response = sendJson("POST", "/api/builds/" + buildId + "/translate",
+            "{\"dx\":5,\"dy\":0,\"dz\":-5}");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode json = objectMapper.readTree(response.body());
+        assertThat(json.get("success").asBoolean()).isTrue();
+        assertThat(json.get("task_count").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void translateBuildReturnsConflictWhenTaskAlreadyExecuted() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        when(buildService.translateBuild(buildId, 1, 0, 0))
+            .thenThrow(new IllegalStateException("Cannot translate build " + buildId + ": task already executed"));
+
+        HttpResponse<String> response = sendJson("POST", "/api/builds/" + buildId + "/translate",
+            "{\"dx\":1,\"dy\":0,\"dz\":0}");
+
+        assertThat(response.statusCode()).isEqualTo(409);
+        assertThat(objectMapper.readTree(response.body()).get("error").asText()).contains("already executed");
     }
 
     @Test

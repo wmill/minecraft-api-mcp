@@ -2,6 +2,7 @@ package ca.waltermiller.mcpapi.endpoints;
 
 import ca.waltermiller.mcpapi.buildtask.model.BoundingBox;
 import ca.waltermiller.mcpapi.buildtask.model.Build;
+import ca.waltermiller.mcpapi.buildtask.model.BuildStatus;
 import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
 import ca.waltermiller.mcpapi.buildtask.model.TaskType;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
@@ -653,6 +654,9 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     if (task.getTaskType() == TaskType.BLOCK_FILL) {
                         checkFillOverwrite(task, taskData, tasks.subList(0, i), issues);
                     }
+
+                    // Check 3: Overlap with tasks belonging to other builds
+                    checkCrossBuildOverlap(build, task, buildId, issues);
                 }
 
                 RegistryKey<World> worldKey = build.getWorld() != null
@@ -720,6 +724,47 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
             } catch (Exception e) {
                 LOGGER.error("Unexpected error starting rail planner", e);
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+
+        // POST /api/builds/{id}/translate - Shift every task in a build by (dx, dy, dz)
+        app.post("/api/builds/{id}/translate", ctx -> {
+            try {
+                String idParam = ctx.pathParam("id");
+                UUID buildId;
+                try {
+                    buildId = UUID.fromString(idParam);
+                } catch (IllegalArgumentException e) {
+                    ctx.status(400).json(Map.of("error", "Invalid build ID format"));
+                    return;
+                }
+
+                TranslateBuildRequest request = ctx.bodyAsClass(TranslateBuildRequest.class);
+
+                List<BuildTask> translatedTasks = buildService.translateBuild(buildId, request.dx, request.dy, request.dz);
+
+                ctx.json(Map.of(
+                    "success", true,
+                    "build_id", buildId.toString(),
+                    "dx", request.dx,
+                    "dy", request.dy,
+                    "dz", request.dz,
+                    "task_count", translatedTasks.size(),
+                    "message", "Build translated successfully"
+                ));
+
+                LOGGER.info("Translated build {} by ({},{},{}) via API", buildId, request.dx, request.dy, request.dz);
+
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).json(Map.of("error", e.getMessage()));
+            } catch (IllegalStateException e) {
+                ctx.status(409).json(Map.of("error", e.getMessage()));
+            } catch (SQLException e) {
+                LOGGER.error("Database error translating build", e);
+                ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
+            } catch (Exception e) {
+                LOGGER.error("Unexpected error translating build", e);
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });
@@ -970,6 +1015,47 @@ public class BuildTaskEndpoint extends APIEndpoint {
     }
 
     /**
+     * Checks whether a task's bounding box overlaps any task belonging to a different build.
+     */
+    private void checkCrossBuildOverlap(Build build, BuildTask task, UUID currentBuildId,
+                                        List<Map<String, Object>> issues) throws SQLException {
+        if (task.getCoordinates() == null) {
+            return;
+        }
+
+        BoundingBox box = task.getCoordinates();
+        LocationQueryService.LocationQueryRequest request = new LocationQueryService.LocationQueryRequest(
+            build.getWorld(), box.getMinX(), box.getMinY(), box.getMinZ(),
+            box.getMaxX(), box.getMaxY(), box.getMaxZ(), true);
+
+        LocationQueryService.LocationQueryResult result = locationQueryService.queryBuildsByLocation(request);
+
+        for (LocationQueryService.BuildLocationResult buildResult : result.builds) {
+            if (buildResult.build.getId().equals(currentBuildId)) {
+                continue; // Same-build overlaps are covered by checkFillOverwrite/rail inspection
+            }
+
+            String severity = buildResult.build.getStatus() == BuildStatus.COMPLETED ? "error" : "warning";
+
+            for (BuildTask otherTask : buildResult.intersecting_tasks) {
+                issues.add(Map.of(
+                    "severity", severity,
+                    "task_id", task.getId().toString(),
+                    "task_order", task.getTaskOrder(),
+                    "check", "cross_build_overlap",
+                    "overlaps_build_id", buildResult.build.getId().toString(),
+                    "overlaps_build_name", Objects.toString(buildResult.build.getName(), ""),
+                    "overlaps_task_id", otherTask.getId().toString(),
+                    "overlaps_task_order", otherTask.getTaskOrder(),
+                    "message", String.format("Task %d (%s) overlaps with task %d in build '%s' (%s, status %s)",
+                        task.getTaskOrder(), task.getTaskType(), otherTask.getTaskOrder(),
+                        buildResult.build.getName(), buildResult.build.getId(), buildResult.build.getStatus())
+                ));
+            }
+        }
+    }
+
+    /**
      * Request object for adding a task with optional position.
      */
     public static class AddTaskWithOrderRequest {
@@ -979,6 +1065,17 @@ public class BuildTaskEndpoint extends APIEndpoint {
         public Integer task_order; // Optional: if provided, insert at this position
 
         public AddTaskWithOrderRequest() {}
+    }
+
+    /**
+     * Request object for translating a build by (dx, dy, dz).
+     */
+    public static class TranslateBuildRequest {
+        public int dx;
+        public int dy;
+        public int dz;
+
+        public TranslateBuildRequest() {}
     }
 
     /**
