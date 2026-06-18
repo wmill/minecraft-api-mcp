@@ -143,11 +143,32 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     })
                     .collect(Collectors.toList());
 
-                ctx.json(Map.of(
-                    "success", true,
-                    "build", buildJson,
-                    "tasks", taskMaps
-                ));
+                // Compute aggregate bounding box across all tasks
+                int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+                int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+                boolean hasBounds = false;
+                for (BuildTask task : tasks) {
+                    BoundingBox bb = task.getCoordinates();
+                    if (bb != null) {
+                        minX = Math.min(minX, bb.getMinX()); minY = Math.min(minY, bb.getMinY()); minZ = Math.min(minZ, bb.getMinZ());
+                        maxX = Math.max(maxX, bb.getMaxX()); maxY = Math.max(maxY, bb.getMaxY()); maxZ = Math.max(maxZ, bb.getMaxZ());
+                        hasBounds = true;
+                    }
+                }
+                Map<String, Object> boundingBox = hasBounds ? Map.of(
+                    "min_x", minX, "min_y", minY, "min_z", minZ,
+                    "max_x", maxX, "max_y", maxY, "max_z", maxZ,
+                    "size_x", maxX - minX + 1, "size_y", maxY - minY + 1, "size_z", maxZ - minZ + 1
+                ) : null;
+
+                Map<String, Object> response = new LinkedHashMap<>();
+                response.put("success", true);
+                response.put("build", buildJson);
+                response.put("tasks", taskMaps);
+                if (boundingBox != null) {
+                    response.put("bounding_box", boundingBox);
+                }
+                ctx.json(response);
                 
             } catch (SQLException e) {
                 LOGGER.error("Database error retrieving build", e);

@@ -352,6 +352,45 @@ class BuildTaskEndpointTest {
             Map.of("error", "view_direction must be one of: south, west, north, east")));
     }
 
+    @Test
+    void getBuildStatusReturnsBoundingBox() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("test", "desc", "minecraft:overworld");
+        build.setId(buildId);
+
+        ObjectNode data1 = objectMapper.createObjectNode();
+        data1.put("x1", 0); data1.put("y1", 64); data1.put("z1", 0);
+        data1.put("x2", 5); data1.put("y2", 64); data1.put("z2", 5);
+        data1.put("block_type", "minecraft:stone");
+
+        ObjectNode data2 = objectMapper.createObjectNode();
+        data2.put("x1", 10); data2.put("y1", 60); data2.put("z1", 0);
+        data2.put("x2", 15); data2.put("y2", 65); data2.put("z2", 10);
+        data2.put("block_type", "minecraft:dirt");
+
+        BuildTask task1 = new BuildTask(buildId, 0, TaskType.BLOCK_FILL, data1, "fill1");
+        BuildTask task2 = new BuildTask(buildId, 1, TaskType.BLOCK_FILL, data2, "fill2");
+
+        when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
+        when(buildService.getTasks(buildId)).thenReturn(List.of(task1, task2));
+
+        HttpResponse<String> response = send("GET", "/api/builds/" + buildId, null);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode json = objectMapper.readTree(response.body());
+        JsonNode bb = json.get("bounding_box");
+        assertThat(bb).isNotNull();
+        assertThat(bb.get("min_x").asInt()).isEqualTo(0);
+        assertThat(bb.get("min_y").asInt()).isEqualTo(60);
+        assertThat(bb.get("min_z").asInt()).isEqualTo(0);
+        assertThat(bb.get("max_x").asInt()).isEqualTo(15);
+        assertThat(bb.get("max_y").asInt()).isEqualTo(65);
+        assertThat(bb.get("max_z").asInt()).isEqualTo(10);
+        assertThat(bb.get("size_x").asInt()).isEqualTo(16);
+        assertThat(bb.get("size_y").asInt()).isEqualTo(6);
+        assertThat(bb.get("size_z").asInt()).isEqualTo(11);
+    }
+
     private HttpResponse<String> sendJson(String method, String path, String json) throws IOException, InterruptedException {
         return send(method, path, HttpRequest.BodyPublishers.ofString(json));
     }

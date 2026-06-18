@@ -917,6 +917,14 @@ async def handle_get_build_status(
                     if task.get('error_message'):
                         response_text += f"   - Error: {task['error_message']}\n"
 
+            bb = result.get("bounding_box")
+            if bb:
+                response_text += (
+                    f"\n**Bounding Box:** ({bb['min_x']}, {bb['min_y']}, {bb['min_z']}) to "
+                    f"({bb['max_x']}, {bb['max_y']}, {bb['max_z']})  "
+                    f"[{bb['size_x']} x {bb['size_y']} x {bb['size_z']} blocks]\n"
+                )
+
             return format_success_response(response_text)
         else:
             return CallToolResult(
