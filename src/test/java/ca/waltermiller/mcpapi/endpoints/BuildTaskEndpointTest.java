@@ -300,6 +300,31 @@ class BuildTaskEndpointTest {
     }
 
     @Test
+    void resetBuildReturns200WithTaskCount() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        when(buildService.resetBuild(buildId)).thenReturn(3);
+
+        HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/reset", null);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode body = objectMapper.readTree(response.body());
+        assertThat(body.get("success").asBoolean()).isTrue();
+        assertThat(body.get("tasks_reset").asInt()).isEqualTo(3);
+    }
+
+    @Test
+    void resetBuildReturns409WhenBuildInProgress() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        when(buildService.resetBuild(buildId))
+            .thenThrow(new IllegalStateException("Cannot reset build that is currently executing: " + buildId));
+
+        HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/reset", null);
+
+        assertThat(response.statusCode()).isEqualTo(409);
+        assertThat(objectMapper.readTree(response.body()).get("error").asText()).contains("currently executing");
+    }
+
+    @Test
     void previewBuildRejectsInvalidTerrainMargin() throws Exception {
         UUID buildId = UUID.randomUUID();
         Build build = new Build("preview", "desc", "minecraft:overworld");

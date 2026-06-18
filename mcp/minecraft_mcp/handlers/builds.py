@@ -769,6 +769,30 @@ async def handle_replay_build(
         return format_error_response(e, "replaying build")
 
 
+async def handle_reset_build(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    **arguments
+) -> CallToolResult:
+    """
+    Reset a build's status so tasks can be modified and re-executed.
+    """
+    try:
+        result = await api_client.reset_build(build_id)
+
+        if result.get("success"):
+            tasks_reset = result.get("tasks_reset", 0)
+            response_text = f"Build {build_id} reset to CREATED. {tasks_reset} task(s) re-queued.\n"
+            response_text += "You can now modify or translate the build, then call execute_build.\n"
+            return format_success_response(response_text)
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Failed to reset build: {result.get('error', 'Unknown error')}")]
+            )
+    except Exception as e:
+        return format_error_response(e, "resetting build")
+
+
 async def handle_query_builds_by_location(
     api_client: MinecraftAPIClient,
     min_x: int,

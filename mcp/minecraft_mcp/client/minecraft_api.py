@@ -1081,6 +1081,25 @@ class MinecraftAPIClient:
                 error_message = response.text or f"HTTP {response.status_code}"
             return {"success": False, "error": error_message, "status_code": response.status_code}
 
+    async def reset_build(self, build_id: str) -> dict:
+        """
+        Reset a build to CREATED status so tasks can be modified and re-executed.
+
+        Returns:
+            dict: {"success": True, ...} on success, or {"success": False, "error": "..."} on rejection.
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/builds/{build_id}/reset"
+            )
+            if response.status_code == 200:
+                return response.json()
+            try:
+                error_message = response.json().get("error", response.text)
+            except Exception:
+                error_message = response.text or f"HTTP {response.status_code}"
+            return {"success": False, "error": error_message, "status_code": response.status_code}
+
     async def execute_build(
         self,
         build_id: str

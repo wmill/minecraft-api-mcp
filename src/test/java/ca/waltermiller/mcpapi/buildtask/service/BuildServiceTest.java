@@ -247,6 +247,66 @@ class BuildServiceTest {
         assertThat(exception.getMessage()).contains("already executed");
     }
 
+    @Test
+    void resetBuildSetsStatusToCreatedAndRequeuesTasks() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("build", "desc");
+        build.setId(buildId);
+        build.setStatus(BuildStatus.COMPLETED);
+        BuildTask task = new BuildTask(buildId, 0, TaskType.BLOCK_FILL, validFillData(), "fill");
+        task.markCompleted();
+
+        when(buildRepository.findById(buildId)).thenReturn(Optional.of(build));
+        when(taskRepository.findByBuildIdOrdered(buildId)).thenReturn(List.of(task));
+        when(buildRepository.update(any(Build.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.update(any(BuildTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        int count = buildService.resetBuild(buildId);
+
+        assertThat(count).isEqualTo(1);
+        assertThat(build.getStatus()).isEqualTo(BuildStatus.CREATED);
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.QUEUED);
+        verify(buildRepository).update(build);
+        verify(taskRepository).update(task);
+    }
+
+    @Test
+    void resetBuildSkipsNbtStructureTasks() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("build", "desc");
+        build.setId(buildId);
+        build.setStatus(BuildStatus.COMPLETED);
+        BuildTask fillTask = new BuildTask(buildId, 0, TaskType.BLOCK_FILL, validFillData(), "fill");
+        fillTask.markCompleted();
+        BuildTask nbtTask = new BuildTask(buildId, 1, TaskType.NBT_STRUCTURE, validFillData(), "nbt");
+        nbtTask.markCompleted();
+
+        when(buildRepository.findById(buildId)).thenReturn(Optional.of(build));
+        when(taskRepository.findByBuildIdOrdered(buildId)).thenReturn(List.of(fillTask, nbtTask));
+        when(buildRepository.update(any(Build.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.update(any(BuildTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        int count = buildService.resetBuild(buildId);
+
+        assertThat(count).isEqualTo(1);
+        assertThat(fillTask.getStatus()).isEqualTo(TaskStatus.QUEUED);
+        assertThat(nbtTask.getStatus()).isEqualTo(TaskStatus.COMPLETED);
+    }
+
+    @Test
+    void resetBuildRejectsInProgressBuild() throws Exception {
+        UUID buildId = UUID.randomUUID();
+        Build build = new Build("build", "desc");
+        build.setId(buildId);
+        build.setStatus(BuildStatus.IN_PROGRESS);
+        when(buildRepository.findById(buildId)).thenReturn(Optional.of(build));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            buildService.resetBuild(buildId));
+
+        assertThat(exception.getMessage()).contains("currently executing");
+    }
+
     private ObjectNode validFillData() {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("x1", 0);

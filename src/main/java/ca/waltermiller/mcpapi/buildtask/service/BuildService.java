@@ -333,6 +333,45 @@ public class BuildService {
     }
 
     /**
+     * Resets a build's status to CREATED and re-queues all non-NBT tasks,
+     * without executing. Allows tasks to be modified or translated before re-execution.
+     *
+     * @return count of tasks reset
+     */
+    public int resetBuild(UUID buildId) throws SQLException {
+        if (buildId == null) {
+            throw new IllegalArgumentException("Build ID cannot be null");
+        }
+
+        Optional<Build> buildOpt = buildRepository.findById(buildId);
+        if (buildOpt.isEmpty()) {
+            throw new IllegalArgumentException("Build not found: " + buildId);
+        }
+
+        Build build = buildOpt.get();
+        if (build.getStatus() == BuildStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Cannot reset build that is currently executing: " + buildId);
+        }
+
+        build.setStatus(BuildStatus.CREATED);
+        buildRepository.update(build);
+
+        List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
+        int resetCount = 0;
+        for (BuildTask task : tasks) {
+            if (task.getTaskType() == TaskType.NBT_STRUCTURE) {
+                continue;
+            }
+            task.resetForReplay();
+            taskRepository.update(task);
+            resetCount++;
+        }
+
+        logger.info("Reset build {} ({} tasks re-queued)", buildId, resetCount);
+        return resetCount;
+    }
+
+    /**
      * Shuts down the executor service.
      */
     public void shutdown() {

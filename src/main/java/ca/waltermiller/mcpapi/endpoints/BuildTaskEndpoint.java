@@ -523,6 +523,40 @@ public class BuildTaskEndpoint extends APIEndpoint {
             }
         });
 
+        // POST /api/builds/{id}/reset - Reset a build so tasks can be modified and re-executed
+        app.post("/api/builds/{id}/reset", ctx -> {
+            try {
+                String idParam = ctx.pathParam("id");
+                UUID buildId;
+                try {
+                    buildId = UUID.fromString(idParam);
+                } catch (IllegalArgumentException e) {
+                    ctx.status(400).json(Map.of("error", "Invalid build ID format"));
+                    return;
+                }
+
+                int tasksReset = buildService.resetBuild(buildId);
+                ctx.status(200).json(Map.of(
+                    "success", true,
+                    "build_id", buildId.toString(),
+                    "tasks_reset", tasksReset,
+                    "message", "Build reset to CREATED; " + tasksReset + " tasks re-queued"
+                ));
+                LOGGER.info("Reset build {} via API ({} tasks re-queued)", buildId, tasksReset);
+
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).json(Map.of("error", e.getMessage()));
+            } catch (IllegalStateException e) {
+                ctx.status(409).json(Map.of("error", e.getMessage()));
+            } catch (SQLException e) {
+                LOGGER.error("Database error resetting build", e);
+                ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
+            } catch (Exception e) {
+                LOGGER.error("Unexpected error resetting build", e);
+                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
+            }
+        });
+
         // POST /api/builds/query-location - Query builds by location
         app.post("/api/builds/query-location", ctx -> {
             try {
