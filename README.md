@@ -49,6 +49,18 @@ First you'll need the postgres image up and running `docker compose up -d postgr
 
 After that the gradle runServer command worked for me. Kudos to the fabric devs.
 
+## Postgres dev snapshots
+
+For quick local database snapshots, use the helper scripts against the Docker Compose `postgres` service:
+
+```bash
+docker compose up -d postgres
+./scripts/pg_dump_snapshot.sh
+./scripts/pg_restore_snapshot.sh snapshots/postgres/<snapshot>.dump --yes
+```
+
+Snapshots are written under `snapshots/postgres/` by default and are ignored by git. You can pass an explicit dump path to `pg_dump_snapshot.sh` if you want a specific filename.
+
 ## Schematic service
 
 There is an optional schematic catalog service in `schematic-service/`. It searches metadata from local schematic analysis and serves converted vanilla NBT files so MCP can place them through the existing `/api/world/structure/place` endpoint.
