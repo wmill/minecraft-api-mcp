@@ -248,61 +248,70 @@ class BuildServiceTest {
     }
 
     @Test
-    void resetBuildSetsStatusToCreatedAndRequeuesTasks() throws Exception {
-        UUID buildId = UUID.randomUUID();
-        Build build = new Build("build", "desc");
-        build.setId(buildId);
-        build.setStatus(BuildStatus.COMPLETED);
-        BuildTask task = new BuildTask(buildId, 0, TaskType.BLOCK_FILL, validFillData(), "fill");
+    void cloneBuildCreatesNewBuildWithCopiedTasks() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+        Build source = new Build("build", "desc", "minecraft:overworld");
+        source.setId(sourceId);
+        source.setStatus(BuildStatus.COMPLETED);
+        BuildTask task = new BuildTask(sourceId, 0, TaskType.BLOCK_FILL, validFillData(), "fill");
         task.markCompleted();
 
-        when(buildRepository.findById(buildId)).thenReturn(Optional.of(build));
-        when(taskRepository.findByBuildIdOrdered(buildId)).thenReturn(List.of(task));
-        when(buildRepository.update(any(Build.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(taskRepository.update(any(BuildTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(buildRepository.findById(sourceId)).thenReturn(Optional.of(source));
+        when(taskRepository.findByBuildIdOrdered(sourceId)).thenReturn(List.of(task));
+        when(buildRepository.create(any(Build.class))).thenAnswer(invocation -> {
+            Build b = invocation.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+        when(taskRepository.addToQueue(any(UUID.class), any(BuildTask.class)))
+            .thenAnswer(invocation -> invocation.getArgument(1));
 
-        int count = buildService.resetBuild(buildId);
+        Build newBuild = buildService.cloneBuild(sourceId);
 
-        assertThat(count).isEqualTo(1);
-        assertThat(build.getStatus()).isEqualTo(BuildStatus.CREATED);
-        assertThat(task.getStatus()).isEqualTo(TaskStatus.QUEUED);
-        verify(buildRepository).update(build);
-        verify(taskRepository).update(task);
+        assertThat(newBuild.getId()).isNotEqualTo(sourceId);
+        assertThat(newBuild.getName()).isEqualTo("build");
+        assertThat(source.getStatus()).isEqualTo(BuildStatus.COMPLETED); // source unchanged
+        verify(buildRepository).create(any(Build.class));
+        verify(taskRepository).addToQueue(eq(newBuild.getId()), any(BuildTask.class));
     }
 
     @Test
-    void resetBuildSkipsNbtStructureTasks() throws Exception {
-        UUID buildId = UUID.randomUUID();
-        Build build = new Build("build", "desc");
-        build.setId(buildId);
-        build.setStatus(BuildStatus.COMPLETED);
-        BuildTask fillTask = new BuildTask(buildId, 0, TaskType.BLOCK_FILL, validFillData(), "fill");
+    void cloneBuildSkipsNbtStructureTasks() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+        Build source = new Build("build", "desc", "minecraft:overworld");
+        source.setId(sourceId);
+        source.setStatus(BuildStatus.COMPLETED);
+        BuildTask fillTask = new BuildTask(sourceId, 0, TaskType.BLOCK_FILL, validFillData(), "fill");
         fillTask.markCompleted();
-        BuildTask nbtTask = new BuildTask(buildId, 1, TaskType.NBT_STRUCTURE, validFillData(), "nbt");
+        BuildTask nbtTask = new BuildTask(sourceId, 1, TaskType.NBT_STRUCTURE, validFillData(), "nbt");
         nbtTask.markCompleted();
 
-        when(buildRepository.findById(buildId)).thenReturn(Optional.of(build));
-        when(taskRepository.findByBuildIdOrdered(buildId)).thenReturn(List.of(fillTask, nbtTask));
-        when(buildRepository.update(any(Build.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(taskRepository.update(any(BuildTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(buildRepository.findById(sourceId)).thenReturn(Optional.of(source));
+        when(taskRepository.findByBuildIdOrdered(sourceId)).thenReturn(List.of(fillTask, nbtTask));
+        when(buildRepository.create(any(Build.class))).thenAnswer(invocation -> {
+            Build b = invocation.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+        when(taskRepository.addToQueue(any(UUID.class), any(BuildTask.class)))
+            .thenAnswer(invocation -> invocation.getArgument(1));
 
-        int count = buildService.resetBuild(buildId);
+        buildService.cloneBuild(sourceId);
 
-        assertThat(count).isEqualTo(1);
-        assertThat(fillTask.getStatus()).isEqualTo(TaskStatus.QUEUED);
-        assertThat(nbtTask.getStatus()).isEqualTo(TaskStatus.COMPLETED);
+        // addToQueue called once for BLOCK_FILL, not for NBT_STRUCTURE
+        verify(taskRepository, org.mockito.Mockito.times(1)).addToQueue(any(UUID.class), any(BuildTask.class));
     }
 
     @Test
-    void resetBuildRejectsInProgressBuild() throws Exception {
-        UUID buildId = UUID.randomUUID();
-        Build build = new Build("build", "desc");
-        build.setId(buildId);
-        build.setStatus(BuildStatus.IN_PROGRESS);
-        when(buildRepository.findById(buildId)).thenReturn(Optional.of(build));
+    void cloneBuildRejectsInProgressBuild() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+        Build source = new Build("build", "desc");
+        source.setId(sourceId);
+        source.setStatus(BuildStatus.IN_PROGRESS);
+        when(buildRepository.findById(sourceId)).thenReturn(Optional.of(source));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
-            buildService.resetBuild(buildId));
+            buildService.cloneBuild(sourceId));
 
         assertThat(exception.getMessage()).contains("currently executing");
     }

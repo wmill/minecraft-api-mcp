@@ -769,28 +769,32 @@ async def handle_replay_build(
         return format_error_response(e, "replaying build")
 
 
-async def handle_reset_build(
+async def handle_clone_build(
     api_client: MinecraftAPIClient,
     build_id: str,
     **arguments
 ) -> CallToolResult:
     """
-    Reset a build's status so tasks can be modified and re-executed.
+    Clone a build, creating a copy with a new UUID so the original is preserved.
     """
     try:
-        result = await api_client.reset_build(build_id)
+        result = await api_client.clone_build(build_id)
 
         if result.get("success"):
-            tasks_reset = result.get("tasks_reset", 0)
-            response_text = f"Build {build_id} reset to CREATED. {tasks_reset} task(s) re-queued.\n"
-            response_text += "You can now modify or translate the build, then call execute_build.\n"
+            new_id = result.get("new_build_id")
+            tasks_cloned = result.get("tasks_cloned", 0)
+            response_text = (
+                f"Build {build_id} cloned → new build {new_id}. "
+                f"{tasks_cloned} task(s) copied as QUEUED.\n"
+                "Use translate_build on the new build ID to reposition, then call execute_build.\n"
+            )
             return format_success_response(response_text)
         else:
             return CallToolResult(
-                content=[TextContent(type="text", text=f"Failed to reset build: {result.get('error', 'Unknown error')}")]
+                content=[TextContent(type="text", text=f"Failed to clone build: {result.get('error', 'Unknown error')}")]
             )
     except Exception as e:
-        return format_error_response(e, "resetting build")
+        return format_error_response(e, "cloning build")
 
 
 async def handle_query_builds_by_location(

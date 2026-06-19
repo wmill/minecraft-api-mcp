@@ -333,42 +333,43 @@ public class BuildService {
     }
 
     /**
-     * Resets a build's status to CREATED and re-queues all non-NBT tasks,
-     * without executing. Allows tasks to be modified or translated before re-execution.
+     * Creates a copy of a build with a new UUID. All non-NBT tasks are cloned as QUEUED.
+     * The source build is left unchanged, preserving its placement history.
      *
-     * @return count of tasks reset
+     * @return the newly created Build
      */
-    public int resetBuild(UUID buildId) throws SQLException {
-        if (buildId == null) {
+    public Build cloneBuild(UUID sourceId) throws SQLException {
+        if (sourceId == null) {
             throw new IllegalArgumentException("Build ID cannot be null");
         }
 
-        Optional<Build> buildOpt = buildRepository.findById(buildId);
-        if (buildOpt.isEmpty()) {
-            throw new IllegalArgumentException("Build not found: " + buildId);
+        Optional<Build> sourceOpt = buildRepository.findById(sourceId);
+        if (sourceOpt.isEmpty()) {
+            throw new IllegalArgumentException("Build not found: " + sourceId);
         }
 
-        Build build = buildOpt.get();
-        if (build.getStatus() == BuildStatus.IN_PROGRESS) {
-            throw new IllegalStateException("Cannot reset build that is currently executing: " + buildId);
+        Build source = sourceOpt.get();
+        if (source.getStatus() == BuildStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Cannot clone build that is currently executing: " + sourceId);
         }
 
-        build.setStatus(BuildStatus.CREATED);
-        buildRepository.update(build);
+        Build newBuild = new Build(source.getName(), source.getDescription(), source.getWorld());
+        Build savedBuild = buildRepository.create(newBuild);
 
-        List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
-        int resetCount = 0;
-        for (BuildTask task : tasks) {
+        List<BuildTask> sourceTasks = taskRepository.findByBuildIdOrdered(sourceId);
+        int clonedCount = 0;
+        for (BuildTask task : sourceTasks) {
             if (task.getTaskType() == TaskType.NBT_STRUCTURE) {
                 continue;
             }
-            task.resetForReplay();
-            taskRepository.update(task);
-            resetCount++;
+            BuildTask cloned = new BuildTask(savedBuild.getId(), task.getTaskOrder(),
+                task.getTaskType(), task.getTaskData().deepCopy(), task.getDescription());
+            taskRepository.addToQueue(savedBuild.getId(), cloned);
+            clonedCount++;
         }
 
-        logger.info("Reset build {} ({} tasks re-queued)", buildId, resetCount);
-        return resetCount;
+        logger.info("Cloned build {} → {} ({} tasks)", sourceId, savedBuild.getId(), clonedCount);
+        return savedBuild;
     }
 
     /**

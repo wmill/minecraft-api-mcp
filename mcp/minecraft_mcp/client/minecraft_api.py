@@ -1081,16 +1081,18 @@ class MinecraftAPIClient:
                 error_message = response.text or f"HTTP {response.status_code}"
             return {"success": False, "error": error_message, "status_code": response.status_code}
 
-    async def reset_build(self, build_id: str) -> dict:
+    async def clone_build(self, build_id: str) -> dict:
         """
-        Reset a build to CREATED status so tasks can be modified and re-executed.
+        Clone a build, creating a copy with a new UUID. All non-NBT tasks are copied as QUEUED.
+        The source build is preserved unchanged.
 
         Returns:
-            dict: {"success": True, ...} on success, or {"success": False, "error": "..."} on rejection.
+            dict: {"success": True, "new_build_id": "...", "tasks_cloned": N, ...} on success,
+                  or {"success": False, "error": "..."} on rejection.
         """
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/builds/{build_id}/reset"
+                f"{self.base_url}/api/builds/{build_id}/clone"
             )
             if response.status_code == 200:
                 return response.json()

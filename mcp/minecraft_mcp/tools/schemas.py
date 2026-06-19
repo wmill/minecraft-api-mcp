@@ -1426,15 +1426,15 @@ TOOL_REPLAY_BUILD = Tool(
     }
 )
 
-TOOL_RESET_BUILD = Tool(
-    name="reset_build",
-    description="Reset a build's status to CREATED and re-queue all tasks without executing. Use this when you want to modify or translate a build's tasks (e.g. move it to a new location) and then execute it fresh. NBT_STRUCTURE tasks are not reset. Rejected if the build is currently executing.",
+TOOL_CLONE_BUILD = Tool(
+    name="clone_build",
+    description="Create a copy of an existing build with a new UUID. All non-NBT tasks are copied as QUEUED. The original build is preserved unchanged as a placement record. Use this before translate_build when you want to place the same structure at a different location without losing the original. Rejected if the build is currently executing.",
     inputSchema={
         "type": "object",
         "properties": {
             "build_id": {
                 "type": "string",
-                "description": "Build UUID"
+                "description": "Source build UUID to clone"
             }
         },
         "required": ["build_id"]
@@ -1882,7 +1882,7 @@ TOOL_SCHEMAS = [
     TOOL_ADD_BUILD_TASK_PREFAB_LADDER,
     TOOL_EXECUTE_BUILD,
     TOOL_REPLAY_BUILD,
-    TOOL_RESET_BUILD,
+    TOOL_CLONE_BUILD,
     TOOL_QUERY_BUILDS_BY_LOCATION,
     TOOL_GET_BUILD_STATUS,
     TOOL_AUDIT_BUILD,

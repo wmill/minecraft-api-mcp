@@ -544,36 +544,37 @@ public class BuildTaskEndpoint extends APIEndpoint {
             }
         });
 
-        // POST /api/builds/{id}/reset - Reset a build so tasks can be modified and re-executed
-        app.post("/api/builds/{id}/reset", ctx -> {
+        // POST /api/builds/{id}/clone - Clone a build with a new UUID; source is preserved unchanged
+        app.post("/api/builds/{id}/clone", ctx -> {
             try {
                 String idParam = ctx.pathParam("id");
-                UUID buildId;
+                UUID sourceId;
                 try {
-                    buildId = UUID.fromString(idParam);
+                    sourceId = UUID.fromString(idParam);
                 } catch (IllegalArgumentException e) {
                     ctx.status(400).json(Map.of("error", "Invalid build ID format"));
                     return;
                 }
 
-                int tasksReset = buildService.resetBuild(buildId);
+                Build newBuild = buildService.cloneBuild(sourceId);
+                List<BuildTask> clonedTasks = buildService.getTasks(newBuild.getId());
                 ctx.status(200).json(Map.of(
                     "success", true,
-                    "build_id", buildId.toString(),
-                    "tasks_reset", tasksReset,
-                    "message", "Build reset to CREATED; " + tasksReset + " tasks re-queued"
+                    "source_build_id", sourceId.toString(),
+                    "new_build_id", newBuild.getId().toString(),
+                    "tasks_cloned", clonedTasks.size()
                 ));
-                LOGGER.info("Reset build {} via API ({} tasks re-queued)", buildId, tasksReset);
+                LOGGER.info("Cloned build {} → {} ({} tasks)", sourceId, newBuild.getId(), clonedTasks.size());
 
             } catch (IllegalArgumentException e) {
                 ctx.status(400).json(Map.of("error", e.getMessage()));
             } catch (IllegalStateException e) {
                 ctx.status(409).json(Map.of("error", e.getMessage()));
             } catch (SQLException e) {
-                LOGGER.error("Database error resetting build", e);
+                LOGGER.error("Database error cloning build", e);
                 ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
             } catch (Exception e) {
-                LOGGER.error("Unexpected error resetting build", e);
+                LOGGER.error("Unexpected error cloning build", e);
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });

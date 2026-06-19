@@ -300,25 +300,34 @@ class BuildTaskEndpointTest {
     }
 
     @Test
-    void resetBuildReturns200WithTaskCount() throws Exception {
-        UUID buildId = UUID.randomUUID();
-        when(buildService.resetBuild(buildId)).thenReturn(3);
+    void cloneBuildReturnsNewBuildId() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+        UUID newId = UUID.randomUUID();
+        Build newBuild = new Build("build", "desc", "minecraft:overworld");
+        newBuild.setId(newId);
+        when(buildService.cloneBuild(sourceId)).thenReturn(newBuild);
+        when(buildService.getTasks(newId)).thenReturn(List.of(
+            new BuildTask(newId, 0, TaskType.BLOCK_FILL, objectMapper.createObjectNode(), "t1"),
+            new BuildTask(newId, 1, TaskType.BLOCK_FILL, objectMapper.createObjectNode(), "t2")
+        ));
 
-        HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/reset", null);
+        HttpResponse<String> response = send("POST", "/api/builds/" + sourceId + "/clone", null);
 
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = objectMapper.readTree(response.body());
         assertThat(body.get("success").asBoolean()).isTrue();
-        assertThat(body.get("tasks_reset").asInt()).isEqualTo(3);
+        assertThat(body.get("source_build_id").asText()).isEqualTo(sourceId.toString());
+        assertThat(body.get("new_build_id").asText()).isEqualTo(newId.toString());
+        assertThat(body.get("tasks_cloned").asInt()).isEqualTo(2);
     }
 
     @Test
-    void resetBuildReturns409WhenBuildInProgress() throws Exception {
-        UUID buildId = UUID.randomUUID();
-        when(buildService.resetBuild(buildId))
-            .thenThrow(new IllegalStateException("Cannot reset build that is currently executing: " + buildId));
+    void cloneBuildReturns409WhenBuildInProgress() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+        when(buildService.cloneBuild(sourceId))
+            .thenThrow(new IllegalStateException("Cannot clone build that is currently executing: " + sourceId));
 
-        HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/reset", null);
+        HttpResponse<String> response = send("POST", "/api/builds/" + sourceId + "/clone", null);
 
         assertThat(response.statusCode()).isEqualTo(409);
         assertThat(objectMapper.readTree(response.body()).get("error").asText()).contains("currently executing");
