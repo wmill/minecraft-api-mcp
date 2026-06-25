@@ -1362,7 +1362,7 @@ class MinecraftAPIClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/api/player/teleport",
+                f"{self.base_url}/api/players/teleport",
                 json=payload
             )
             response.raise_for_status()

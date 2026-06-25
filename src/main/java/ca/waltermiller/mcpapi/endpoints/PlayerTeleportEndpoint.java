@@ -11,6 +11,7 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.world.World;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 public class PlayerTeleportEndpoint extends APIEndpoint {
     
@@ -26,21 +27,29 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
     private void teleportPlayer(Context ctx) {
         try {
             TeleportRequest request = ctx.bodyAsClass(TeleportRequest.class);
-            
-            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+
+            CompletableFuture<TeleportResult> future = new CompletableFuture<>();
+
+            server.execute(() -> {
                 try {
                     // Find the player by name
                     ServerPlayerEntity player = server.getPlayerManager().getPlayer(request.player_name());
                     if (player == null) {
-                        ctx.status(404).json(new ErrorResponse("Player not found: " + request.player_name()));
+                        future.complete(new TeleportResult(404, new ErrorResponse("Player not found: " + request.player_name())));
                         return;
                     }
 
                     // Get the target dimension
-                    RegistryKey<World> dimensionKey = RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.dimension()));
+                    Identifier dimensionId = Identifier.tryParse(request.dimension());
+                    if (dimensionId == null) {
+                        future.complete(new TeleportResult(400, new ErrorResponse("Invalid dimension: " + request.dimension())));
+                        return;
+                    }
+
+                    RegistryKey<World> dimensionKey = RegistryKey.of(RegistryKeys.WORLD, dimensionId);
                     ServerWorld targetWorld = server.getWorld(dimensionKey);
                     if (targetWorld == null) {
-                        ctx.status(400).json(new ErrorResponse("Invalid dimension: " + request.dimension()));
+                        future.complete(new TeleportResult(400, new ErrorResponse("Invalid dimension: " + request.dimension())));
                         return;
                     }
 
@@ -49,6 +58,7 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
 
                     // Create response
                     TeleportResponse response = new TeleportResponse(
+                        true,
                         "success",
                         "Player " + request.player_name() + " teleported successfully",
                         request.player_name(),
@@ -60,22 +70,28 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
                         request.pitch()
                     );
 
-                    ctx.json(response);
+                    future.complete(new TeleportResult(200, response));
                     LOGGER.info("Teleported player {} to ({}, {}, {}) in {}",
                         request.player_name(), request.x(), request.y(), request.z(), request.dimension());
                     
                 } catch (Exception e) {
                     LOGGER.error("Error teleporting player: ", e);
-                    ctx.status(500).json(new ErrorResponse("Failed to teleport player: " + e.getMessage()));
+                    future.complete(new TeleportResult(500, new ErrorResponse("Failed to teleport player: " + e.getMessage())));
                 }
-            }, server::execute);
-            
-            // Wait for completion with timeout handling
-            future.exceptionally(throwable -> {
-                LOGGER.error("Teleport operation failed: ", throwable);
-                ctx.status(500).json(new ErrorResponse("Teleport operation failed: " + throwable.getMessage()));
-                return null;
             });
+
+            try {
+                TeleportResult result = future.get(10, TimeUnit.SECONDS);
+                ctx.status(result.statusCode()).json(result.body());
+            } catch (java.util.concurrent.TimeoutException e) {
+                ctx.status(500).json(new ErrorResponse("Timeout waiting for teleport operation"));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                ctx.status(500).json(new ErrorResponse("Teleport operation interrupted"));
+            } catch (Exception e) {
+                LOGGER.error("Teleport operation failed: ", e);
+                ctx.status(500).json(new ErrorResponse("Teleport operation failed: " + e.getMessage()));
+            }
             
         } catch (Exception e) {
             LOGGER.error("Error processing teleport request: ", e);
@@ -84,6 +100,7 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
     }
     
     public record TeleportResponse(
+        boolean success,
         String status,
         String message,
         String player_name,
@@ -96,6 +113,8 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
     ) {}
 
     public record ErrorResponse(String error) {}
+
+    private record TeleportResult(int statusCode, Object body) {}
 
     public record TeleportRequest(
         String player_name,
@@ -124,4 +143,3 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
         }
 }
 }
-
