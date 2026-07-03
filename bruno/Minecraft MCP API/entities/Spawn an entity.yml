@@ -1,0 +1,117 @@
+info:
+  name: Spawn an entity
+  type: http
+  seq: 2
+  tags:
+    - entities
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/entities/spawn"
+  body:
+    type: json
+    data: |-
+      {
+        "type": "minecraft:zombie",
+        "world": "minecraft:overworld",
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Entity spawned
+    request:
+      url: "{{baseUrl}}/api/world/entities/spawn"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "type": "minecraft:zombie",
+            "world": "minecraft:overworld",
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "type": "",
+            "uuid": "",
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/world/entities/spawn"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "type": "minecraft:zombie",
+            "world": "minecraft:overworld",
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/entities/spawn"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "type": "minecraft:zombie",
+            "world": "minecraft:overworld",
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

@@ -1,0 +1,76 @@
+info:
+  name: Broadcast a message to all players
+  type: http
+  seq: 1
+  tags:
+    - messages
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/message/broadcast"
+  body:
+    type: json
+    data: |-
+      {
+        "message": "",
+        "action_bar": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Message sent
+    request:
+      url: "{{baseUrl}}/api/message/broadcast"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "message": "",
+            "action_bar": false
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "message": "",
+            "player_count": 0
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/message/broadcast"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "message": "",
+            "action_bar": false
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

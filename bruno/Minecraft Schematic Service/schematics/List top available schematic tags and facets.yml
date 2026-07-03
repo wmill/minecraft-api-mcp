@@ -1,0 +1,118 @@
+info:
+  name: List top available schematic tags and facets
+  type: http
+  seq: 2
+  tags:
+    - schematics
+
+http:
+  method: GET
+  url: "{{baseUrl}}/schematics/tags"
+  params:
+    - name: limit
+      value: "20"
+      type: query
+      description: Maximum number of tags and facet values per group (1-100)
+    - name: placeable
+      value: "true"
+      type: query
+      description: Only count schematics with an NBT file available for placement
+    - name: fallback
+      value: "true"
+      type: query
+      description: Fall back to local catalog aggregation when Elasticsearch is unavailable
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Top tags and facets
+    request:
+      url: "{{baseUrl}}/schematics/tags"
+      method: GET
+      params:
+        - name: limit
+          value: "20"
+          type: query
+          description: Maximum number of tags and facet values per group (1-100)
+        - name: placeable
+          value: "true"
+          type: query
+          description: Only count schematics with an NBT file available for placement
+        - name: fallback
+          value: "true"
+          type: query
+          description: Fall back to local catalog aggregation when Elasticsearch is unavailable
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "tags": [
+              {
+                "tag": "",
+                "count": 0
+              }
+            ],
+            "facets": {
+              "structure_type": [
+                {
+                  "value": "",
+                  "count": 0
+                }
+              ],
+              "style": [
+                {
+                  "value": "",
+                  "count": 0
+                }
+              ],
+              "size_category": [
+                {
+                  "value": "",
+                  "count": 0
+                }
+              ]
+            },
+            "source": "elasticsearch"
+          }
+  - name: 503 Response
+    description: Elasticsearch unavailable and fallback=false
+    request:
+      url: "{{baseUrl}}/schematics/tags"
+      method: GET
+      params:
+        - name: limit
+          value: "20"
+          type: query
+          description: Maximum number of tags and facet values per group (1-100)
+        - name: placeable
+          value: "true"
+          type: query
+          description: Only count schematics with an NBT file available for placement
+        - name: fallback
+          value: "true"
+          type: query
+          description: Fall back to local catalog aggregation when Elasticsearch is unavailable
+    response:
+      status: 503
+      statusText: Service Unavailable
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "detail": ""
+          }

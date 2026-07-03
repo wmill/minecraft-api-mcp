@@ -1,0 +1,168 @@
+info:
+  name: Add a task to a build
+  type: http
+  seq: 5
+  tags:
+    - builds
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/builds/:id/tasks"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID
+  body:
+    type: json
+    data: |-
+      {
+        "task_type": "BLOCK_SET",
+        "task_data": {},
+        "description": "",
+        "task_order": 0
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 201 Response
+    description: Task added
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+      body:
+        type: json
+        data: |-
+          {
+            "task_type": "BLOCK_SET",
+            "task_data": {},
+            "description": "",
+            "task_order": 0
+          }
+    response:
+      status: 201
+      statusText: Created
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "task": {
+              "id": "",
+              "build_id": "",
+              "task_order": 0,
+              "task_type": "BLOCK_SET",
+              "status": "QUEUED",
+              "task_data": {},
+              "description": "",
+              "executed_at": "",
+              "error_message": ""
+            }
+          }
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+      body:
+        type: json
+        data: |-
+          {
+            "task_type": "BLOCK_SET",
+            "task_data": {},
+            "description": "",
+            "task_order": 0
+          }
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 409 Response
+    description: Operation not allowed in current state
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+      body:
+        type: json
+        data: |-
+          {
+            "task_type": "BLOCK_SET",
+            "task_data": {},
+            "description": "",
+            "task_order": 0
+          }
+    response:
+      status: 409
+      statusText: Conflict
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+      body:
+        type: json
+        data: |-
+          {
+            "task_type": "BLOCK_SET",
+            "task_data": {},
+            "description": "",
+            "task_order": 0
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

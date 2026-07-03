@@ -1,0 +1,95 @@
+info:
+  name: Place a torch
+  type: http
+  seq: 4
+  tags:
+    - prefabs
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/prefabs/torch"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "block_type": "minecraft:torch",
+        "facing": ""
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Torch placed
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/torch"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "block_type": "minecraft:torch",
+            "facing": ""
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "world": "",
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "block_type": "",
+            "wall_mounted": false,
+            "facing": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/torch"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "block_type": "minecraft:torch",
+            "facing": ""
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

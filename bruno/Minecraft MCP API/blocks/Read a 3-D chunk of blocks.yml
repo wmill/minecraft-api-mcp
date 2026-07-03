@@ -1,0 +1,112 @@
+info:
+  name: Read a 3-D chunk of blocks
+  type: http
+  seq: 3
+  tags:
+    - blocks
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/blocks/chunk"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "start_x": 0,
+        "start_y": 0,
+        "start_z": 0,
+        "size_x": 0,
+        "size_y": 0,
+        "size_z": 0
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Block chunk data
+    request:
+      url: "{{baseUrl}}/api/world/blocks/chunk"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "size_x": 0,
+            "size_y": 0,
+            "size_z": 0
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "world": "",
+            "start_position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "size": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "blocks": [
+              [
+                [
+                  {
+                    "block_name": "minecraft:stone",
+                    "block_states": {
+                      "facing": "north"
+                    }
+                  }
+                ]
+              ]
+            ]
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/blocks/chunk"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "size_x": 0,
+            "size_y": 0,
+            "size_z": 0
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

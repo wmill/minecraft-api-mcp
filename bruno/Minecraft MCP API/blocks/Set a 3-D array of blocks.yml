@@ -1,0 +1,98 @@
+info:
+  name: Set a 3-D array of blocks
+  type: http
+  seq: 2
+  tags:
+    - blocks
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/blocks/set"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "start_x": 0,
+        "start_y": 0,
+        "start_z": 0,
+        "blocks": [
+          [
+            []
+          ]
+        ]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Blocks placed
+    request:
+      url: "{{baseUrl}}/api/world/blocks/set"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "blocks": [
+              [
+                []
+              ]
+            ]
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "blocks_set": 0,
+            "blocks_skipped": 0,
+            "world": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/blocks/set"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "blocks": [
+              [
+                []
+              ]
+            ]
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

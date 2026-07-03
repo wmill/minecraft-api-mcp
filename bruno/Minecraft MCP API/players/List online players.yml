@@ -1,0 +1,48 @@
+info:
+  name: List online players
+  type: http
+  seq: 1
+  tags:
+    - players
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/world/players"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Array of online players with positions and rotations
+    request:
+      url: "{{baseUrl}}/api/world/players"
+      method: GET
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          [
+            {
+              "name": "",
+              "uuid": "",
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "yaw": 0,
+                "pitch": 0
+              }
+            }
+          ]

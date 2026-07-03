@@ -1,0 +1,166 @@
+info:
+  name: Search schematics by text and optional filters
+  type: http
+  seq: 1
+  tags:
+    - schematics
+
+http:
+  method: GET
+  url: "{{baseUrl}}/schematics/search"
+  params:
+    - name: q
+      value: ""
+      type: query
+      description: Search query text
+    - name: limit
+      value: "10"
+      type: query
+      description: Maximum number of results (1–50)
+    - name: structure_type
+      value: ""
+      type: query
+      description: Filter by structure type (e.g. tower, building, bridge)
+      disabled: true
+    - name: style
+      value: ""
+      type: query
+      description: Filter by architectural style (e.g. medieval, rustic, modern)
+      disabled: true
+    - name: size_category
+      value: ""
+      type: query
+      description: Filter by size category
+      disabled: true
+    - name: has_interior
+      value: ""
+      type: query
+      description: Filter by whether the schematic has an interior
+      disabled: true
+    - name: placeable
+      value: "true"
+      type: query
+      description: Only return schematics with an NBT file available for placement
+    - name: fallback
+      value: "true"
+      type: query
+      description: Fall back to local search when Elasticsearch is unavailable
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Search results
+    request:
+      url: "{{baseUrl}}/schematics/search"
+      method: GET
+      params:
+        - name: q
+          value: ""
+          type: query
+          description: Search query text
+        - name: limit
+          value: "10"
+          type: query
+          description: Maximum number of results (1–50)
+        - name: structure_type
+          value: ""
+          type: query
+          description: Filter by structure type (e.g. tower, building, bridge)
+          disabled: true
+        - name: style
+          value: ""
+          type: query
+          description: Filter by architectural style (e.g. medieval, rustic, modern)
+          disabled: true
+        - name: size_category
+          value: ""
+          type: query
+          description: Filter by size category
+          disabled: true
+        - name: has_interior
+          value: ""
+          type: query
+          description: Filter by whether the schematic has an interior
+          disabled: true
+        - name: placeable
+          value: "true"
+          type: query
+          description: Only return schematics with an NBT file available for placement
+        - name: fallback
+          value: "true"
+          type: query
+          description: Fall back to local search when Elasticsearch is unavailable
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "results": [],
+            "count": 0,
+            "source": "elasticsearch"
+          }
+  - name: 503 Response
+    description: Elasticsearch unavailable and fallback=false
+    request:
+      url: "{{baseUrl}}/schematics/search"
+      method: GET
+      params:
+        - name: q
+          value: ""
+          type: query
+          description: Search query text
+        - name: limit
+          value: "10"
+          type: query
+          description: Maximum number of results (1–50)
+        - name: structure_type
+          value: ""
+          type: query
+          description: Filter by structure type (e.g. tower, building, bridge)
+          disabled: true
+        - name: style
+          value: ""
+          type: query
+          description: Filter by architectural style (e.g. medieval, rustic, modern)
+          disabled: true
+        - name: size_category
+          value: ""
+          type: query
+          description: Filter by size category
+          disabled: true
+        - name: has_interior
+          value: ""
+          type: query
+          description: Filter by whether the schematic has an interior
+          disabled: true
+        - name: placeable
+          value: "true"
+          type: query
+          description: Only return schematics with an NBT file available for placement
+        - name: fallback
+          value: "true"
+          type: query
+          description: Fall back to local search when Elasticsearch is unavailable
+    response:
+      status: 503
+      statusText: Service Unavailable
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "detail": ""
+          }

@@ -1,0 +1,71 @@
+info:
+  name: Start executing a build asynchronously
+  type: http
+  seq: 9
+  tags:
+    - builds
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/builds/:id/execute"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 202 Response
+    description: Execution started
+    request:
+      url: "{{baseUrl}}/api/builds/:id/execute"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+    response:
+      status: 202
+      statusText: Accepted
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "build_id": "",
+            "message": "",
+            "status": "accepted"
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/builds/:id/execute"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

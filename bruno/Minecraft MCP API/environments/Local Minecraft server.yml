@@ -1,0 +1,4 @@
+name: Local Minecraft server
+variables:
+  - name: baseUrl
+    value: http://localhost:7070

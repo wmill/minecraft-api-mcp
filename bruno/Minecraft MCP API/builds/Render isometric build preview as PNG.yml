@@ -1,0 +1,251 @@
+info:
+  name: Render isometric build preview as PNG
+  type: http
+  seq: 11
+  tags:
+    - builds
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/builds/:id/preview"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID
+    - name: iso_scale
+      value: "6"
+      type: query
+    - name: terrain_margin
+      value: "0"
+      type: query
+    - name: view_direction
+      value: south
+      type: query
+    - name: view_direction
+      value: west
+      type: query
+      disabled: true
+    - name: view_direction
+      value: north
+      type: query
+      disabled: true
+    - name: view_direction
+      value: east
+      type: query
+      disabled: true
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: PNG image
+    request:
+      url: "{{baseUrl}}/api/builds/:id/preview"
+      method: GET
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+        - name: iso_scale
+          value: "6"
+          type: query
+        - name: terrain_margin
+          value: "0"
+          type: query
+        - name: view_direction
+          value: south
+          type: query
+        - name: view_direction
+          value: west
+          type: query
+          disabled: true
+        - name: view_direction
+          value: north
+          type: query
+          disabled: true
+        - name: view_direction
+          value: east
+          type: query
+          disabled: true
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: image/png
+      body:
+        type: text
+        data: ""
+  - name: 204 Response
+    description: No blocks to render
+    request:
+      url: "{{baseUrl}}/api/builds/:id/preview"
+      method: GET
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+        - name: iso_scale
+          value: "6"
+          type: query
+        - name: terrain_margin
+          value: "0"
+          type: query
+        - name: view_direction
+          value: south
+          type: query
+        - name: view_direction
+          value: west
+          type: query
+          disabled: true
+        - name: view_direction
+          value: north
+          type: query
+          disabled: true
+        - name: view_direction
+          value: east
+          type: query
+          disabled: true
+    response:
+      status: 204
+      statusText: No Content
+      body:
+        type: text
+        data: ""
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/builds/:id/preview"
+      method: GET
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+        - name: iso_scale
+          value: "6"
+          type: query
+        - name: terrain_margin
+          value: "0"
+          type: query
+        - name: view_direction
+          value: south
+          type: query
+        - name: view_direction
+          value: west
+          type: query
+          disabled: true
+        - name: view_direction
+          value: north
+          type: query
+          disabled: true
+        - name: view_direction
+          value: east
+          type: query
+          disabled: true
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 404 Response
+    description: Resource not found
+    request:
+      url: "{{baseUrl}}/api/builds/:id/preview"
+      method: GET
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+        - name: iso_scale
+          value: "6"
+          type: query
+        - name: terrain_margin
+          value: "0"
+          type: query
+        - name: view_direction
+          value: south
+          type: query
+        - name: view_direction
+          value: west
+          type: query
+          disabled: true
+        - name: view_direction
+          value: north
+          type: query
+          disabled: true
+        - name: view_direction
+          value: east
+          type: query
+          disabled: true
+    response:
+      status: 404
+      statusText: Not Found
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/builds/:id/preview"
+      method: GET
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+        - name: iso_scale
+          value: "6"
+          type: query
+        - name: terrain_margin
+          value: "0"
+          type: query
+        - name: view_direction
+          value: south
+          type: query
+        - name: view_direction
+          value: west
+          type: query
+          disabled: true
+        - name: view_direction
+          value: north
+          type: query
+          disabled: true
+        - name: view_direction
+          value: east
+          type: query
+          disabled: true
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

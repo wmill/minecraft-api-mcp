@@ -1,0 +1,178 @@
+info:
+  name: Update a task's data or description
+  type: http
+  seq: 8
+  tags:
+    - builds
+
+http:
+  method: PATCH
+  url: "{{baseUrl}}/api/builds/:id/tasks/:taskId"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID
+    - name: taskId
+      value: ""
+      type: path
+      description: Task UUID
+  body:
+    type: json
+    data: |-
+      {
+        "task_data": {},
+        "description": ""
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Task updated
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks/:taskId"
+      method: PATCH
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+        - name: taskId
+          value: ""
+          type: path
+          description: Task UUID
+      body:
+        type: json
+        data: |-
+          {
+            "task_data": {},
+            "description": ""
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "task": {
+              "id": "",
+              "build_id": "",
+              "task_order": 0,
+              "task_type": "BLOCK_SET",
+              "status": "QUEUED",
+              "task_data": {},
+              "description": "",
+              "executed_at": "",
+              "error_message": ""
+            }
+          }
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks/:taskId"
+      method: PATCH
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+        - name: taskId
+          value: ""
+          type: path
+          description: Task UUID
+      body:
+        type: json
+        data: |-
+          {
+            "task_data": {},
+            "description": ""
+          }
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 409 Response
+    description: Operation not allowed in current state
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks/:taskId"
+      method: PATCH
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+        - name: taskId
+          value: ""
+          type: path
+          description: Task UUID
+      body:
+        type: json
+        data: |-
+          {
+            "task_data": {},
+            "description": ""
+          }
+    response:
+      status: 409
+      statusText: Conflict
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks/:taskId"
+      method: PATCH
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+        - name: taskId
+          value: ""
+          type: path
+          description: Task UUID
+      body:
+        type: json
+        data: |-
+          {
+            "task_data": {},
+            "description": ""
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

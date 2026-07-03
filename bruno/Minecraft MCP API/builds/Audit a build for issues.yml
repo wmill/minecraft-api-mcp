@@ -1,0 +1,104 @@
+info:
+  name: Audit a build for issues
+  type: http
+  seq: 12
+  tags:
+    - builds
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/builds/:id/audit"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Audit results
+    request:
+      url: "{{baseUrl}}/api/builds/:id/audit"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "build_id": "",
+            "issues": [
+              {
+                "severity": "warning",
+                "task_id": "",
+                "task_order": 0,
+                "check": "",
+                "message": ""
+              }
+            ],
+            "summary": {
+              "warnings": 0,
+              "errors": 0
+            }
+          }
+  - name: 404 Response
+    description: Resource not found
+    request:
+      url: "{{baseUrl}}/api/builds/:id/audit"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+    response:
+      status: 404
+      statusText: Not Found
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/builds/:id/audit"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

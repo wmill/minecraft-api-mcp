@@ -1,0 +1,105 @@
+info:
+  name: Build a staircase
+  type: http
+  seq: 2
+  tags:
+    - prefabs
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/prefabs/stairs"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "start_x": 0,
+        "start_y": 0,
+        "start_z": 0,
+        "end_x": 0,
+        "end_y": 0,
+        "end_z": 0,
+        "block_type": "minecraft:oak_stairs",
+        "stair_type": "",
+        "staircase_direction": "",
+        "fill_support": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Staircase placed
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/stairs"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "end_x": 0,
+            "end_y": 0,
+            "end_z": 0,
+            "block_type": "minecraft:oak_stairs",
+            "stair_type": "",
+            "staircase_direction": "",
+            "fill_support": false
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "world": "",
+            "blocks_placed": 0,
+            "staircase_direction": "",
+            "fill_support": false
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/stairs"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "end_x": 0,
+            "end_y": 0,
+            "end_z": 0,
+            "block_type": "minecraft:oak_stairs",
+            "stair_type": "",
+            "staircase_direction": "",
+            "fill_support": false
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

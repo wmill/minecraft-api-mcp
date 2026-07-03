@@ -1,0 +1,119 @@
+info:
+  name: Poll rail planning job status
+  type: http
+  seq: 14
+  tags:
+    - builds
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/rail-plans/:jobId"
+  params:
+    - name: jobId
+      value: ""
+      type: path
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Planning job status
+    request:
+      url: "{{baseUrl}}/api/rail-plans/:jobId"
+      method: GET
+      params:
+        - name: jobId
+          value: ""
+          type: path
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "planning_job": {
+              "id": "",
+              "build_id": "",
+              "status": "PLANNING",
+              "phase": "",
+              "sampled_area_count": 0,
+              "route_length": 0,
+              "created_at": "",
+              "updated_at": "",
+              "error_message": "",
+              "result": {}
+            }
+          }
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/rail-plans/:jobId"
+      method: GET
+      params:
+        - name: jobId
+          value: ""
+          type: path
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 404 Response
+    description: Resource not found
+    request:
+      url: "{{baseUrl}}/api/rail-plans/:jobId"
+      method: GET
+      params:
+        - name: jobId
+          value: ""
+          type: path
+    response:
+      status: 404
+      statusText: Not Found
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/rail-plans/:jobId"
+      method: GET
+      params:
+        - name: jobId
+          value: ""
+          type: path
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

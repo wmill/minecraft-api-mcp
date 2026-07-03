@@ -1,0 +1,123 @@
+info:
+  name: Rain fire over a circular area
+  type: http
+  seq: 1
+  tags:
+    - effects
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/effects/rain-fire"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "x": 0,
+        "z": 0,
+        "radius": 0,
+        "density": 0,
+        "seed": 0
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Fire placed
+    request:
+      url: "{{baseUrl}}/api/world/effects/rain-fire"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x": 0,
+            "z": 0,
+            "radius": 0,
+            "density": 0,
+            "seed": 0
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "world": "",
+            "fires_placed": 0,
+            "columns_considered": 0,
+            "center": {
+              "x": 0,
+              "z": 0
+            },
+            "radius": 0,
+            "density": 0
+          }
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/world/effects/rain-fire"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x": 0,
+            "z": 0,
+            "radius": 0,
+            "density": 0,
+            "seed": 0
+          }
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/effects/rain-fire"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x": 0,
+            "z": 0,
+            "radius": 0,
+            "density": 0,
+            "seed": 0
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

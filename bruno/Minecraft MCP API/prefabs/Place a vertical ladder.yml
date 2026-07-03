@@ -1,0 +1,102 @@
+info:
+  name: Place a vertical ladder
+  type: http
+  seq: 6
+  tags:
+    - prefabs
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/prefabs/ladder"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "height": 0,
+        "block_type": "minecraft:ladder",
+        "facing": ""
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Ladder placed
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/ladder"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "height": 0,
+            "block_type": "minecraft:ladder",
+            "facing": ""
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "world": "",
+            "blocks_placed": 0,
+            "facing": "",
+            "start_position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "end_position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/ladder"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "height": 0,
+            "block_type": "minecraft:ladder",
+            "facing": ""
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

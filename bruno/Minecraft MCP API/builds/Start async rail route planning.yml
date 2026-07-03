@@ -1,0 +1,209 @@
+info:
+  name: Start async rail route planning
+  type: http
+  seq: 13
+  tags:
+    - builds
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/builds/:id/plan-rail"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "start_x": 0,
+        "start_y": 0,
+        "start_z": 0,
+        "end_x": 0,
+        "end_y": 0,
+        "end_z": 0,
+        "weight_overrides": {},
+        "rail_bed_block": "",
+        "support_block": "",
+        "power_block": "",
+        "tunnel_lining_block": ""
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 202 Response
+    description: Planning job accepted
+    request:
+      url: "{{baseUrl}}/api/builds/:id/plan-rail"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "end_x": 0,
+            "end_y": 0,
+            "end_z": 0,
+            "weight_overrides": {},
+            "rail_bed_block": "",
+            "support_block": "",
+            "power_block": "",
+            "tunnel_lining_block": ""
+          }
+    response:
+      status: 202
+      statusText: Accepted
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "planning_job": {
+              "id": "",
+              "build_id": "",
+              "status": "PLANNING",
+              "phase": "",
+              "sampled_area_count": 0,
+              "route_length": 0,
+              "created_at": "",
+              "updated_at": "",
+              "error_message": "",
+              "result": {}
+            }
+          }
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/builds/:id/plan-rail"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "end_x": 0,
+            "end_y": 0,
+            "end_z": 0,
+            "weight_overrides": {},
+            "rail_bed_block": "",
+            "support_block": "",
+            "power_block": "",
+            "tunnel_lining_block": ""
+          }
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 409 Response
+    description: Operation not allowed in current state
+    request:
+      url: "{{baseUrl}}/api/builds/:id/plan-rail"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "end_x": 0,
+            "end_y": 0,
+            "end_z": 0,
+            "weight_overrides": {},
+            "rail_bed_block": "",
+            "support_block": "",
+            "power_block": "",
+            "tunnel_lining_block": ""
+          }
+    response:
+      status: 409
+      statusText: Conflict
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/builds/:id/plan-rail"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "end_x": 0,
+            "end_y": 0,
+            "end_z": 0,
+            "weight_overrides": {},
+            "rail_bed_block": "",
+            "support_block": "",
+            "power_block": "",
+            "tunnel_lining_block": ""
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

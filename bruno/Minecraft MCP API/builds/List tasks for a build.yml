@@ -1,0 +1,105 @@
+info:
+  name: List tasks for a build
+  type: http
+  seq: 4
+  tags:
+    - builds
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/builds/:id/tasks"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Task list
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks"
+      method: GET
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "build_id": "",
+            "task_count": 0,
+            "tasks": [
+              {
+                "id": "",
+                "build_id": "",
+                "task_order": 0,
+                "task_type": "BLOCK_SET",
+                "status": "QUEUED",
+                "task_data": {},
+                "description": "",
+                "executed_at": "",
+                "error_message": ""
+              }
+            ]
+          }
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks"
+      method: GET
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/builds/:id/tasks"
+      method: GET
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

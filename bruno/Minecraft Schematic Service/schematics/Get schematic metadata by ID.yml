@@ -1,0 +1,112 @@
+info:
+  name: Get schematic metadata by ID
+  type: http
+  seq: 3
+  tags:
+    - schematics
+
+http:
+  method: GET
+  url: "{{baseUrl}}/schematics/:schematic_id"
+  params:
+    - name: schematic_id
+      value: "12345"
+      type: path
+      description: Numeric schematic identifier
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Schematic metadata
+    request:
+      url: "{{baseUrl}}/schematics/:schematic_id"
+      method: GET
+      params:
+        - name: schematic_id
+          value: "12345"
+          type: path
+          description: Numeric schematic identifier
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "schematic_id": "12345",
+            "title": "Medieval Watchtower",
+            "description": "",
+            "keywords": "",
+            "keyword_tags": [],
+            "structure_type": "tower",
+            "style": "medieval",
+            "placement": {
+              "notes": ""
+            },
+            "size_category": "medium",
+            "has_interior": false,
+            "confidence": 0,
+            "size": {
+              "width": 0,
+              "height": 0,
+              "length": 0
+            },
+            "non_air_block_count": 0,
+            "placeable": false,
+            "nbt_filename": "",
+            "image_metadata": {},
+            "search_text": ""
+          }
+  - name: 404 Response
+    description: Schematic not found
+    request:
+      url: "{{baseUrl}}/schematics/:schematic_id"
+      method: GET
+      params:
+        - name: schematic_id
+          value: "12345"
+          type: path
+          description: Numeric schematic identifier
+    response:
+      status: 404
+      statusText: Not Found
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "detail": ""
+          }
+  - name: 503 Response
+    description: Catalog data unavailable
+    request:
+      url: "{{baseUrl}}/schematics/:schematic_id"
+      method: GET
+      params:
+        - name: schematic_id
+          value: "12345"
+          type: path
+          description: Numeric schematic identifier
+    response:
+      status: 503
+      statusText: Service Unavailable
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "detail": ""
+          }

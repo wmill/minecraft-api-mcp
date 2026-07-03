@@ -1,0 +1,111 @@
+info:
+  name: Create a new build
+  type: http
+  seq: 1
+  tags:
+    - builds
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/builds"
+  body:
+    type: json
+    data: |-
+      {
+        "name": "",
+        "description": "",
+        "world": "minecraft:overworld"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 201 Response
+    description: Build created
+    request:
+      url: "{{baseUrl}}/api/builds"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "name": "",
+            "description": "",
+            "world": "minecraft:overworld"
+          }
+    response:
+      status: 201
+      statusText: Created
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "build": {
+              "id": "",
+              "name": "",
+              "description": "",
+              "world": "minecraft:overworld",
+              "status": "CREATED",
+              "created_at": "",
+              "completed_at": ""
+            }
+          }
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/builds"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "name": "",
+            "description": "",
+            "world": "minecraft:overworld"
+          }
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/builds"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "name": "",
+            "description": "",
+            "world": "minecraft:overworld"
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

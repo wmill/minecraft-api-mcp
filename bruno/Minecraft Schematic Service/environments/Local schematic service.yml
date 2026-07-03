@@ -1,0 +1,4 @@
+name: Local schematic service
+variables:
+  - name: baseUrl
+    value: http://localhost:7080

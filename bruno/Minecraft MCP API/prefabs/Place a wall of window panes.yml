@@ -1,0 +1,99 @@
+info:
+  name: Place a wall of window panes
+  type: http
+  seq: 3
+  tags:
+    - prefabs
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/prefabs/window-pane"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "start_x": 0,
+        "start_y": 0,
+        "start_z": 0,
+        "end_x": 0,
+        "end_z": 0,
+        "height": 0,
+        "block_type": "minecraft:glass_pane",
+        "waterlogged": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Window panes placed
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/window-pane"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "end_x": 0,
+            "end_z": 0,
+            "height": 0,
+            "block_type": "minecraft:glass_pane",
+            "waterlogged": false
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "world": "",
+            "panes_placed": 0,
+            "orientation": "",
+            "waterlogged": false
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/window-pane"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "end_x": 0,
+            "end_z": 0,
+            "height": 0,
+            "block_type": "minecraft:glass_pane",
+            "waterlogged": false
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

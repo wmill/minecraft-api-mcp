@@ -1,0 +1,100 @@
+info:
+  name: Fill a rectangular region with a single block type
+  type: http
+  seq: 4
+  tags:
+    - blocks
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/blocks/fill"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "x1": 0,
+        "y1": 0,
+        "z1": 0,
+        "x2": 0,
+        "y2": 0,
+        "z2": 0,
+        "block_type": "minecraft:stone",
+        "notify_neighbors": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Fill completed
+    request:
+      url: "{{baseUrl}}/api/world/blocks/fill"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x1": 0,
+            "y1": 0,
+            "z1": 0,
+            "x2": 0,
+            "y2": 0,
+            "z2": 0,
+            "block_type": "minecraft:stone",
+            "notify_neighbors": false
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "blocks_set": 0,
+            "blocks_failed": 0,
+            "total_blocks": 0,
+            "world": "",
+            "box_bounds": {}
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/blocks/fill"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x1": 0,
+            "y1": 0,
+            "z1": 0,
+            "x2": 0,
+            "y2": 0,
+            "z2": 0,
+            "block_type": "minecraft:stone",
+            "notify_neighbors": false
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

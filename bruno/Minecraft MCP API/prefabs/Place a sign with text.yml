@@ -1,0 +1,109 @@
+info:
+  name: Place a sign with text
+  type: http
+  seq: 5
+  tags:
+    - prefabs
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/prefabs/sign"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "block_type": "minecraft:oak_sign",
+        "front_lines": [],
+        "back_lines": [],
+        "facing": "",
+        "rotation": 0,
+        "glowing": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Sign placed
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/sign"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "block_type": "minecraft:oak_sign",
+            "front_lines": [],
+            "back_lines": [],
+            "facing": "",
+            "rotation": 0,
+            "glowing": false
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "world": "",
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "block_type": "",
+            "sign_type": "wall",
+            "glowing": false,
+            "facing": "",
+            "rotation": 0
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/sign"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "block_type": "minecraft:oak_sign",
+            "front_lines": [],
+            "back_lines": [],
+            "facing": "",
+            "rotation": 0,
+            "glowing": false
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

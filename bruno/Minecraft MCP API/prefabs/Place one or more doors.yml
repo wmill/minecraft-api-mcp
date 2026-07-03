@@ -1,0 +1,103 @@
+info:
+  name: Place one or more doors
+  type: http
+  seq: 1
+  tags:
+    - prefabs
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/prefabs/door"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "start_x": 0,
+        "start_y": 0,
+        "start_z": 0,
+        "width": 0,
+        "facing": "north",
+        "block_type": "minecraft:oak_door",
+        "hinge": "left",
+        "open": false,
+        "double_doors": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Doors placed
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/door"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "width": 0,
+            "facing": "north",
+            "block_type": "minecraft:oak_door",
+            "hinge": "left",
+            "open": false,
+            "double_doors": false
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "world": "",
+            "doors_placed": 0,
+            "facing": "",
+            "hinge": "",
+            "open": false
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/prefabs/door"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "start_x": 0,
+            "start_y": 0,
+            "start_z": 0,
+            "width": 0,
+            "facing": "north",
+            "block_type": "minecraft:oak_door",
+            "hinge": "left",
+            "open": false,
+            "double_doors": false
+          }
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }

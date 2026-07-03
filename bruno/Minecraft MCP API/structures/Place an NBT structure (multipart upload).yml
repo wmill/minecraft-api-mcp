@@ -1,0 +1,198 @@
+info:
+  name: Place an NBT structure (multipart upload)
+  type: http
+  seq: 1
+  tags:
+    - structures
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/structure/place"
+  body:
+    type: multipart-form
+    data:
+      - name: nbt_file
+        type: file
+        value: []
+        description: NBT structure file
+      - name: world
+        type: text
+        value: minecraft:overworld
+      - name: x
+        type: text
+        value: "0"
+      - name: y
+        type: text
+        value: "64"
+      - name: z
+        type: text
+        value: "0"
+      - name: rotation
+        type: text
+        value: NONE
+      - name: include_entities
+        type: text
+        value: "true"
+      - name: replace_blocks
+        type: text
+        value: "true"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Structure placed
+    request:
+      url: "{{baseUrl}}/api/world/structure/place"
+      method: POST
+      body:
+        type: multipart-form
+        data:
+          - name: nbt_file
+            type: file
+            value: []
+            description: NBT structure file
+          - name: world
+            type: text
+            value: minecraft:overworld
+          - name: x
+            type: text
+            value: "0"
+          - name: y
+            type: text
+            value: "64"
+          - name: z
+            type: text
+            value: "0"
+          - name: rotation
+            type: text
+            value: NONE
+          - name: include_entities
+            type: text
+            value: "true"
+          - name: replace_blocks
+            type: text
+            value: "true"
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "message": "",
+            "filename": "",
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "world": "",
+            "structure_size": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": "",
+            "include_entities": false,
+            "replace_blocks": false
+          }
+  - name: 400 Response
+    description: Invalid request
+    request:
+      url: "{{baseUrl}}/api/world/structure/place"
+      method: POST
+      body:
+        type: multipart-form
+        data:
+          - name: nbt_file
+            type: file
+            value: []
+            description: NBT structure file
+          - name: world
+            type: text
+            value: minecraft:overworld
+          - name: x
+            type: text
+            value: "0"
+          - name: y
+            type: text
+            value: "64"
+          - name: z
+            type: text
+            value: "0"
+          - name: rotation
+            type: text
+            value: NONE
+          - name: include_entities
+            type: text
+            value: "true"
+          - name: replace_blocks
+            type: text
+            value: "true"
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
+  - name: 500 Response
+    description: Internal server error
+    request:
+      url: "{{baseUrl}}/api/world/structure/place"
+      method: POST
+      body:
+        type: multipart-form
+        data:
+          - name: nbt_file
+            type: file
+            value: []
+            description: NBT structure file
+          - name: world
+            type: text
+            value: minecraft:overworld
+          - name: x
+            type: text
+            value: "0"
+          - name: y
+            type: text
+            value: "64"
+          - name: z
+            type: text
+            value: "0"
+          - name: rotation
+            type: text
+            value: NONE
+          - name: include_entities
+            type: text
+            value: "true"
+          - name: replace_blocks
+            type: text
+            value: "true"
+    response:
+      status: 500
+      statusText: Internal Server Error
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": ""
+          }
