@@ -2,34 +2,24 @@
 	"schemaVersion": 1,
 	"id": "mcpapi",
 	"version": "0.0.1",
-	"name": "Example mod",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"name": "Minecraft MCP API",
+	"description": "Exposes a REST API for AI-driven Minecraft interaction via the Model Context Protocol.",
 	"authors": [
-		"Me!"
+		"Walter Miller"
 	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
+	"contact": {},
 	"license": "Commercial",
 	"icon": "assets/mcpapi/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"ca.waltermiller.mcpapi.ExampleMod"
-		],
-		"client": [
-			"ca.waltermiller.mcpapi.ExampleModClient"
+			"ca.waltermiller.mcpapi.McpApiMod"
 		]
 	},
-	"mixins": [],
 	"depends": {
 		"fabricloader": ">=0.16.14",
 		"minecraft": "~1.21.7",
 		"java": ">=21",
 		"fabric-api": "*"
-	},
-	"suggests": {
-		"another-mod": "*"
 	}
 }

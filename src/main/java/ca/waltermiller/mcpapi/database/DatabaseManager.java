@@ -106,14 +106,4 @@ public class DatabaseManager {
         }
     }
     
-    /**
-     * Force schema reinitialization (for testing purposes).
-     * WARNING: This will delete all existing data!
-     */
-    public void reinitializeSchema() throws SQLException {
-        LOGGER.warn("Reinitializing database schema - all data will be lost!");
-        databaseSchema.dropSchema();
-        databaseSchema.initializeSchema();
-        LOGGER.info("Database schema reinitialized");
-    }
 }

@@ -2,7 +2,6 @@ package ca.waltermiller.mcpapi.buildtask.service;
 
 import ca.waltermiller.mcpapi.buildtask.model.TaskType;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,11 +15,6 @@ import java.util.List;
  */
 public class TaskDataValidator {
     private static final Logger logger = LoggerFactory.getLogger(TaskDataValidator.class);
-    private final ObjectMapper objectMapper;
-
-    public TaskDataValidator() {
-        this.objectMapper = new ObjectMapper();
-    }
 
     /**
      * Validates task data for a specific task type.

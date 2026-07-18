@@ -127,54 +127,6 @@ public class PostgreSQLBuildRepository implements BuildRepository {
     }
     
     @Override
-    public List<Build> findByStatus(BuildStatus status) throws SQLException {
-        String sql = """
-            SELECT id, name, description, status, created_at, completed_at, world
-            FROM builds
-            WHERE status = ?
-            ORDER BY created_at DESC
-            """;
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, status.name());
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                List<Build> builds = new ArrayList<>();
-                while (rs.next()) {
-                    builds.add(mapResultSetToBuild(rs));
-                }
-                return builds;
-            }
-        }
-    }
-    
-    @Override
-    public List<Build> findByWorld(String world) throws SQLException {
-        String sql = """
-            SELECT id, name, description, status, created_at, completed_at, world
-            FROM builds
-            WHERE world = ?
-            ORDER BY created_at DESC
-            """;
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, world);
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                List<Build> builds = new ArrayList<>();
-                while (rs.next()) {
-                    builds.add(mapResultSetToBuild(rs));
-                }
-                return builds;
-            }
-        }
-    }
-    
-    @Override
     public List<Build> findByLocationIntersection(String world, BoundingBox boundingBox) throws SQLException {
         String sql = """
             SELECT DISTINCT b.id, b.name, b.description, b.status, b.created_at, b.completed_at, b.world
@@ -204,71 +156,6 @@ public class PostgreSQLBuildRepository implements BuildRepository {
                     builds.add(mapResultSetToBuild(rs));
                 }
                 return builds;
-            }
-        }
-    }
-    
-    @Override
-    public List<Build> findAll(String world) throws SQLException {
-        String sql;
-        if (world != null) {
-            sql = """
-                SELECT id, name, description, status, created_at, completed_at, world
-                FROM builds
-                WHERE world = ?
-                ORDER BY created_at DESC
-                """;
-        } else {
-            sql = """
-                SELECT id, name, description, status, created_at, completed_at, world
-                FROM builds
-                ORDER BY created_at DESC
-                """;
-        }
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            if (world != null) {
-                stmt.setString(1, world);
-            }
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                List<Build> builds = new ArrayList<>();
-                while (rs.next()) {
-                    builds.add(mapResultSetToBuild(rs));
-                }
-                return builds;
-            }
-        }
-    }
-    
-    @Override
-    public long count() throws SQLException {
-        String sql = "SELECT COUNT(*) FROM builds";
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-            
-            if (rs.next()) {
-                return rs.getLong(1);
-            }
-            return 0;
-        }
-    }
-    
-    @Override
-    public boolean existsById(UUID id) throws SQLException {
-        String sql = "SELECT 1 FROM builds WHERE id = ? LIMIT 1";
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setObject(1, id);
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                return rs.next();
             }
         }
     }

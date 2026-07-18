@@ -31,7 +31,6 @@ public class BlocksEndpoint extends APIEndpoint {
     }
 
     private void init() {
-        // Define your endpoints here
         app.get("/api/world/blocks/list", ctx -> {
             // Delegate to core method
             var blockInfos = core.getBlockList();

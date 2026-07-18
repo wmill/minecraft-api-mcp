@@ -242,14 +242,14 @@ public class RailPlanningService {
             int idealY = (int) Math.round(startTrackY + (endTrackY - startTrackY) * progress);
             int desired = Math.max(idealY, Math.max(anchorFloor, surfaceY - 3));
             int previousTrackY = trackHeights.isEmpty() ? startTrackY : trackHeights.get(trackHeights.size() - 1);
-            int trackY = clampStatic(desired, Math.max(anchorFloor, previousTrackY - safeMaxStep), previousTrackY + safeMaxStep);
+            int trackY = clamp(desired, Math.max(anchorFloor, previousTrackY - safeMaxStep), previousTrackY + safeMaxStep);
 
             if (i == 0) {
                 trackY = startTrackY;
             }
             if (i == surfaceHeights.size() - 1) {
                 int targetY = Math.max(anchorFloor, endTrackY);
-                trackY = clampStatic(targetY, Math.max(anchorFloor, previousTrackY - safeMaxStep), previousTrackY + safeMaxStep);
+                trackY = clamp(targetY, Math.max(anchorFloor, previousTrackY - safeMaxStep), previousTrackY + safeMaxStep);
             }
 
             trackHeights.add(trackY);
@@ -318,14 +318,14 @@ public class RailPlanningService {
         if (incoming == null || outgoing == null || incoming == outgoing) {
             return 0.0;
         }
-        return effectiveDoubleStatic(weights, "turn_cost", 0.5);
+        return effectiveDouble(weights, "turn_cost", 0.5);
     }
 
     static double computeTerrainPenalty(int surfaceY, double idealTrackY, Map<String, Double> weights) {
-        double bridgeCost = effectiveDoubleStatic(weights, "bridge_cost", DEFAULT_BRIDGE_COST);
-        double tunnelCost = effectiveDoubleStatic(weights, "tunnel_cost", DEFAULT_TUNNEL_COST);
-        int waterSurfaceThreshold = effectiveIntStatic(weights, "water_surface_threshold", DEFAULT_WATER_SURFACE_THRESHOLD);
-        double waterTunnelPenalty = effectiveDoubleStatic(weights, "water_tunnel_penalty", DEFAULT_WATER_TUNNEL_PENALTY);
+        double bridgeCost = effectiveDouble(weights, "bridge_cost", DEFAULT_BRIDGE_COST);
+        double tunnelCost = effectiveDouble(weights, "tunnel_cost", DEFAULT_TUNNEL_COST);
+        int waterSurfaceThreshold = effectiveInt(weights, "water_surface_threshold", DEFAULT_WATER_SURFACE_THRESHOLD);
+        double waterTunnelPenalty = effectiveDouble(weights, "water_tunnel_penalty", DEFAULT_WATER_TUNNEL_PENALTY);
 
         double bridgeHeight = Math.max(0.0, idealTrackY - (surfaceY + 1.0));
         double tunnelCover = Math.max(0.0, surfaceY - (idealTrackY + 2.0));
@@ -483,33 +483,21 @@ public class RailPlanningService {
         }
     }
 
-    private int effectiveInt(Map<String, Double> weights, String key, int fallback) {
-        return effectiveIntStatic(weights, key, fallback);
-    }
-
-    private double effectiveDouble(Map<String, Double> weights, String key, double fallback) {
-        return effectiveDoubleStatic(weights, key, fallback);
-    }
-
-    private static int effectiveIntStatic(Map<String, Double> weights, String key, int fallback) {
+    private static int effectiveInt(Map<String, Double> weights, String key, int fallback) {
         if (weights == null || !weights.containsKey(key)) {
             return fallback;
         }
         return (int) Math.round(weights.get(key));
     }
 
-    private static double effectiveDoubleStatic(Map<String, Double> weights, String key, double fallback) {
+    private static double effectiveDouble(Map<String, Double> weights, String key, double fallback) {
         if (weights == null || !weights.containsKey(key)) {
             return fallback;
         }
         return weights.get(key);
     }
 
-    private int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
-    private static int clampStatic(int value, int min, int max) {
+    private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 

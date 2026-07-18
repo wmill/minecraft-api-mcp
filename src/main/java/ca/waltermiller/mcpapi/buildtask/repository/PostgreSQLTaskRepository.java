@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.*;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -229,32 +228,6 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     }
     
     @Override
-    public List<BuildTask> findByBuildIdAndStatus(UUID buildId, TaskStatus status) throws SQLException {
-        String sql = """
-            SELECT id, build_id, task_order, task_type, task_data, status, executed_at, error_message,
-                   min_x, min_y, min_z, max_x, max_y, max_z, description
-            FROM build_tasks
-            WHERE build_id = ? AND status = ?
-            ORDER BY task_order ASC
-            """;
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setObject(1, buildId);
-            stmt.setString(2, status.name());
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                List<BuildTask> tasks = new ArrayList<>();
-                while (rs.next()) {
-                    tasks.add(mapResultSetToTask(rs));
-                }
-                return tasks;
-            }
-        }
-    }
-    
-    @Override
     public BuildTask addToQueue(UUID buildId, BuildTask task) throws SQLException {
         // Get the next task order
         int nextOrder = getNextTaskOrder(buildId);
@@ -347,61 +320,6 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     }
     
     @Override
-    public List<BuildTask> findByWorldWithCoordinates(String world) throws SQLException {
-        String sql = """
-            SELECT bt.id, bt.build_id, bt.task_order, bt.task_type, bt.task_data, bt.status,
-                   bt.executed_at, bt.error_message, bt.min_x, bt.min_y, bt.min_z, bt.max_x, bt.max_y, bt.max_z, bt.description
-            FROM build_tasks bt
-            INNER JOIN builds b ON bt.build_id = b.id
-            WHERE b.world = ? AND bt.min_x IS NOT NULL
-            ORDER BY bt.task_order ASC
-            """;
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, world);
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                List<BuildTask> tasks = new ArrayList<>();
-                while (rs.next()) {
-                    tasks.add(mapResultSetToTask(rs));
-                }
-                return tasks;
-            }
-        }
-    }
-    
-    @Override
-    public BuildTask updateTaskStatus(UUID taskId, TaskStatus status, String errorMessage) throws SQLException {
-        String sql = """
-            UPDATE build_tasks
-            SET status = ?, executed_at = ?, error_message = ?
-            WHERE id = ?
-            """;
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, status.name());
-            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
-            stmt.setString(3, errorMessage);
-            stmt.setObject(4, taskId);
-            
-            int rowsAffected = stmt.executeUpdate();
-            if (rowsAffected == 0) {
-                throw new SQLException("Updating task status failed, task not found: " + taskId);
-            }
-            
-            LOGGER.debug("Updated task status for ID: {} to {}", taskId, status);
-            
-            // Return the updated task
-            return findById(taskId).orElseThrow(() -> 
-                new SQLException("Task not found after status update: " + taskId));
-        }
-    }
-    
-    @Override
     public int deleteByBuildId(UUID buildId) throws SQLException {
         String sql = "DELETE FROM build_tasks WHERE build_id = ?";
         
@@ -414,43 +332,6 @@ public class PostgreSQLTaskRepository implements TaskRepository {
             LOGGER.debug("Deleted {} tasks for build: {}", rowsAffected, buildId);
             
             return rowsAffected;
-        }
-    }
-    
-    @Override
-    public long countByBuildId(UUID buildId) throws SQLException {
-        String sql = "SELECT COUNT(*) FROM build_tasks WHERE build_id = ?";
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setObject(1, buildId);
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getLong(1);
-                }
-                return 0;
-            }
-        }
-    }
-    
-    @Override
-    public long countByBuildIdAndStatus(UUID buildId, TaskStatus status) throws SQLException {
-        String sql = "SELECT COUNT(*) FROM build_tasks WHERE build_id = ? AND status = ?";
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setObject(1, buildId);
-            stmt.setString(2, status.name());
-            
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getLong(1);
-                }
-                return 0;
-            }
         }
     }
     

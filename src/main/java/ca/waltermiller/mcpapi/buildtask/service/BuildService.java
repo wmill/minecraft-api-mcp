@@ -580,24 +580,6 @@ public class BuildService {
     }
 
     /**
-     * Retrieves a single task by ID, verifying it belongs to the specified build.
-     */
-    public Optional<BuildTask> getTask(UUID buildId, UUID taskId) throws SQLException {
-        if (buildId == null) {
-            throw new IllegalArgumentException("Build ID cannot be null");
-        }
-        if (taskId == null) {
-            throw new IllegalArgumentException("Task ID cannot be null");
-        }
-
-        Optional<BuildTask> taskOpt = taskRepository.findById(taskId);
-        if (taskOpt.isPresent() && !taskOpt.get().getBuildId().equals(buildId)) {
-            return Optional.empty(); // Task doesn't belong to this build
-        }
-        return taskOpt;
-    }
-
-    /**
      * Request object for creating a new build.
      */
     public static class CreateBuildRequest {

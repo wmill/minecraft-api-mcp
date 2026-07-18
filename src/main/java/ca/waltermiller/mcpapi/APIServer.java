@@ -18,6 +18,8 @@ import java.sql.SQLException;
 
 
 public class APIServer {
+    public static final int DEFAULT_PORT = 7070;
+
     public static Javalin app;
     public static MinecraftServer minecraftServer;
     public static org.slf4j.Logger logger;
@@ -25,16 +27,17 @@ public class APIServer {
     public static void start(MinecraftServer server, org.slf4j.Logger logger) {
         minecraftServer = server;
         APIServer.logger = logger;
-        int port = 7070;
+        int port = DEFAULT_PORT;
         String portOverride = System.getProperty("api.port");
         if (portOverride != null && !portOverride.isBlank()) {
             try {
                 port = Integer.parseInt(portOverride);
-            } catch (NumberFormatException ignored) {
-                port = 7070;
+            } catch (NumberFormatException e) {
+                logger.warn("Invalid api.port value '{}', falling back to {}", portOverride, DEFAULT_PORT);
             }
         }
         app = Javalin.create().start(port);
+        logger.info("Web server started on port {}", port);
 
         app.get("/api/test", ctx -> ctx.result("Server is running"));
 

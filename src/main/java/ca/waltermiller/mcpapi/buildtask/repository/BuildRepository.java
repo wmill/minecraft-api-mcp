@@ -1,7 +1,6 @@
 package ca.waltermiller.mcpapi.buildtask.repository;
 
 import ca.waltermiller.mcpapi.buildtask.model.Build;
-import ca.waltermiller.mcpapi.buildtask.model.BuildStatus;
 import ca.waltermiller.mcpapi.buildtask.model.BoundingBox;
 
 import java.sql.SQLException;
@@ -37,35 +36,10 @@ public interface BuildRepository {
      * Delete a build by ID.
      */
     boolean deleteById(UUID id) throws SQLException;
-    
-    /**
-     * Find all builds with a specific status.
-     */
-    List<Build> findByStatus(BuildStatus status) throws SQLException;
-    
-    /**
-     * Find all builds in a specific world.
-     */
-    List<Build> findByWorld(String world) throws SQLException;
-    
+
     /**
      * Find builds that intersect with the given bounding box.
      * Requirements: 4.1, 4.4
      */
     List<Build> findByLocationIntersection(String world, BoundingBox boundingBox) throws SQLException;
-    
-    /**
-     * Find all builds, optionally filtered by world.
-     */
-    List<Build> findAll(String world) throws SQLException;
-    
-    /**
-     * Count total number of builds.
-     */
-    long count() throws SQLException;
-    
-    /**
-     * Check if a build exists by ID.
-     */
-    boolean existsById(UUID id) throws SQLException;
 }

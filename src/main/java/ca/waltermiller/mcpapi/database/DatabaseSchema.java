@@ -204,32 +204,4 @@ public class DatabaseSchema {
         }
         return false;
     }
-    
-    /**
-     * Drop all tables (for testing purposes).
-     * WARNING: This will delete all data!
-     */
-    public void dropSchema() throws SQLException {
-        LOGGER.warn("Dropping database schema - all data will be lost!");
-        
-        try (Connection connection = databaseConfig.getConnection()) {
-            connection.setAutoCommit(false);
-            
-            try {
-                try (Statement stmt = connection.createStatement()) {
-                    stmt.execute("DROP TABLE IF EXISTS build_tasks CASCADE");
-                    stmt.execute("DROP TABLE IF EXISTS rail_planning_jobs CASCADE");
-                    stmt.execute("DROP TABLE IF EXISTS builds CASCADE");
-                }
-                
-                connection.commit();
-                LOGGER.info("Database schema dropped successfully");
-                
-            } catch (SQLException e) {
-                connection.rollback();
-                LOGGER.error("Failed to drop database schema, rolling back", e);
-                throw e;
-            }
-        }
-    }
 }

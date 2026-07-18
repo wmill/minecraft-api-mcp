@@ -1,7 +1,6 @@
 package ca.waltermiller.mcpapi.buildtask.repository;
 
 import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
-import ca.waltermiller.mcpapi.buildtask.model.TaskStatus;
 import ca.waltermiller.mcpapi.buildtask.model.BoundingBox;
 
 import java.sql.SQLException;
@@ -41,12 +40,7 @@ public interface TaskRepository {
      * Requirements: 2.3
      */
     List<BuildTask> findByBuildIdOrdered(UUID buildId) throws SQLException;
-    
-    /**
-     * Find tasks by build ID and status.
-     */
-    List<BuildTask> findByBuildIdAndStatus(UUID buildId, TaskStatus status) throws SQLException;
-    
+
     /**
      * Add a task to the end of the queue for a build.
      * Requirements: 2.1, 2.5
@@ -75,30 +69,9 @@ public interface TaskRepository {
      * Requirements: 4.3
      */
     List<BuildTask> findByLocationIntersection(String world, BoundingBox boundingBox) throws SQLException;
-    
-    /**
-     * Find all tasks with coordinate information in a specific world.
-     * Requirements: 4.3
-     */
-    List<BuildTask> findByWorldWithCoordinates(String world) throws SQLException;
-    
-    /**
-     * Update task status and execution details.
-     */
-    BuildTask updateTaskStatus(UUID taskId, TaskStatus status, String errorMessage) throws SQLException;
-    
+
     /**
      * Delete all tasks for a specific build.
      */
     int deleteByBuildId(UUID buildId) throws SQLException;
-    
-    /**
-     * Count tasks by build ID.
-     */
-    long countByBuildId(UUID buildId) throws SQLException;
-    
-    /**
-     * Count tasks by build ID and status.
-     */
-    long countByBuildIdAndStatus(UUID buildId, TaskStatus status) throws SQLException;
 }
