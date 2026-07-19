@@ -8,27 +8,27 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.structure.StructurePlacementData;
 import net.minecraft.structure.StructureTemplate;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.BlockRotation;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import net.minecraft.structure.StructureTemplateManager;
 import org.jetbrains.annotations.NotNull;
 
 public class NBTStructureEndpoint extends APIEndpoint {
+    private static final int TIMEOUT_SECONDS = 30;
 
     private BuildService buildService;
 
@@ -68,7 +68,6 @@ public class NBTStructureEndpoint extends APIEndpoint {
             String zStr = ctx.formParam("z");
             String rotationStr = Objects.requireNonNullElse(ctx.formParam("rotation"), "NONE");
             String includeEntitiesStr = Objects.requireNonNullElse(ctx.formParam("include_entities"), "true");
-            String replaceBlocksStr = Objects.requireNonNullElse(ctx.formParam("replace_blocks"), "true");
 
             // Parse coordinates
             int x, y, z;
@@ -93,7 +92,6 @@ public class NBTStructureEndpoint extends APIEndpoint {
 
             // Parse boolean parameters
             boolean includeEntities = Boolean.parseBoolean(includeEntitiesStr);
-            boolean replaceBlocks = Boolean.parseBoolean(replaceBlocksStr);
 
             // Validate world
             RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(worldName);
@@ -147,8 +145,6 @@ public class NBTStructureEndpoint extends APIEndpoint {
             // Execute on server thread
             server.execute(() -> {
                 try {
-                    // Read NBT data from uploaded file
-
                     boolean success = template.place(world, pos, pos, placementData, Random.create(), 2);
 
                     if (success) {
@@ -167,7 +163,6 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         response.put("structure_size", Map.of("x", size.getX(), "y", size.getY(), "z", size.getZ()));
                         response.put("rotation", rotation.toString());
                         response.put("include_entities", includeEntities);
-                        response.put("replace_blocks", replaceBlocks);
 
                         if (buildService != null) {
                             try {
@@ -197,19 +192,10 @@ public class NBTStructureEndpoint extends APIEndpoint {
                 }
             });
 
-            // Wait for result and respond
-            try {
-                Map<String, Object> result = future.get(30, TimeUnit.SECONDS);
-                if (result.containsKey("error")) {
-                    ctx.status(500).json(result);
-                } else {
-                    ctx.json(result);
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for structure placement"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, future, TIMEOUT_SECONDS, "structure placement",
+                result -> !result.containsKey("error"),
+                result -> (String) result.get("error"),
+                result -> result);
 
         } catch (Exception e) {
             LOGGER.error("Error processing structure placement request: ", e);

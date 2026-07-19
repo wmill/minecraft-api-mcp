@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -81,7 +82,7 @@ class LocationQueryServiceTest {
     }
 
     @Test
-    void queryBuildsByLocationFallsBackToEmptyTasksOnTaskLookupFailure() throws Exception {
+    void queryBuildsByLocationPropagatesTaskLookupFailure() throws Exception {
         Build build = build(UUID.randomUUID(), BuildStatus.COMPLETED, Instant.parse("2025-01-01T00:00:00Z"));
         when(buildRepository.findByLocationIntersection(eq("minecraft:overworld"), any()))
             .thenReturn(List.of(build));
@@ -97,10 +98,9 @@ class LocationQueryServiceTest {
         request.max_y = 10;
         request.max_z = 10;
 
-        LocationQueryService.LocationQueryResult result = service.queryBuildsByLocation(request);
-
-        assertThat(result.builds).hasSize(1);
-        assertThat(result.builds.get(0).intersecting_tasks).isEmpty();
+        assertThatThrownBy(() -> service.queryBuildsByLocation(request))
+            .isInstanceOf(SQLException.class)
+            .hasMessage("boom");
     }
 
     private Build build(UUID id, BuildStatus status, Instant createdAt) {

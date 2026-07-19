@@ -126,7 +126,7 @@ public class RailPlanningService {
             job.setPhase("planned");
             jobRepository.update(job);
         } catch (Exception e) {
-            markFailed(jobId, e.getMessage());
+            markFailed(jobId, e.getMessage() != null ? e.getMessage() : e.toString());
         }
     }
 

@@ -65,22 +65,13 @@ public class LocationQueryService {
 
         logger.info("Found {} builds intersecting with query area", intersectingBuilds.size());
 
-        // Get detailed results with task information
+        // Get detailed results with task information: one intersection query, grouped per build
+        List<BuildTask> intersectingTasks = taskRepository.findByLocationIntersection(request.world, queryBox);
         List<BuildLocationResult> results = intersectingBuilds.stream()
-            .map(build -> {
-                try {
-                    // Get tasks for this build that intersect with the query area
-                    List<BuildTask> intersectingTasks = taskRepository.findByLocationIntersection(request.world, queryBox)
-                        .stream()
-                        .filter(task -> task.getBuildId().equals(build.getId()))
-                        .collect(Collectors.toList());
-
-                    return new BuildLocationResult(build, intersectingTasks);
-                } catch (SQLException e) {
-                    logger.error("Error getting tasks for build {}", build.getId(), e);
-                    return new BuildLocationResult(build, List.of());
-                }
-            })
+            .map(build -> new BuildLocationResult(build,
+                intersectingTasks.stream()
+                    .filter(task -> task.getBuildId().equals(build.getId()))
+                    .collect(Collectors.toList())))
             .collect(Collectors.toList());
 
         return new LocationQueryResult(results, queryBox);

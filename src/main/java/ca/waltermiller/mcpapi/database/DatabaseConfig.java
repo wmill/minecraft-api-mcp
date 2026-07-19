@@ -17,7 +17,7 @@ public class DatabaseConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseConfig.class);
     
     private static DatabaseConfig instance;
-    private HikariDataSource dataSource;
+    private volatile HikariDataSource dataSource;
     
     // Default configuration values
     private static final String DEFAULT_HOST = "localhost";
