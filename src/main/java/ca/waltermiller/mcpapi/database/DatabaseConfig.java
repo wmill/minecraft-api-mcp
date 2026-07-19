@@ -25,6 +25,15 @@ public class DatabaseConfig {
     private static final String DEFAULT_DATABASE = "minecraft_builds";
     private static final String DEFAULT_USER = "minecraft";
     private static final String DEFAULT_PASSWORD = "minecraft_password";
+
+    // Connection pool tuning
+    private static final int POOL_MAX_SIZE = 10;
+    private static final int POOL_MIN_IDLE = 2;
+    private static final long CONNECTION_TIMEOUT_MS = 30_000;
+    private static final long IDLE_TIMEOUT_MS = 600_000;      // 10 minutes
+    private static final long MAX_LIFETIME_MS = 1_800_000;    // 30 minutes
+    private static final long LEAK_DETECTION_THRESHOLD_MS = 60_000;
+    private static final long VALIDATION_TIMEOUT_MS = 5_000;
     
     private DatabaseConfig() {
         // Lazy initialization - don't initialize data source in constructor
@@ -66,16 +75,16 @@ public class DatabaseConfig {
             config.setDriverClassName("org.postgresql.Driver");
             
             // Connection pool settings
-            config.setMaximumPoolSize(10);
-            config.setMinimumIdle(2);
-            config.setConnectionTimeout(30000); // 30 seconds
-            config.setIdleTimeout(600000); // 10 minutes
-            config.setMaxLifetime(1800000); // 30 minutes
-            config.setLeakDetectionThreshold(60000); // 1 minute
-            
+            config.setMaximumPoolSize(POOL_MAX_SIZE);
+            config.setMinimumIdle(POOL_MIN_IDLE);
+            config.setConnectionTimeout(CONNECTION_TIMEOUT_MS);
+            config.setIdleTimeout(IDLE_TIMEOUT_MS);
+            config.setMaxLifetime(MAX_LIFETIME_MS);
+            config.setLeakDetectionThreshold(LEAK_DETECTION_THRESHOLD_MS);
+
             // Connection validation
             config.setConnectionTestQuery("SELECT 1");
-            config.setValidationTimeout(5000); // 5 seconds
+            config.setValidationTimeout(VALIDATION_TIMEOUT_MS);
             
             // Pool name for monitoring
             config.setPoolName("MinecraftBuildsPool");

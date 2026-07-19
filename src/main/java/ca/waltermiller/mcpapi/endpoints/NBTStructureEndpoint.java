@@ -3,6 +3,7 @@ package ca.waltermiller.mcpapi.endpoints;
 import ca.waltermiller.mcpapi.buildtask.model.Build;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import io.javalin.Javalin;
+import io.javalin.http.Context;
 import io.javalin.http.UploadedFile;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtIo;
@@ -13,6 +14,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.structure.StructurePlacementData;
 import net.minecraft.structure.StructureTemplate;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3i;
 import net.minecraft.util.BlockRotation;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
@@ -34,14 +36,14 @@ public class NBTStructureEndpoint extends APIEndpoint {
 
     public NBTStructureEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
         super(app, server, logger);
-        registerEndpoints();
+        init();
     }
 
     public void setBuildService(BuildService buildService) {
         this.buildService = buildService;
     }
 
-    protected void registerEndpoints() {
+    private void init() {
         app.post("/api/world/structure/place", this::placeStructure);
     }
 
@@ -52,7 +54,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
         return isGzipped;
     }
 
-    private void placeStructure(io.javalin.http.Context ctx) {
+    private void placeStructure(Context ctx) {
         try {
             // Get uploaded NBT file
             UploadedFile nbtFile = ctx.uploadedFile("nbt_file");
@@ -149,7 +151,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
 
                     if (success) {
                         // Get structure size for response
-                        net.minecraft.util.math.Vec3i size = template.getSize();
+                        Vec3i size = template.getSize();
 
                         LOGGER.info("Successfully placed NBT structure '{}' ({}x{}x{}) at ({}, {}, {})",
                             nbtFile.filename(), size.getX(), size.getY(), size.getZ(), x, y, z);

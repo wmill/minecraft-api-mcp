@@ -21,6 +21,8 @@ import java.io.IOException;
 public final class IsoRenderer {
 
     public static final int DEFAULT_SCALE = 6;
+    public static final int MIN_SCALE = 1;
+    public static final int MAX_SCALE = 32;
 
     private IsoRenderer() {}
 

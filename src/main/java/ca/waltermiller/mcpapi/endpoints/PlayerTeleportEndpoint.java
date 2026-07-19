@@ -5,9 +5,7 @@ import io.javalin.http.Context;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Identifier;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.world.World;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -17,10 +15,10 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
     
     public PlayerTeleportEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
         super(app, server, logger);
-        registerEndpoints();
+        init();
     }
-    
-    protected void registerEndpoints() {
+
+    private void init() {
         app.post("/api/players/teleport", this::teleportPlayer);
     }
     

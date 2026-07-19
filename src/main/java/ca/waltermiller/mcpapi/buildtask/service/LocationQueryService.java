@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
  * Requirements: 4.1, 4.2, 4.4
  */
 public class LocationQueryService {
-    private static final Logger logger = LoggerFactory.getLogger(LocationQueryService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(LocationQueryService.class);
     
     private final BuildRepository buildRepository;
     private final TaskRepository taskRepository;
@@ -39,7 +39,7 @@ public class LocationQueryService {
             throw new IllegalArgumentException("Location query request cannot be null");
         }
 
-        logger.info("Querying builds in world {} for area ({},{},{}) to ({},{},{})", 
+        LOGGER.info("Querying builds in world {} for area ({},{},{}) to ({},{},{})", 
             request.world, request.min_x, request.min_y, request.min_z,
             request.max_x, request.max_y, request.max_z);
 
@@ -63,7 +63,7 @@ public class LocationQueryService {
         // Requirements: 4.4
         intersectingBuilds.sort(Comparator.comparing(Build::getCreatedAt));
 
-        logger.info("Found {} builds intersecting with query area", intersectingBuilds.size());
+        LOGGER.info("Found {} builds intersecting with query area", intersectingBuilds.size());
 
         // Get detailed results with task information: one intersection query, grouped per build
         List<BuildTask> intersectingTasks = taskRepository.findByLocationIntersection(request.world, queryBox);

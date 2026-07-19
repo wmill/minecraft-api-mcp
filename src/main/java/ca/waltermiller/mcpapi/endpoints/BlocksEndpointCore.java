@@ -6,7 +6,6 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
@@ -23,6 +22,10 @@ import java.util.concurrent.CompletableFuture;
  * This class contains the business logic for block operations without Javalin Context dependencies.
  */
 public class BlocksEndpointCore {
+    static final int MAX_CHUNK_SIZE = 64;         // per dimension
+    static final int MAX_FILL_BLOCKS = 100_000;
+    static final int MAX_HEIGHTMAP_POINTS = 10_000;
+
     private final MinecraftServer server;
     private final org.slf4j.Logger logger;
 
@@ -131,9 +134,8 @@ public class BlocksEndpointCore {
         }
         
         // Validate chunk size limits (prevent huge requests)
-        int maxChunkSize = 64; // Maximum 64x64x64 chunk
-        if (request.size_x > maxChunkSize || request.size_y > maxChunkSize || request.size_z > maxChunkSize) {
-            future.complete(new ChunkResult(false, "Chunk size too large. Maximum size is " + maxChunkSize + " per dimension", null, null, null, null));
+        if (request.size_x > MAX_CHUNK_SIZE || request.size_y > MAX_CHUNK_SIZE || request.size_z > MAX_CHUNK_SIZE) {
+            future.complete(new ChunkResult(false, "Chunk size too large. Maximum size is " + MAX_CHUNK_SIZE + " per dimension", null, null, null, null));
             return future;
         }
         
@@ -209,9 +211,8 @@ public class BlocksEndpointCore {
         int totalBlocks = sizeX * sizeY * sizeZ;
         
         // Validate box size (prevent huge operations)
-        int maxBoxSize = 100000; // Maximum 100k blocks
-        if (totalBlocks > maxBoxSize) {
-            future.complete(new FillResult(false, "Box too large. Maximum " + maxBoxSize + " blocks allowed", 0, 0, 0, null, null));
+        if (totalBlocks > MAX_FILL_BLOCKS) {
+            future.complete(new FillResult(false, "Box too large. Maximum " + MAX_FILL_BLOCKS + " blocks allowed", 0, 0, 0, null, null));
             return future;
         }
         
@@ -302,9 +303,8 @@ public class BlocksEndpointCore {
         int totalPoints = sizeX * sizeZ;
         
         // Validate area size (prevent huge operations)
-        int maxAreaSize = 10000; // Maximum 10k height points (100x100 area)
-        if (totalPoints > maxAreaSize) {
-            future.complete(new HeightmapResult(false, "Area too large. Maximum " + maxAreaSize + " height points allowed", null, null, null, null, null, null));
+        if (totalPoints > MAX_HEIGHTMAP_POINTS) {
+            future.complete(new HeightmapResult(false, "Area too large. Maximum " + MAX_HEIGHTMAP_POINTS + " height points allowed", null, null, null, null, null, null));
             return future;
         }
         

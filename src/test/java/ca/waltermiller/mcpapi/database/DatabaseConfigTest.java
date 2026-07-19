@@ -49,14 +49,4 @@ class DatabaseConfigTest {
         }
     }
     
-    @Test
-    void testHealthCheckWithoutDatabase() {
-        // This test will fail if no database is available, which is expected
-        // In CI/CD environments, this would be skipped or run with a test database
-        boolean isHealthy = databaseConfig.isHealthy();
-        
-        // We don't assert true/false here since it depends on database availability
-        // Just verify the method doesn't throw an exception
-        assertThat(isHealthy).isIn(true, false);
-    }
 }

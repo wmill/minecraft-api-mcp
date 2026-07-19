@@ -106,8 +106,9 @@ public class BlocksEndpoint extends APIEndpoint {
 
             int scale = IsoRenderer.DEFAULT_SCALE;
             if (req.iso_scale != null) {
-                if (req.iso_scale < 1 || req.iso_scale > 32) {
-                    ctx.status(400).json(Map.of("error", "iso_scale must be between 1 and 32"));
+                if (req.iso_scale < IsoRenderer.MIN_SCALE || req.iso_scale > IsoRenderer.MAX_SCALE) {
+                    ctx.status(400).json(Map.of("error",
+                        "iso_scale must be between " + IsoRenderer.MIN_SCALE + " and " + IsoRenderer.MAX_SCALE));
                     return;
                 }
                 scale = req.iso_scale;

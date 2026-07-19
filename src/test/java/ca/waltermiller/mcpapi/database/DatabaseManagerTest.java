@@ -49,10 +49,8 @@ class DatabaseManagerTest {
     
     @Test
     void testHealthCheckBeforeInitialization() {
-        // Before initialization, health check should return false
-        boolean isHealthy = databaseManager.isHealthy();
-        
-        // Health depends on database availability, so we just verify no exceptions
-        assertThat(isHealthy).isIn(true, false);
+        // Health short-circuits on the initialized flag, so this is false regardless
+        // of whether a database is reachable
+        assertThat(databaseManager.isHealthy()).isFalse();
     }
 }

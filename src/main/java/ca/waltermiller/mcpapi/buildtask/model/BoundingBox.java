@@ -8,15 +8,12 @@ import com.fasterxml.jackson.databind.JsonNode;
  * Requirements: 4.3
  */
 public class BoundingBox {
-    private int minX;
-    private int minY;
-    private int minZ;
-    private int maxX;
-    private int maxY;
-    private int maxZ;
-
-    public BoundingBox() {
-    }
+    private final int minX;
+    private final int minY;
+    private final int minZ;
+    private final int maxX;
+    private final int maxY;
+    private final int maxZ;
 
     public BoundingBox(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         this.minX = Math.min(minX, maxX);

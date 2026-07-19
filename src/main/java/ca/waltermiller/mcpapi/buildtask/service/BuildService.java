@@ -24,7 +24,7 @@ import java.util.concurrent.Executors;
  * Requirements: 1.1, 1.2, 2.1, 2.5, 3.1, 3.4
  */
 public class BuildService {
-    private static final Logger logger = LoggerFactory.getLogger(BuildService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(BuildService.class);
     
     private final BuildRepository buildRepository;
     private final TaskRepository taskRepository;
@@ -50,12 +50,12 @@ public class BuildService {
         // Create build with unique ID (UUID.randomUUID() in constructor)
         Build build = new Build(request.name, request.description, request.world);
         
-        logger.info("Creating new build: {} in world {}", build.getName(), build.getWorld());
+        LOGGER.info("Creating new build: {} in world {}", build.getName(), build.getWorld());
         
         // Store in database
         Build savedBuild = buildRepository.create(build);
         
-        logger.info("Created build with ID: {}", savedBuild.getId());
+        LOGGER.info("Created build with ID: {}", savedBuild.getId());
         return savedBuild;
     }
 
@@ -81,7 +81,7 @@ public class BuildService {
         savedBuild.setStatus(BuildStatus.COMPLETED);
         buildRepository.update(savedBuild);
 
-        logger.info("Recorded NBT placement '{}' at ({},{},{}) as build {}", filename, x, y, z, savedBuild.getId());
+        LOGGER.info("Recorded NBT placement '{}' at ({},{},{}) as build {}", filename, x, y, z, savedBuild.getId());
         return savedBuild;
     }
 
@@ -126,12 +126,12 @@ public class BuildService {
         // Create task
         BuildTask task = new BuildTask(buildId, taskOrder, request.task_type, request.task_data, request.description);
         
-        logger.info("Adding task {} of type {} to build {}", task.getId(), task.getTaskType(), buildId);
+        LOGGER.info("Adding task {} of type {} to build {}", task.getId(), task.getTaskType(), buildId);
         
         // Add to queue
         BuildTask savedTask = taskRepository.addToQueue(buildId, task);
         
-        logger.info("Added task {} to build {} at position {}", savedTask.getId(), buildId, taskOrder);
+        LOGGER.info("Added task {} to build {} at position {}", savedTask.getId(), buildId, taskOrder);
         return savedTask;
     }
 
@@ -170,7 +170,7 @@ public class BuildService {
             throw new IllegalStateException("Cannot modify tasks for completed build: " + buildId);
         }
 
-        logger.info("Updating task queue for build {} with {} tasks", buildId, tasks.size());
+        LOGGER.info("Updating task queue for build {} with {} tasks", buildId, tasks.size());
         
         // Update task orders and save
         for (int i = 0; i < tasks.size(); i++) {
@@ -181,7 +181,7 @@ public class BuildService {
         
         taskRepository.updateTaskQueue(buildId, tasks);
         
-        logger.info("Updated task queue for build {}", buildId);
+        LOGGER.info("Updated task queue for build {}", buildId);
     }
 
     /**
@@ -196,7 +196,7 @@ public class BuildService {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                logger.info("Starting execution of build {}", buildId);
+                LOGGER.info("Starting execution of build {}", buildId);
                 
                 // Get build and verify it exists
                 Optional<Build> buildOpt = buildRepository.findById(buildId);
@@ -221,7 +221,7 @@ public class BuildService {
                     return new BuildExecutionResult(buildId, true, 0, 0, List.of(), "No tasks to execute");
                 }
 
-                logger.info("Executing {} tasks for build {}", tasks.size(), buildId);
+                LOGGER.info("Executing {} tasks for build {}", tasks.size(), buildId);
 
                 // Execute tasks in order
                 int tasksExecuted = 0;
@@ -241,16 +241,16 @@ public class BuildService {
                         
                         if (result.success()) {
                             tasksExecuted++;
-                            logger.info("Task {} completed successfully", task.getId());
+                            LOGGER.info("Task {} completed successfully", task.getId());
                         } else {
                             tasksFailed++;
-                            logger.error("Task {} failed: {}", task.getId(), result.errorMessage());
+                            LOGGER.error("Task {} failed: {}", task.getId(), result.errorMessage());
                         }
                     } catch (Exception e) {
                         tasksFailed++;
                         task.markFailed("Exception during execution: " + e.getMessage());
                         taskRepository.update(task);
-                        logger.error("Task {} failed with exception", task.getId(), e);
+                        LOGGER.error("Task {} failed with exception", task.getId(), e);
                     }
                 }
 
@@ -259,18 +259,18 @@ public class BuildService {
                 build.setStatus(allTasksCompleted ? BuildStatus.COMPLETED : BuildStatus.FAILED);
                 buildRepository.update(build);
 
-                logger.info("Build {} execution completed. Tasks executed: {}, failed: {}", 
+                LOGGER.info("Build {} execution completed. Tasks executed: {}, failed: {}", 
                     buildId, tasksExecuted, tasksFailed);
 
                 return new BuildExecutionResult(buildId, allTasksCompleted, tasksExecuted, tasksFailed, 
                     List.of(), allTasksCompleted ? "Build completed successfully" : "Some tasks failed");
 
             } catch (SQLException e) {
-                logger.error("Database error during build execution", e);
+                LOGGER.error("Database error during build execution", e);
                 return new BuildExecutionResult(buildId, false, 0, 0, List.of(), 
                     "Database error: " + e.getMessage());
             } catch (Exception e) {
-                logger.error("Unexpected error during build execution", e);
+                LOGGER.error("Unexpected error during build execution", e);
                 return new BuildExecutionResult(buildId, false, 0, 0, List.of(), 
                     "Unexpected error: " + e.getMessage());
             }
@@ -289,7 +289,7 @@ public class BuildService {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                logger.info("Starting replay of build {}", buildId);
+                LOGGER.info("Starting replay of build {}", buildId);
 
                 // Get build and verify it exists
                 Optional<Build> buildOpt = buildRepository.findById(buildId);
@@ -313,10 +313,10 @@ public class BuildService {
                     taskRepository.update(task);
                 }
 
-                logger.info("Reset {} tasks for replay of build {}", tasks.size(), buildId);
+                LOGGER.info("Reset {} tasks for replay of build {}", tasks.size(), buildId);
 
             } catch (SQLException e) {
-                logger.error("Database error resetting build for replay", e);
+                LOGGER.error("Database error resetting build for replay", e);
                 return new BuildExecutionResult(buildId, false, 0, 0, List.of(),
                     "Database error during reset: " + e.getMessage());
             }
@@ -325,7 +325,7 @@ public class BuildService {
             try {
                 return executeBuild(buildId).get();
             } catch (Exception e) {
-                logger.error("Error during replay execution", e);
+                LOGGER.error("Error during replay execution", e);
                 return new BuildExecutionResult(buildId, false, 0, 0, List.of(),
                     "Error during replay: " + e.getMessage());
             }
@@ -368,7 +368,7 @@ public class BuildService {
             clonedCount++;
         }
 
-        logger.info("Cloned build {} → {} ({} tasks)", sourceId, savedBuild.getId(), clonedCount);
+        LOGGER.info("Cloned build {} → {} ({} tasks)", sourceId, savedBuild.getId(), clonedCount);
         return savedBuild;
     }
 
@@ -408,7 +408,7 @@ public class BuildService {
             throw new IllegalArgumentException("Task does not belong to build: " + buildId);
         }
 
-        logger.info("Deleting task {} from build {}", taskId, buildId);
+        LOGGER.info("Deleting task {} from build {}", taskId, buildId);
 
         // Delete the task
         taskRepository.deleteById(taskId);
@@ -423,7 +423,7 @@ public class BuildService {
         }
         taskRepository.updateTaskQueue(buildId, remainingTasks);
 
-        logger.info("Deleted task {} and reordered {} remaining tasks", taskId, remainingTasks.size());
+        LOGGER.info("Deleted task {} and reordered {} remaining tasks", taskId, remainingTasks.size());
     }
 
     /**
@@ -459,7 +459,7 @@ public class BuildService {
         // Create the new task
         BuildTask newTask = new BuildTask(buildId, insertPosition, request.task_type, request.task_data, request.description);
 
-        logger.info("Inserting task {} at position {} in build {}", newTask.getId(), insertPosition, buildId);
+        LOGGER.info("Inserting task {} at position {} in build {}", newTask.getId(), insertPosition, buildId);
 
         // Save the new task
         BuildTask savedTask = taskRepository.create(newTask);
@@ -472,7 +472,7 @@ public class BuildService {
         }
         taskRepository.updateTaskQueue(buildId, tasks);
 
-        logger.info("Inserted task {} at position {}", savedTask.getId(), insertPosition);
+        LOGGER.info("Inserted task {} at position {}", savedTask.getId(), insertPosition);
         return savedTask;
     }
 
@@ -507,7 +507,7 @@ public class BuildService {
             throw new IllegalArgumentException("Task does not belong to build: " + buildId);
         }
 
-        logger.info("Updating task {} in build {}", taskId, buildId);
+        LOGGER.info("Updating task {} in build {}", taskId, buildId);
 
         // Merge partial task_data with existing
         if (partialTaskData != null && !partialTaskData.isNull()) {
@@ -533,7 +533,7 @@ public class BuildService {
         }
 
         BuildTask updatedTask = taskRepository.update(task);
-        logger.info("Updated task {}", taskId);
+        LOGGER.info("Updated task {}", taskId);
         return updatedTask;
     }
 
@@ -575,7 +575,7 @@ public class BuildService {
 
         taskRepository.updateAll(tasks);
 
-        logger.info("Translated build {} by ({},{},{})", buildId, dx, dy, dz);
+        LOGGER.info("Translated build {} by ({},{},{})", buildId, dx, dy, dz);
         return tasks;
     }
 

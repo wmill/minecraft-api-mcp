@@ -16,12 +16,12 @@ import net.minecraft.block.entity.SignBlockEntity;
 import net.minecraft.block.entity.SignText;
 import net.minecraft.text.Text;
 import net.minecraft.block.enums.DoorHinge;
+import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.StairShape;
 import net.minecraft.state.property.Properties;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
@@ -37,6 +37,11 @@ import java.util.concurrent.CompletableFuture;
  * This class contains the business logic for prefab operations without Javalin Context dependencies.
  */
 public class PrefabEndpointCore {
+    static final int MIN_WORLD_Y = -64;
+    static final int MAX_WORLD_Y = 320;
+    static final int MAX_SIGN_LINES = 4;
+    static final int MAX_SIGN_ROTATION = 15;
+
     private final MinecraftServer server;
     private final org.slf4j.Logger logger;
 
@@ -132,14 +137,14 @@ public class PrefabEndpointCore {
                 BlockState lowerState = block.getDefaultState()
                     .with(Properties.HORIZONTAL_FACING, facing)
                     .with(Properties.DOOR_HINGE, currentHinge)
-                    .with(Properties.DOUBLE_BLOCK_HALF, net.minecraft.block.enums.DoubleBlockHalf.LOWER)
+                    .with(Properties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER)
                     .with(Properties.OPEN, open)
                     .with(Properties.POWERED, false);
 
                 BlockState upperState = block.getDefaultState()
                     .with(Properties.HORIZONTAL_FACING, facing)
                     .with(Properties.DOOR_HINGE, currentHinge)
-                    .with(Properties.DOUBLE_BLOCK_HALF, net.minecraft.block.enums.DoubleBlockHalf.UPPER)
+                    .with(Properties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER)
                     .with(Properties.OPEN, open)
                     .with(Properties.POWERED, false);
 
@@ -374,11 +379,11 @@ public class PrefabEndpointCore {
             return new SignResult(false, "Block is not a sign: " + request.block_type, null, null, null, null, null, null, false);
         }
 
-        if (request.front_lines != null && request.front_lines.length > 4) {
-            return new SignResult(false, "Front text can have maximum 4 lines", null, null, null, null, null, null, false);
+        if (request.front_lines != null && request.front_lines.length > MAX_SIGN_LINES) {
+            return new SignResult(false, "Front text can have maximum " + MAX_SIGN_LINES + " lines", null, null, null, null, null, null, false);
         }
-        if (request.back_lines != null && request.back_lines.length > 4) {
-            return new SignResult(false, "Back text can have maximum 4 lines", null, null, null, null, null, null, false);
+        if (request.back_lines != null && request.back_lines.length > MAX_SIGN_LINES) {
+            return new SignResult(false, "Back text can have maximum " + MAX_SIGN_LINES + " lines", null, null, null, null, null, null, false);
         }
 
         logger.info("Placing sign in world {} at ({}, {}, {}) type {}",
@@ -423,7 +428,7 @@ public class PrefabEndpointCore {
                 return new SignResult(true, null, worldKey.getValue().toString(), position, request.block_type, "wall", facing.asString(), null, request.glowing != null ? request.glowing : false);
             } else {
                 int rotation = request.rotation != null ? request.rotation : 0;
-                rotation = Math.max(0, Math.min(15, rotation));
+                rotation = Math.max(0, Math.min(MAX_SIGN_ROTATION, rotation));
 
                 signState = block.getDefaultState()
                     .with(Properties.ROTATION, rotation);
@@ -490,11 +495,11 @@ public class PrefabEndpointCore {
             return new LadderResult(false, "Block is not a ladder: " + request.block_type, null, 0, null, null, null);
         }
 
-        if (request.y < -64 || request.y > 320) {
-            return new LadderResult(false, "Y coordinate out of world bounds (-64 to 320)", null, 0, null, null, null);
+        if (request.y < MIN_WORLD_Y || request.y > MAX_WORLD_Y) {
+            return new LadderResult(false, "Y coordinate out of world bounds (" + MIN_WORLD_Y + " to " + MAX_WORLD_Y + ")", null, 0, null, null, null);
         }
 
-        int maxHeight = 320 - request.y + 1;
+        int maxHeight = MAX_WORLD_Y - request.y + 1;
         int actualHeight = Math.min(request.height, maxHeight);
 
         logger.info("Placing ladder prefab in world {} at ({}, {}, {}) height {} block_type {}",
@@ -797,9 +802,9 @@ public class PrefabEndpointCore {
     }
 
     private SignText createSignText(String[] lines, Boolean glowing) {
-        // Ensure we have exactly 4 lines (pad with empty if needed)
-        Text[] textLines = new Text[4];
-        for (int i = 0; i < 4; i++) {
+        // Ensure we have exactly MAX_SIGN_LINES lines (pad with empty if needed)
+        Text[] textLines = new Text[MAX_SIGN_LINES];
+        for (int i = 0; i < MAX_SIGN_LINES; i++) {
             if (i < lines.length && lines[i] != null) {
                 textLines[i] = Text.literal(lines[i]);
             } else {
@@ -808,7 +813,7 @@ public class PrefabEndpointCore {
         }
 
         // filteredMessages - same as regular messages for now
-        Text[] filteredLines = new Text[4];
+        Text[] filteredLines = new Text[MAX_SIGN_LINES];
         System.arraycopy(textLines, 0, filteredLines, 0, 4);
 
         return new SignText(

@@ -41,6 +41,11 @@ public class RailPlanningService {
     private static final double DEFAULT_TUNNEL_COST = 6.0;
     private static final int DEFAULT_WATER_SURFACE_THRESHOLD = 63;
     private static final double DEFAULT_WATER_TUNNEL_PENALTY = 8.0;
+    private static final double DEFAULT_GRADE_COST = 5.0;
+    private static final double DEFAULT_DETOUR_COST = 0.15;
+    private static final double DEFAULT_SURFACE_COST = 1.0;
+    private static final double DEFAULT_TURN_COST = 0.5;
+    private static final int DEFAULT_POWERED_RAIL_INTERVAL = 8;
 
     private final BuildRepository buildRepository;
     private final BuildService buildService;
@@ -52,12 +57,11 @@ public class RailPlanningService {
     public RailPlanningService(BuildRepository buildRepository,
                                BuildService buildService,
                                RailPlanningJobRepository jobRepository,
-                               MinecraftServer server,
-                               org.slf4j.Logger logger) {
+                               MinecraftServer server) {
         this.buildRepository = buildRepository;
         this.buildService = buildService;
         this.jobRepository = jobRepository;
-        this.blocksCore = new BlocksEndpointCore(server, logger);
+        this.blocksCore = new BlocksEndpointCore(server, LOGGER);
         this.executorService = Executors.newSingleThreadExecutor();
     }
 
@@ -141,7 +145,7 @@ public class RailPlanningService {
                 pointNode.put("z", point.z());
             }
             taskData.put("world", world);
-            taskData.put("powered_rail_interval", effectiveInt(request.weight_overrides, "powered_rail_interval", 8));
+            taskData.put("powered_rail_interval", effectiveInt(request.weight_overrides, "powered_rail_interval", DEFAULT_POWERED_RAIL_INTERVAL));
             taskData.put("rail_bed_block", request.rail_bed_block);
             taskData.put("support_block", request.support_block);
             taskData.put("power_block", request.power_block);
@@ -302,9 +306,9 @@ public class RailPlanningService {
         int currentY = field.heightAt(current.x(), current.z());
         int nextY = field.heightAt(neighbor.x(), neighbor.z());
         double grade = Math.abs(nextY - currentY);
-        double gradeCost = effectiveDouble(request.weight_overrides, "grade_cost", 5.0) * grade;
-        double detourCost = effectiveDouble(request.weight_overrides, "detour_cost", 0.15) * distanceFromLine(neighbor, start, end);
-        double base = effectiveDouble(request.weight_overrides, "surface_cost", 1.0);
+        double gradeCost = effectiveDouble(request.weight_overrides, "grade_cost", DEFAULT_GRADE_COST) * grade;
+        double detourCost = effectiveDouble(request.weight_overrides, "detour_cost", DEFAULT_DETOUR_COST) * distanceFromLine(neighbor, start, end);
+        double base = effectiveDouble(request.weight_overrides, "surface_cost", DEFAULT_SURFACE_COST);
         double turnCost = computeTurnPenalty(currentState.incomingDirection(), neighborState.incomingDirection(), request.weight_overrides);
         double idealTrackY = idealTrackYForPoint(neighbor, start, end, request.start_y, request.end_y);
         double terrainPenalty = computeTerrainPenalty(nextY, idealTrackY, request.weight_overrides);
@@ -318,7 +322,7 @@ public class RailPlanningService {
         if (incoming == null || outgoing == null || incoming == outgoing) {
             return 0.0;
         }
-        return effectiveDouble(weights, "turn_cost", 0.5);
+        return effectiveDouble(weights, "turn_cost", DEFAULT_TURN_COST);
     }
 
     static double computeTerrainPenalty(int surfaceY, double idealTrackY, Map<String, Double> weights) {

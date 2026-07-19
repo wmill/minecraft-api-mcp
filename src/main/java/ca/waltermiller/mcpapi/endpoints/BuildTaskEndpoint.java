@@ -38,8 +38,6 @@ import java.util.stream.Collectors;
  * Requirements: 6.1, 6.4, 6.5
  */
 public class BuildTaskEndpoint extends APIEndpoint {
-    private static final int MIN_ISO_SCALE = 1;
-    private static final int MAX_ISO_SCALE = 32;
     private static final int MAX_TERRAIN_MARGIN = 8;
 
     private final BuildService buildService;
@@ -683,8 +681,9 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     ctx.status(400).json(Map.of("error", "iso_scale must be an integer"));
                     return;
                 }
-                if (scale < MIN_ISO_SCALE || scale > MAX_ISO_SCALE) {
-                    ctx.status(400).json(Map.of("error", "iso_scale must be between " + MIN_ISO_SCALE + " and " + MAX_ISO_SCALE));
+                if (scale < IsoRenderer.MIN_SCALE || scale > IsoRenderer.MAX_SCALE) {
+                    ctx.status(400).json(Map.of("error",
+                        "iso_scale must be between " + IsoRenderer.MIN_SCALE + " and " + IsoRenderer.MAX_SCALE));
                     return;
                 }
             }

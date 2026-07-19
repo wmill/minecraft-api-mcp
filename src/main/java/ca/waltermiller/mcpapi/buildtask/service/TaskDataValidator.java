@@ -14,7 +14,7 @@ import java.util.List;
  * Requirements: 2.2
  */
 public class TaskDataValidator {
-    private static final Logger logger = LoggerFactory.getLogger(TaskDataValidator.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(TaskDataValidator.class);
 
     /**
      * Validates task data for a specific task type.
@@ -29,7 +29,7 @@ public class TaskDataValidator {
             return ValidationResult.failure("Task data cannot be null");
         }
 
-        logger.debug("Validating task data for type: {}", taskType);
+        LOGGER.debug("Validating task data for type: {}", taskType);
 
         return switch (taskType) {
             case BLOCK_SET -> validateBlockSetData(taskData);

@@ -14,7 +14,6 @@ import net.minecraft.block.RailBlock;
 import net.minecraft.block.enums.RailShape;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
@@ -37,7 +36,7 @@ import java.util.concurrent.TimeUnit;
  * Requirements: 3.1, 3.2, 3.3, 3.5, 4.3
  */
 public class TaskExecutor {
-    private static final Logger logger = LoggerFactory.getLogger(TaskExecutor.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(TaskExecutor.class);
     private static final int EXECUTION_TIMEOUT_SECONDS = 30;
     
     private final BlocksEndpointCore blocksCore;
@@ -48,8 +47,8 @@ public class TaskExecutor {
 
     public TaskExecutor(MinecraftServer server) {
         this.server = server;
-        this.blocksCore = new BlocksEndpointCore(server, logger);
-        this.prefabCore = new PrefabEndpointCore(server, logger);
+        this.blocksCore = new BlocksEndpointCore(server, LOGGER);
+        this.prefabCore = new PrefabEndpointCore(server, LOGGER);
         this.objectMapper = new ObjectMapper();
         this.validator = new TaskDataValidator();
     }
@@ -63,7 +62,7 @@ public class TaskExecutor {
             return new TaskExecutionResult(false, "Task cannot be null", null);
         }
 
-        logger.info("Executing task {} of type {} for build {}", 
+        LOGGER.info("Executing task {} of type {} for build {}", 
             task.getId(), task.getTaskType(), task.getBuildId());
 
         // Validate task data before execution
@@ -71,7 +70,7 @@ public class TaskExecutor {
         if (!validationResult.isValid()) {
             String errorMessage = "Task data validation failed: " + validationResult.getErrorMessage();
             task.markFailed(errorMessage);
-            logger.error("Task {} validation failed: {}", task.getId(), validationResult.getErrorMessage());
+            LOGGER.error("Task {} validation failed: {}", task.getId(), validationResult.getErrorMessage());
             return new TaskExecutionResult(false, errorMessage, null);
         }
 
@@ -104,10 +103,10 @@ public class TaskExecutor {
             // Update task status based on result
             if (result.success()) {
                 task.markCompleted();
-                logger.info("Task {} completed successfully", task.getId());
+                LOGGER.info("Task {} completed successfully", task.getId());
             } else {
                 task.markFailed(result.errorMessage());
-                logger.error("Task {} failed: {}", task.getId(), result.errorMessage());
+                LOGGER.error("Task {} failed: {}", task.getId(), result.errorMessage());
             }
 
             return result;
@@ -115,7 +114,7 @@ public class TaskExecutor {
         } catch (Exception e) {
             String errorMessage = "Exception during task execution: " + e.getMessage();
             task.markFailed(errorMessage);
-            logger.error("Task {} failed with exception", task.getId(), e);
+            LOGGER.error("Task {} failed with exception", task.getId(), e);
             return new TaskExecutionResult(false, errorMessage, null);
         }
     }

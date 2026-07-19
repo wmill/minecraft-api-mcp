@@ -10,7 +10,16 @@ import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import ca.waltermiller.mcpapi.buildtask.service.LocationQueryService;
 import ca.waltermiller.mcpapi.buildtask.service.RailPlanningService;
 import ca.waltermiller.mcpapi.database.DatabaseManager;
-import ca.waltermiller.mcpapi.endpoints.*;
+import ca.waltermiller.mcpapi.endpoints.BlocksEndpoint;
+import ca.waltermiller.mcpapi.endpoints.BuildTaskEndpoint;
+import ca.waltermiller.mcpapi.endpoints.EntitiesEndpoint;
+import ca.waltermiller.mcpapi.endpoints.MessageEndpoint;
+import ca.waltermiller.mcpapi.endpoints.NBTStructureEndpoint;
+import ca.waltermiller.mcpapi.endpoints.PlayerTeleportEndpoint;
+import ca.waltermiller.mcpapi.endpoints.PlayersEndpoint;
+import ca.waltermiller.mcpapi.endpoints.PrefabEndpoint;
+import ca.waltermiller.mcpapi.endpoints.RainFireEndpoint;
+import ca.waltermiller.mcpapi.endpoints.TaskExecutor;
 import io.javalin.Javalin;
 import net.minecraft.server.MinecraftServer;
 
@@ -81,7 +90,7 @@ public class APIServer {
         BuildService buildService = new BuildService(buildRepository, taskRepository, taskExecutor);
         LocationQueryService locationQueryService = new LocationQueryService(buildRepository, taskRepository);
         RailPlanningService railPlanningService = new RailPlanningService(
-            buildRepository, buildService, railPlanningJobRepository, server, logger);
+            buildRepository, buildService, railPlanningJobRepository, server);
         
         // Wire build service into NBT endpoint for spatial record-keeping
         nbtEndpoint.setBuildService(buildService);
