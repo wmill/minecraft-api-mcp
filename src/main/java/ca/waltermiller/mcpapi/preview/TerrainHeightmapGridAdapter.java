@@ -21,7 +21,7 @@ public final class TerrainHeightmapGridAdapter {
 
     static BlockGrid fromHeights(int[][] heights, String blockId) {
         if (heights == null || heights.length == 0) {
-            return new BlockGrid(Map.of(), 0, 0, 0, -1, -1, -1);
+            return BlockGrid.empty();
         }
 
         Map<BlockPos, String> cells = new LinkedHashMap<>();
@@ -40,7 +40,7 @@ public final class TerrainHeightmapGridAdapter {
         }
 
         if (cells.isEmpty() || sizeZ == 0) {
-            return new BlockGrid(Map.of(), 0, 0, 0, -1, -1, -1);
+            return BlockGrid.empty();
         }
 
         int minY = cells.keySet().stream().mapToInt(BlockPos::getY).min().orElse(0);

@@ -18,8 +18,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 public class BlocksEndpoint extends APIEndpoint {
+    private static final int WRITE_TIMEOUT_SECONDS = 10;
+    private static final int BULK_TIMEOUT_SECONDS = 30;
+
     private final BlocksEndpointCore core;
-    
+
     public BlocksEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
         this(app, server, logger, new BlocksEndpointCore(server, logger));
     }
@@ -42,116 +45,60 @@ public class BlocksEndpoint extends APIEndpoint {
         // null will be used to indicate blocks that will not be changed.
         app.post("/api/world/blocks/set", ctx -> {
             BlockSetRequest req = ctx.bodyAsClass(BlockSetRequest.class);
-            
-            // Delegate to core method
-            CompletableFuture<BlockSetResult> future = core.setBlocks(req);
-            
-            // Wait for result and respond
-            try {
-                BlockSetResult result = future.get(10, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    ctx.json(Map.of(
-                        "success", true,
-                        "blocks_set", result.blocksSet(),
-                        "blocks_skipped", result.blocksSkipped(),
-                        "world", result.world()
-                    ));
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for block operation"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, core.setBlocks(req), WRITE_TIMEOUT_SECONDS, "block operation",
+                BlockSetResult::success, BlockSetResult::error,
+                result -> Map.of(
+                    "success", true,
+                    "blocks_set", result.blocksSet(),
+                    "blocks_skipped", result.blocksSkipped(),
+                    "world", result.world()
+                ));
         });
 
         // get a chunk of blocks, payload will be a JSON object with the chunk coordinates and size to grab
         // response will be a three-dimensional array of block values
         app.post("/api/world/blocks/chunk", ctx -> {
             ChunkRequest req = ctx.bodyAsClass(ChunkRequest.class);
-            
-            // Delegate to core method
-            CompletableFuture<ChunkResult> future = core.getChunk(req);
-            
-            // Wait for result and respond
-            try {
-                ChunkResult result = future.get(10, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    ctx.json(Map.of(
-                        "success", true,
-                        "world", result.world(),
-                        "start_position", result.startPosition(),
-                        "size", result.size(),
-                        "blocks", result.blocks()
-                    ));
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for chunk operation"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, core.getChunk(req), WRITE_TIMEOUT_SECONDS, "chunk operation",
+                ChunkResult::success, ChunkResult::error,
+                result -> Map.of(
+                    "success", true,
+                    "world", result.world(),
+                    "start_position", result.startPosition(),
+                    "size", result.size(),
+                    "blocks", result.blocks()
+                ));
         });
 
         // Fill a box/cuboid with a specific block type between two coordinates
         app.post("/api/world/blocks/fill", ctx -> {
             FillBoxRequest req = ctx.bodyAsClass(FillBoxRequest.class);
-            
-            // Delegate to core method
-            CompletableFuture<FillResult> future = core.fillBox(req);
-            
-            // Wait for result and respond
-            try {
-                FillResult result = future.get(30, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    ctx.json(Map.of(
-                        "success", true,
-                        "blocks_set", result.blocksSet(),
-                        "blocks_failed", result.blocksFailed(),
-                        "total_blocks", result.totalBlocks(),
-                        "world", result.world(),
-                        "box_bounds", result.boxBounds()
-                    ));
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for box fill operation"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, core.fillBox(req), BULK_TIMEOUT_SECONDS, "box fill operation",
+                FillResult::success, FillResult::error,
+                result -> Map.of(
+                    "success", true,
+                    "blocks_set", result.blocksSet(),
+                    "blocks_failed", result.blocksFailed(),
+                    "total_blocks", result.totalBlocks(),
+                    "world", result.world(),
+                    "box_bounds", result.boxBounds()
+                ));
         });
 
         // Get heightmap/topography for a rectangular area
         app.post("/api/world/blocks/heightmap", ctx -> {
             HeightmapRequest req = ctx.bodyAsClass(HeightmapRequest.class);
-            
-            // Delegate to core method
-            CompletableFuture<HeightmapResult> future = core.getHeightmap(req);
-            
-            // Wait for result and respond
-            try {
-                HeightmapResult result = future.get(30, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    ctx.json(Map.of(
-                        "success", true,
-                        "world", result.world(),
-                        "area_bounds", result.areaBounds(),
-                        "size", result.size(),
-                        "heightmap_type", result.heightmapType(),
-                        "height_range", result.heightRange(),
-                        "heights", result.heights()
-                    ));
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for heightmap operation"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, core.getHeightmap(req), BULK_TIMEOUT_SECONDS, "heightmap operation",
+                HeightmapResult::success, HeightmapResult::error,
+                result -> Map.of(
+                    "success", true,
+                    "world", result.world(),
+                    "area_bounds", result.areaBounds(),
+                    "size", result.size(),
+                    "heightmap_type", result.heightmapType(),
+                    "height_range", result.heightRange(),
+                    "heights", result.heights()
+                ));
         });
 
         app.post("/api/world/blocks/heightmap/preview", ctx -> {
@@ -185,7 +132,7 @@ public class BlocksEndpoint extends APIEndpoint {
             CompletableFuture<HeightmapResult> future = core.getHeightmap(heightmapRequest);
 
             try {
-                HeightmapResult result = future.get(30, TimeUnit.SECONDS);
+                HeightmapResult result = future.get(BULK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 if (!result.success()) {
                     ctx.status(isClientError(result.error()) ? 400 : 500).json(Map.of("error", result.error()));
                     return;
@@ -213,15 +160,6 @@ public class BlocksEndpoint extends APIEndpoint {
      */
     public BlocksEndpointCore getCore() {
         return core;
-    }
-
-    private static boolean isClientError(String error) {
-        if (error == null) {
-            return false;
-        }
-        return error.startsWith("Invalid")
-            || error.startsWith("Area too large")
-            || error.startsWith("Unknown world");
     }
 }
 

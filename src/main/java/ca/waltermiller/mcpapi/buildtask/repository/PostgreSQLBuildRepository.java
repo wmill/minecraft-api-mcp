@@ -19,7 +19,9 @@ import java.util.UUID;
  */
 public class PostgreSQLBuildRepository implements BuildRepository {
     private static final Logger LOGGER = LoggerFactory.getLogger(PostgreSQLBuildRepository.class);
-    
+
+    private static final String BUILD_COLUMNS = "id, name, description, status, created_at, completed_at, world";
+
     private final DatabaseConfig databaseConfig;
     
     public PostgreSQLBuildRepository(DatabaseConfig databaseConfig) {
@@ -57,11 +59,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
     
     @Override
     public Optional<Build> findById(UUID id) throws SQLException {
-        String sql = """
-            SELECT id, name, description, status, created_at, completed_at, world
-            FROM builds
-            WHERE id = ?
-            """;
+        String sql = "SELECT " + BUILD_COLUMNS + " FROM builds WHERE id = ?";
         
         try (Connection conn = databaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -143,12 +141,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, world);
-            stmt.setInt(2, boundingBox.getMaxX());
-            stmt.setInt(3, boundingBox.getMinX());
-            stmt.setInt(4, boundingBox.getMaxY());
-            stmt.setInt(5, boundingBox.getMinY());
-            stmt.setInt(6, boundingBox.getMaxZ());
-            stmt.setInt(7, boundingBox.getMinZ());
+            JdbcSupport.bindBoxIntersection(stmt, 2, boundingBox);
             
             try (ResultSet rs = stmt.executeQuery()) {
                 List<Build> builds = new ArrayList<>();

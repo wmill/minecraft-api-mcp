@@ -30,6 +30,11 @@ public final class BlockGrid {
         this.maxZ = maxZ;
     }
 
+    /** An empty grid sentinel with an inverted (invalid) bounding box. */
+    public static BlockGrid empty() {
+        return new BlockGrid(Map.of(), 0, 0, 0, -1, -1, -1);
+    }
+
     public static BlockGrid from(Map<BlockPos, BlockState> placed) {
         return from(placed, (Function<BlockPos, BlockState>) null, 0);
     }
@@ -58,7 +63,7 @@ public final class BlockGrid {
 
     static BlockGrid fromIds(Map<BlockPos, String> placed, Function<BlockPos, String> terrainLookup, int terrainMargin) {
         if (placed.isEmpty()) {
-            return new BlockGrid(Map.of(), 0, 0, 0, -1, -1, -1);
+            return empty();
         }
 
         Map<BlockPos, String> cells = terrainMargin > 0 && terrainLookup != null
@@ -71,7 +76,7 @@ public final class BlockGrid {
         }
 
         if (cells.isEmpty()) {
-            return new BlockGrid(Map.of(), 0, 0, 0, -1, -1, -1);
+            return empty();
         }
 
         return fromResolvedCells(cells);
@@ -138,42 +143,37 @@ public final class BlockGrid {
     public int minY() { return minY; }
     public int minZ() { return minZ; }
 
-    private static BlockGrid fromResolvedCells(Map<BlockPos, String> cells) {
-        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-
-        for (BlockPos pos : cells.keySet()) {
-            if (pos.getX() < minX) minX = pos.getX();
-            if (pos.getY() < minY) minY = pos.getY();
-            if (pos.getZ() < minZ) minZ = pos.getZ();
-            if (pos.getX() > maxX) maxX = pos.getX();
-            if (pos.getY() > maxY) maxY = pos.getY();
-            if (pos.getZ() > maxZ) maxZ = pos.getZ();
+    private record Bounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        static Bounds of(Iterable<BlockPos> positions) {
+            int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+            for (BlockPos pos : positions) {
+                if (pos.getX() < minX) minX = pos.getX();
+                if (pos.getY() < minY) minY = pos.getY();
+                if (pos.getZ() < minZ) minZ = pos.getZ();
+                if (pos.getX() > maxX) maxX = pos.getX();
+                if (pos.getY() > maxY) maxY = pos.getY();
+                if (pos.getZ() > maxZ) maxZ = pos.getZ();
+            }
+            return new Bounds(minX, minY, minZ, maxX, maxY, maxZ);
         }
+    }
 
-        return new BlockGrid(new HashMap<>(cells), minX, minY, minZ, maxX, maxY, maxZ);
+    private static BlockGrid fromResolvedCells(Map<BlockPos, String> cells) {
+        Bounds b = Bounds.of(cells.keySet());
+        return new BlockGrid(new HashMap<>(cells), b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ);
     }
 
     private static Map<BlockPos, String> sampleTerrain(
             Map<BlockPos, String> placed,
             Function<BlockPos, String> terrainLookup,
             int terrainMargin) {
-        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-
-        for (BlockPos pos : placed.keySet()) {
-            if (pos.getX() < minX) minX = pos.getX();
-            if (pos.getY() < minY) minY = pos.getY();
-            if (pos.getZ() < minZ) minZ = pos.getZ();
-            if (pos.getX() > maxX) maxX = pos.getX();
-            if (pos.getY() > maxY) maxY = pos.getY();
-            if (pos.getZ() > maxZ) maxZ = pos.getZ();
-        }
+        Bounds b = Bounds.of(placed.keySet());
 
         Map<BlockPos, String> cells = new LinkedHashMap<>();
-        for (int x = minX - terrainMargin; x <= maxX + terrainMargin; x++) {
-            for (int y = minY - terrainMargin; y <= maxY + terrainMargin; y++) {
-                for (int z = minZ - terrainMargin; z <= maxZ + terrainMargin; z++) {
+        for (int x = b.minX - terrainMargin; x <= b.maxX + terrainMargin; x++) {
+            for (int y = b.minY - terrainMargin; y <= b.maxY + terrainMargin; y++) {
+                for (int z = b.minZ - terrainMargin; z <= b.maxZ + terrainMargin; z++) {
                     BlockPos pos = new BlockPos(x, y, z);
                     String id = terrainLookup.apply(pos);
                     if (!isAir(id)) {

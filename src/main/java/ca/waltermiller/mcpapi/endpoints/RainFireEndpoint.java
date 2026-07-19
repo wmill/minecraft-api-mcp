@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 
 public class RainFireEndpoint extends APIEndpoint {
     private static final int MAX_RADIUS = 56;
+    private static final int TIMEOUT_SECONDS = 30;
 
     public RainFireEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
         super(app, server, logger);
@@ -42,38 +43,27 @@ public class RainFireEndpoint extends APIEndpoint {
                 return;
             }
 
-            RegistryKey<World> worldKey = req.world != null
-                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
-                : World.OVERWORLD;
-            ServerWorld world = server.getWorld(worldKey);
+            RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(req.world);
+            ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
             if (world == null) {
-                ctx.status(400).json(Map.of("error", "Unknown world: " + worldKey));
+                ctx.status(400).json(Map.of("error", "Unknown world: " + req.world));
                 return;
             }
 
             CompletableFuture<RainFireResult> future = new CompletableFuture<>();
             server.execute(() -> future.complete(rainFire(world, worldKey, req)));
 
-            try {
-                RainFireResult result = future.get(30, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    ctx.json(Map.of(
-                        "success", true,
-                        "world", result.world(),
-                        "fires_placed", result.fires_placed(),
-                        "columns_considered", result.columns_considered(),
-                        "center", result.center(),
-                        "radius", result.radius(),
-                        "density", result.density()
-                    ));
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for rain_fire"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, future, TIMEOUT_SECONDS, "rain_fire",
+                RainFireResult::success, RainFireResult::error,
+                result -> Map.of(
+                    "success", true,
+                    "world", result.world(),
+                    "fires_placed", result.fires_placed(),
+                    "columns_considered", result.columns_considered(),
+                    "center", result.center(),
+                    "radius", result.radius(),
+                    "density", result.density()
+                ));
         });
     }
 

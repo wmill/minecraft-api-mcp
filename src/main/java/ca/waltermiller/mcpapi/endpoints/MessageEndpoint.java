@@ -8,8 +8,12 @@ import net.minecraft.text.Text;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class MessageEndpoint extends APIEndpoint {
+    private static final int TIMEOUT_SECONDS = 10;
+
     public MessageEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
         super(app, server, logger);
         init();
@@ -44,12 +48,14 @@ public class MessageEndpoint extends APIEndpoint {
             });
             
             try {
-                future.get();
+                future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 ctx.json(Map.of(
                     "success", true,
                     "message", "Message sent to all players",
                     "player_count", server.getPlayerManager().getPlayerList().size()
                 ));
+            } catch (TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for broadcast"));
             } catch (Exception e) {
                 LOGGER.error("Error broadcasting message", e);
                 ctx.status(500).json(Map.of("error", "Failed to send message: " + e.getMessage()));
@@ -89,11 +95,13 @@ public class MessageEndpoint extends APIEndpoint {
             });
             
             try {
-                future.get();
+                future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 ctx.json(Map.of(
                     "success", true,
                     "message", "Message sent to player"
                 ));
+            } catch (TimeoutException e) {
+                ctx.status(500).json(Map.of("error", "Timeout waiting for player message"));
             } catch (Exception e) {
                 LOGGER.error("Error sending message to player", e);
                 ctx.status(500).json(Map.of("error", "Failed to send message: " + e.getMessage()));

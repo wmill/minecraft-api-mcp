@@ -96,8 +96,8 @@ public class NBTStructureEndpoint extends APIEndpoint {
             boolean replaceBlocks = Boolean.parseBoolean(replaceBlocksStr);
 
             // Validate world
-            RegistryKey<World> worldKey = RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(worldName));
-            ServerWorld world = server.getWorld(worldKey);
+            RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(worldName);
+            ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
             if (world == null) {
                 ctx.status(400).json(Map.of("error", "Unknown world: " + worldName));
                 return;

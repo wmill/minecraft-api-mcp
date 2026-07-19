@@ -49,11 +49,9 @@ public class BlocksEndpointCore {
         CompletableFuture<BlockSetResult> future = new CompletableFuture<>();
 
         // Validate world
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
 
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new BlockSetResult(false, "Unknown world: " + worldKey, 0, 0, null));
             return future;
@@ -124,11 +122,9 @@ public class BlocksEndpointCore {
         CompletableFuture<ChunkResult> future = new CompletableFuture<>();
         
         // Validate world
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
         
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new ChunkResult(false, "Unknown world: " + worldKey, null, null, null, null));
             return future;
@@ -190,11 +186,9 @@ public class BlocksEndpointCore {
         CompletableFuture<FillResult> future = new CompletableFuture<>();
         
         // Validate world
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
         
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new FillResult(false, "Unknown world: " + worldKey, 0, 0, 0, null, null));
             return future;
@@ -288,11 +282,9 @@ public class BlocksEndpointCore {
         CompletableFuture<HeightmapResult> future = new CompletableFuture<>();
         
         // Validate world
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
         
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new HeightmapResult(false, "Unknown world: " + worldKey, null, null, null, null, null, null));
             return future;
@@ -394,7 +386,7 @@ public class BlocksEndpointCore {
 }
 
 // Result classes for core operations
-record BlockSetResult(boolean success, String error, int blocksSet, int blocksSkipped, String world) {}
-record ChunkResult(boolean success, String error, String world, Map<String, Integer> startPosition, Map<String, Integer> size, BlockData[][][] blocks) {}
-record FillResult(boolean success, String error, int blocksSet, int blocksFailed, int totalBlocks, String world, Map<String, Map<String, Integer>> boxBounds) {}
-record HeightmapResult(boolean success, String error, String world, Map<String, Map<String, Integer>> areaBounds, Map<String, Integer> size, String heightmapType, Map<String, Integer> heightRange, int[][] heights) {}
+record BlockSetResult(boolean success, String error, int blocksSet, int blocksSkipped, String world) implements OperationResult {}
+record ChunkResult(boolean success, String error, String world, Map<String, Integer> startPosition, Map<String, Integer> size, BlockData[][][] blocks) implements OperationResult {}
+record FillResult(boolean success, String error, int blocksSet, int blocksFailed, int totalBlocks, String world, Map<String, Map<String, Integer>> boxBounds) implements OperationResult {}
+record HeightmapResult(boolean success, String error, String world, Map<String, Map<String, Integer>> areaBounds, Map<String, Integer> size, String heightmapType, Map<String, Integer> heightRange, int[][] heights) implements OperationResult {}

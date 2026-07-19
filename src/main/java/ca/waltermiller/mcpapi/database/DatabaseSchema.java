@@ -13,11 +13,43 @@ import java.sql.Statement;
  */
 public class DatabaseSchema {
     private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseSchema.class);
-    
+
+    private static final String[] TABLE_NAMES = {"builds", "build_tasks", "rail_planning_jobs"};
+
     private final DatabaseConfig databaseConfig;
-    
+
     public DatabaseSchema(DatabaseConfig databaseConfig) {
         this.databaseConfig = databaseConfig;
+    }
+
+    private void execute(Connection connection, String sql, String logMessage) throws SQLException {
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+            LOGGER.debug(logMessage);
+        }
+    }
+
+    /**
+     * Adds a foreign key from childTable.build_id to builds(id) if the named constraint
+     * does not exist yet. Done separately from CREATE TABLE to handle existing data.
+     */
+    private void addBuildForeignKeyIfMissing(Connection connection, String childTable) throws SQLException {
+        String constraintName = childTable + "_build_id_fkey";
+        String fkSql = """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.table_constraints
+                    WHERE constraint_name = '%s'
+                ) THEN
+                    ALTER TABLE %s
+                    ADD CONSTRAINT %s
+                    FOREIGN KEY (build_id) REFERENCES builds(id) ON DELETE CASCADE;
+                END IF;
+            END $$
+            """.formatted(constraintName, childTable, constraintName);
+
+        execute(connection, fkSql, "Added foreign key constraint for " + childTable);
     }
     
     /**
@@ -59,11 +91,8 @@ public class DatabaseSchema {
                 world VARCHAR(255) NOT NULL DEFAULT 'minecraft:overworld'
             )
             """;
-        
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(sql);
-            LOGGER.debug("Created builds table");
-        }
+
+        execute(connection, sql, "Created builds table");
     }
     
     private void createBuildTasksTable(Connection connection) throws SQLException {
@@ -90,31 +119,9 @@ public class DatabaseSchema {
                 UNIQUE(build_id, task_order)
             )
             """;
-        
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(sql);
-            LOGGER.debug("Created build_tasks table");
-        }
-        
-        // Add foreign key constraint separately to handle existing data
-        String fkSql = """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1 FROM information_schema.table_constraints 
-                    WHERE constraint_name = 'build_tasks_build_id_fkey'
-                ) THEN
-                    ALTER TABLE build_tasks 
-                    ADD CONSTRAINT build_tasks_build_id_fkey 
-                    FOREIGN KEY (build_id) REFERENCES builds(id) ON DELETE CASCADE;
-                END IF;
-            END $$
-            """;
-        
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(fkSql);
-            LOGGER.debug("Added foreign key constraint for build_tasks");
-        }
+
+        execute(connection, sql, "Created build_tasks table");
+        addBuildForeignKeyIfMissing(connection, "build_tasks");
     }
 
     private void createRailPlanningJobsTable(Connection connection) throws SQLException {
@@ -134,29 +141,8 @@ public class DatabaseSchema {
             )
             """;
 
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(sql);
-            LOGGER.debug("Created rail_planning_jobs table");
-        }
-
-        String fkSql = """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1 FROM information_schema.table_constraints 
-                    WHERE constraint_name = 'rail_planning_jobs_build_id_fkey'
-                ) THEN
-                    ALTER TABLE rail_planning_jobs
-                    ADD CONSTRAINT rail_planning_jobs_build_id_fkey
-                    FOREIGN KEY (build_id) REFERENCES builds(id) ON DELETE CASCADE;
-                END IF;
-            END $$
-            """;
-
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(fkSql);
-            LOGGER.debug("Added foreign key constraint for rail_planning_jobs");
-        }
+        execute(connection, sql, "Created rail_planning_jobs table");
+        addBuildForeignKeyIfMissing(connection, "rail_planning_jobs");
     }
     
     private void createIndexes(Connection connection) throws SQLException {
@@ -186,17 +172,18 @@ public class DatabaseSchema {
      */
     public boolean isSchemaInitialized() {
         try (Connection connection = databaseConfig.getConnection()) {
+            String tableList = "'" + String.join("', '", TABLE_NAMES) + "'";
             String sql = """
-                SELECT COUNT(*) FROM information_schema.tables 
-                WHERE table_name IN ('builds', 'build_tasks', 'rail_planning_jobs') 
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_name IN (%s)
                 AND table_schema = 'public'
-                """;
-            
+                """.formatted(tableList);
+
             try (Statement stmt = connection.createStatement();
                  var rs = stmt.executeQuery(sql)) {
-                
+
                 if (rs.next()) {
-                    return rs.getInt(1) == 3;
+                    return rs.getInt(1) == TABLE_NAMES.length;
                 }
             }
         } catch (SQLException e) {

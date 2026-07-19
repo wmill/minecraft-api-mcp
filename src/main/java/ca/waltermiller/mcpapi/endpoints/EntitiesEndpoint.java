@@ -18,6 +18,8 @@ import java.util.Map;
 
 
 public class EntitiesEndpoint extends APIEndpoint {
+    private static final int TIMEOUT_SECONDS = 5;
+
     public EntitiesEndpoint(Javalin app, MinecraftServer server, Logger logger) {
         super(app, server, logger);
         init();
@@ -41,11 +43,9 @@ public class EntitiesEndpoint extends APIEndpoint {
                 return;
             }
 
-            RegistryKey<World> worldKey = req.world != null
-                ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(req.world))
-                : World.OVERWORLD;
+            RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(req.world);
 
-            ServerWorld world = server.getWorld(worldKey);
+            ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         
             EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
         
@@ -94,19 +94,10 @@ public class EntitiesEndpoint extends APIEndpoint {
                 }
             });
             
-            // Wait for the result and respond
-            try {
-                Map<String, Object> result = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
-                if (result.containsKey("error")) {
-                    ctx.status(500).json(result);
-                } else {
-                    ctx.json(result);
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for entity spawn"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, future, TIMEOUT_SECONDS, "entity spawn",
+                result -> !result.containsKey("error"),
+                result -> (String) result.get("error"),
+                result -> result);
         });
         
     }

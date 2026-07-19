@@ -1,10 +1,11 @@
 package ca.waltermiller.mcpapi.buildtask.service;
 
+import ca.waltermiller.mcpapi.buildtask.Json;
 import ca.waltermiller.mcpapi.buildtask.model.*;
 import ca.waltermiller.mcpapi.buildtask.repository.BuildRepository;
 import ca.waltermiller.mcpapi.buildtask.repository.TaskRepository;
 import ca.waltermiller.mcpapi.endpoints.TaskExecutor;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,8 +68,7 @@ public class BuildService {
         Build build = new Build("NBT: " + filename, "Auto-recorded NBT structure placement", world);
         Build savedBuild = buildRepository.create(build);
 
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode taskData = mapper.createObjectNode()
+        ObjectNode taskData = Json.MAPPER.createObjectNode()
             .put("x", x).put("y", y).put("z", z)
             .put("size_x", sizeX).put("size_y", sizeY).put("size_z", sizeZ)
             .put("filename", filename).put("rotation", rotation);
@@ -511,13 +511,13 @@ public class BuildService {
 
         // Merge partial task_data with existing
         if (partialTaskData != null && !partialTaskData.isNull()) {
-            com.fasterxml.jackson.databind.JsonNode existingData = task.getTaskData();
-            com.fasterxml.jackson.databind.node.ObjectNode merged;
+            JsonNode existingData = task.getTaskData();
+            ObjectNode merged;
 
             if (existingData != null && existingData.isObject()) {
                 merged = existingData.deepCopy();
             } else {
-                merged = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+                merged = Json.MAPPER.createObjectNode();
             }
 
             // Merge fields from partialTaskData into existing

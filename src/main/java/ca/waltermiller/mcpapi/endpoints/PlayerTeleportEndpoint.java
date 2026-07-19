@@ -40,14 +40,8 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
                     }
 
                     // Get the target dimension
-                    Identifier dimensionId = Identifier.tryParse(request.dimension());
-                    if (dimensionId == null) {
-                        future.complete(new TeleportResult(400, new ErrorResponse("Invalid dimension: " + request.dimension())));
-                        return;
-                    }
-
-                    RegistryKey<World> dimensionKey = RegistryKey.of(RegistryKeys.WORLD, dimensionId);
-                    ServerWorld targetWorld = server.getWorld(dimensionKey);
+                    RegistryKey<World> dimensionKey = WorldResolver.resolveWorldKey(request.dimension());
+                    ServerWorld targetWorld = dimensionKey != null ? server.getWorld(dimensionKey) : null;
                     if (targetWorld == null) {
                         future.complete(new TeleportResult(400, new ErrorResponse("Invalid dimension: " + request.dimension())));
                         return;

@@ -46,16 +46,31 @@ public class PrefabEndpointCore {
     }
 
     /**
+     * Parses a compass direction string ("north"/"south"/"east"/"west", case-insensitive)
+     * to a horizontal Direction, or null when missing or unrecognized.
+     */
+    static Direction parseHorizontalDirection(String value) {
+        if (value == null) {
+            return null;
+        }
+        return switch (value.toLowerCase()) {
+            case "north" -> Direction.NORTH;
+            case "south" -> Direction.SOUTH;
+            case "east" -> Direction.EAST;
+            case "west" -> Direction.WEST;
+            default -> null;
+        };
+    }
+
+    /**
      * Place door prefab
      */
     public CompletableFuture<DoorResult> placeDoor(DoorRequest request) {
         CompletableFuture<DoorResult> future = new CompletableFuture<>();
 
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
 
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new DoorResult(false, "Unknown world: " + worldKey, null, 0, null, null, false));
             return future;
@@ -84,14 +99,8 @@ public class PrefabEndpointCore {
             return new DoorResult(false, "Block is not a door: " + request.block_type, null, 0, null, null, false);
         }
 
-        Direction facing = switch(request.facing.toLowerCase()) {
-            case "north" -> Direction.NORTH;
-            case "south" -> Direction.SOUTH;
-            case "east" -> Direction.EAST;
-            case "west" -> Direction.WEST;
-            default -> null;
-        };
-        if (facing == null || !facing.getAxis().isHorizontal()) {
+        Direction facing = parseHorizontalDirection(request.facing);
+        if (facing == null) {
             return new DoorResult(false, "Facing must be one of north, south, east, west", null, 0, null, null, false);
         }
 
@@ -152,11 +161,9 @@ public class PrefabEndpointCore {
     public CompletableFuture<StairResult> placeStairs(StairRequest request) {
         CompletableFuture<StairResult> future = new CompletableFuture<>();
 
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
 
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new StairResult(false, "Unknown world: " + worldKey, null, 0, null, false));
             return future;
@@ -182,14 +189,8 @@ public class PrefabEndpointCore {
             return new StairResult(false, "Block is not a stair: " + request.stair_type, null, 0, null, false);
         }
 
-        Direction staircaseDirection = switch(request.staircase_direction.toLowerCase()) {
-            case "north" -> Direction.NORTH;
-            case "south" -> Direction.SOUTH;
-            case "east" -> Direction.EAST;
-            case "west" -> Direction.WEST;
-            default -> null;
-        };
-        if (staircaseDirection == null || !staircaseDirection.getAxis().isHorizontal()) {
+        Direction staircaseDirection = parseHorizontalDirection(request.staircase_direction);
+        if (staircaseDirection == null) {
             return new StairResult(false, "staircase_direction must be one of north, south, east, west", null, 0, null, false);
         }
 
@@ -211,11 +212,9 @@ public class PrefabEndpointCore {
     public CompletableFuture<WindowPaneResult> placeWindowPane(WindowPaneRequest request) {
         CompletableFuture<WindowPaneResult> future = new CompletableFuture<>();
 
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
 
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new WindowPaneResult(false, "Unknown world: " + worldKey, null, 0, null, false));
             return future;
@@ -265,11 +264,9 @@ public class PrefabEndpointCore {
     public CompletableFuture<TorchResult> placeTorch(TorchRequest request) {
         CompletableFuture<TorchResult> future = new CompletableFuture<>();
 
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
 
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new TorchResult(false, "Unknown world: " + worldKey, null, null, null, false, null));
             return future;
@@ -300,13 +297,7 @@ public class PrefabEndpointCore {
                 Direction facing = null;
 
                 if (request.facing != null && !request.facing.isEmpty()) {
-                    facing = switch(request.facing.toLowerCase()) {
-                        case "north" -> Direction.NORTH;
-                        case "south" -> Direction.SOUTH;
-                        case "east" -> Direction.EAST;
-                        case "west" -> Direction.WEST;
-                        default -> null;
-                    };
+                    facing = parseHorizontalDirection(request.facing);
 
                     if (facing == null) {
                         return new TorchResult(false, "Invalid facing direction. Must be north, south, east, or west", null, null, null, false, null);
@@ -357,11 +348,9 @@ public class PrefabEndpointCore {
     public CompletableFuture<SignResult> placeSign(SignRequest request) {
         CompletableFuture<SignResult> future = new CompletableFuture<>();
 
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
 
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new SignResult(false, "Unknown world: " + worldKey, null, null, null, null, null, null, false));
             return future;
@@ -403,13 +392,7 @@ public class PrefabEndpointCore {
                 Direction facing = null;
 
                 if (request.facing != null && !request.facing.isEmpty()) {
-                    facing = switch(request.facing.toLowerCase()) {
-                        case "north" -> Direction.NORTH;
-                        case "south" -> Direction.SOUTH;
-                        case "east" -> Direction.EAST;
-                        case "west" -> Direction.WEST;
-                        default -> null;
-                    };
+                    facing = parseHorizontalDirection(request.facing);
 
                     if (facing == null) {
                         return new SignResult(false, "Invalid facing direction. Must be north, south, east, or west", null, null, null, null, null, null, false);
@@ -480,11 +463,9 @@ public class PrefabEndpointCore {
     public CompletableFuture<LadderResult> placeLadder(LadderRequest request) {
         CompletableFuture<LadderResult> future = new CompletableFuture<>();
 
-        RegistryKey<World> worldKey = request.world != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(request.world))
-            : World.OVERWORLD;
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
 
-        ServerWorld world = server.getWorld(worldKey);
+        ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
             future.complete(new LadderResult(false, "Unknown world: " + worldKey, null, 0, null, null, null));
             return future;
@@ -524,13 +505,7 @@ public class PrefabEndpointCore {
             Direction facing = null;
 
             if (request.facing != null && !request.facing.isEmpty()) {
-                facing = switch(request.facing.toLowerCase()) {
-                    case "north" -> Direction.NORTH;
-                    case "south" -> Direction.SOUTH;
-                    case "east" -> Direction.EAST;
-                    case "west" -> Direction.WEST;
-                    default -> null;
-                };
+                facing = parseHorizontalDirection(request.facing);
 
                 if (facing == null) {
                     return new LadderResult(false, "Invalid facing direction. Must be north, south, east, or west", null, 0, null, null, null);
@@ -846,9 +821,9 @@ public class PrefabEndpointCore {
 }
 
 // Result classes for core operations
-record DoorResult(boolean success, String error, String world, int doors_placed, String facing, String hinge, boolean open) {}
-record StairResult(boolean success, String error, String world, int blocks_placed, String staircase_direction, boolean fill_support) {}
-record WindowPaneResult(boolean success, String error, String world, int panes_placed, String orientation, boolean waterlogged) {}
-record TorchResult(boolean success, String error, String world, String block_type, Map<String, Integer> position, boolean wall_mounted, String facing) {}
-record SignResult(boolean success, String error, String world, Map<String, Integer> position, String block_type, String sign_type, String facing, Integer rotation, boolean glowing) {}
-record LadderResult(boolean success, String error, String world, int blocks_placed, String facing, Map<String, Integer> start_position, Map<String, Integer> end_position) {}
+record DoorResult(boolean success, String error, String world, int doors_placed, String facing, String hinge, boolean open) implements OperationResult {}
+record StairResult(boolean success, String error, String world, int blocks_placed, String staircase_direction, boolean fill_support) implements OperationResult {}
+record WindowPaneResult(boolean success, String error, String world, int panes_placed, String orientation, boolean waterlogged) implements OperationResult {}
+record TorchResult(boolean success, String error, String world, String block_type, Map<String, Integer> position, boolean wall_mounted, String facing) implements OperationResult {}
+record SignResult(boolean success, String error, String world, Map<String, Integer> position, String block_type, String sign_type, String facing, Integer rotation, boolean glowing) implements OperationResult {}
+record LadderResult(boolean success, String error, String world, int blocks_placed, String facing, Map<String, Integer> start_position, Map<String, Integer> end_position) implements OperationResult {}

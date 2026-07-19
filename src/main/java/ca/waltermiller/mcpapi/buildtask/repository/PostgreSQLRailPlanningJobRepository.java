@@ -4,7 +4,6 @@ import ca.waltermiller.mcpapi.buildtask.model.RailPlanningJob;
 import ca.waltermiller.mcpapi.buildtask.model.RailPlanningStatus;
 import ca.waltermiller.mcpapi.database.DatabaseConfig;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,11 +19,9 @@ public class PostgreSQLRailPlanningJobRepository implements RailPlanningJobRepos
     private static final Logger LOGGER = LoggerFactory.getLogger(PostgreSQLRailPlanningJobRepository.class);
 
     private final DatabaseConfig databaseConfig;
-    private final ObjectMapper objectMapper;
 
     public PostgreSQLRailPlanningJobRepository(DatabaseConfig databaseConfig) {
         this.databaseConfig = databaseConfig;
-        this.objectMapper = new ObjectMapper();
     }
 
     @Override
@@ -123,14 +120,6 @@ public class PostgreSQLRailPlanningJobRepository implements RailPlanningJobRepos
     }
 
     private JsonNode parseJson(String raw) {
-        if (raw == null) {
-            return null;
-        }
-        try {
-            return objectMapper.readTree(raw);
-        } catch (Exception e) {
-            LOGGER.warn("Failed to parse planning job JSON", e);
-            return null;
-        }
+        return JdbcSupport.parseJsonOrNull(raw, LOGGER, "planning job");
     }
 }

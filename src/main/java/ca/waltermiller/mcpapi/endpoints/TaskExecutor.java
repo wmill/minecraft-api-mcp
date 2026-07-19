@@ -81,14 +81,14 @@ public class TaskExecutor {
         try {
             // Execute based on task type
             CompletableFuture<TaskExecutionResult> future = switch (task.getTaskType()) {
-                case BLOCK_SET -> executeBlockSetTask(task);
-                case BLOCK_FILL -> executeBlockFillTask(task);
-                case PREFAB_DOOR -> executePrefabDoorTask(task);
-                case PREFAB_STAIRS -> executePrefabStairsTask(task);
-                case PREFAB_WINDOW -> executePrefabWindowTask(task);
-                case PREFAB_TORCH -> executePrefabTorchTask(task);
-                case PREFAB_SIGN -> executePrefabSignTask(task);
-                case PREFAB_LADDER -> executePrefabLadderTask(task);
+                case BLOCK_SET -> executeAsync(task, BlockSetRequest.class, blocksCore::setBlocks, TaskExecutor::blockSetMessage);
+                case BLOCK_FILL -> executeAsync(task, FillBoxRequest.class, blocksCore::fillBox, TaskExecutor::blockFillMessage);
+                case PREFAB_DOOR -> executeAsync(task, DoorRequest.class, prefabCore::placeDoor, TaskExecutor::doorMessage);
+                case PREFAB_STAIRS -> executeAsync(task, StairRequest.class, prefabCore::placeStairs, TaskExecutor::stairsMessage);
+                case PREFAB_WINDOW -> executeAsync(task, WindowPaneRequest.class, prefabCore::placeWindowPane, TaskExecutor::windowMessage);
+                case PREFAB_TORCH -> executeAsync(task, TorchRequest.class, prefabCore::placeTorch, TaskExecutor::torchMessage);
+                case PREFAB_SIGN -> executeAsync(task, SignRequest.class, prefabCore::placeSign, TaskExecutor::signMessage);
+                case PREFAB_LADDER -> executeAsync(task, LadderRequest.class, prefabCore::placeLadder, TaskExecutor::ladderMessage);
                 case RAIL_SURFACE_SEGMENT -> executeRailSegmentTask(task, "surface");
                 case RAIL_BRIDGE_SEGMENT -> executeRailSegmentTask(task, "bridge");
                 case RAIL_TUNNEL_SEGMENT -> executeRailSegmentTask(task, "tunnel");
@@ -137,14 +137,22 @@ public class TaskExecutor {
 
         try {
             return switch (task.getTaskType()) {
-                case BLOCK_SET -> dispatchBlockSetInto(task, sink);
-                case BLOCK_FILL -> dispatchBlockFillInto(task, sink);
-                case PREFAB_DOOR -> dispatchPrefabDoorInto(task, sink);
-                case PREFAB_STAIRS -> dispatchPrefabStairsInto(task, sink);
-                case PREFAB_WINDOW -> dispatchPrefabWindowInto(task, sink);
-                case PREFAB_TORCH -> dispatchPrefabTorchInto(task, sink);
-                case PREFAB_SIGN -> dispatchPrefabSignInto(task, sink);
-                case PREFAB_LADDER -> dispatchPrefabLadderInto(task, sink);
+                case BLOCK_SET -> dispatch(task, BlockSetRequest.class,
+                    req -> blocksCore.setBlocksInto(sink, req, resolveWorldKey(req.world)), TaskExecutor::blockSetMessage);
+                case BLOCK_FILL -> dispatch(task, FillBoxRequest.class,
+                    req -> fillInto(sink, req), TaskExecutor::blockFillMessage);
+                case PREFAB_DOOR -> dispatch(task, DoorRequest.class,
+                    req -> prefabCore.placeDoorInto(sink, req, resolveWorldKey(req.world)), TaskExecutor::doorMessage);
+                case PREFAB_STAIRS -> dispatch(task, StairRequest.class,
+                    req -> prefabCore.placeStairsInto(sink, req, resolveWorldKey(req.world)), TaskExecutor::stairsMessage);
+                case PREFAB_WINDOW -> dispatch(task, WindowPaneRequest.class,
+                    req -> prefabCore.placeWindowPaneInto(sink, req, resolveWorldKey(req.world)), TaskExecutor::windowMessage);
+                case PREFAB_TORCH -> dispatch(task, TorchRequest.class,
+                    req -> prefabCore.placeTorchInto(sink, req, resolveWorldKey(req.world)), TaskExecutor::torchMessage);
+                case PREFAB_SIGN -> dispatch(task, SignRequest.class,
+                    req -> prefabCore.placeSignInto(sink, req, resolveWorldKey(req.world)), TaskExecutor::signMessage);
+                case PREFAB_LADDER -> dispatch(task, LadderRequest.class,
+                    req -> prefabCore.placeLadderInto(sink, req, resolveWorldKey(req.world)), TaskExecutor::ladderMessage);
                 case RAIL_SURFACE_SEGMENT -> dispatchRailSegmentInto(task, sink, "surface");
                 case RAIL_BRIDGE_SEGMENT -> dispatchRailSegmentInto(task, sink, "bridge");
                 case RAIL_TUNNEL_SEGMENT -> dispatchRailSegmentInto(task, sink, "tunnel");
@@ -158,126 +166,97 @@ public class TaskExecutor {
     }
 
     private RegistryKey<World> resolveWorldKey(String worldString) {
-        return worldString != null
-            ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(worldString))
-            : World.OVERWORLD;
+        return WorldResolver.resolveWorldKey(worldString);
     }
 
-    private TaskExecutionResult dispatchBlockSetInto(BuildTask task, BlockSink sink) {
+    /**
+     * Parses the task data as the given request type and runs the operation synchronously,
+     * translating the operation result into a TaskExecutionResult.
+     */
+    private <Req, Res extends OperationResult> TaskExecutionResult dispatch(
+            BuildTask task, Class<Req> requestClass,
+            java.util.function.Function<Req, Res> operation,
+            java.util.function.Function<Res, String> successMessage) {
         try {
-            BlockSetRequest request = objectMapper.treeToValue(task.getTaskData(), BlockSetRequest.class);
-            BlockSetResult result = blocksCore.setBlocksInto(sink, request, resolveWorldKey(request.world));
-            if (result.success()) {
-                return new TaskExecutionResult(true, null, "Set " + result.blocksSet() + " blocks, skipped " + result.blocksSkipped());
-            }
-            return new TaskExecutionResult(false, result.error(), null);
+            Req request = objectMapper.treeToValue(task.getTaskData(), requestClass);
+            return toExecutionResult(operation.apply(request), successMessage);
         } catch (Exception e) {
-            return new TaskExecutionResult(false, "Failed to parse BLOCK_SET task data: " + e.getMessage(), null);
+            return parseFailure(task, e);
         }
     }
 
-    private TaskExecutionResult dispatchBlockFillInto(BuildTask task, BlockSink sink) {
+    /**
+     * Async variant of dispatch: runs the core's own async wrapper (which resolves the
+     * world, enforces size limits, and hops to the server thread).
+     */
+    private <Req, Res extends OperationResult> CompletableFuture<TaskExecutionResult> executeAsync(
+            BuildTask task, Class<Req> requestClass,
+            java.util.function.Function<Req, CompletableFuture<Res>> operation,
+            java.util.function.Function<Res, String> successMessage) {
         try {
-            FillBoxRequest request = objectMapper.treeToValue(task.getTaskData(), FillBoxRequest.class);
-            int minX = Math.min(request.x1, request.x2);
-            int maxX = Math.max(request.x1, request.x2);
-            int minY = Math.min(request.y1, request.y2);
-            int maxY = Math.max(request.y1, request.y2);
-            int minZ = Math.min(request.z1, request.z2);
-            int maxZ = Math.max(request.z1, request.z2);
-            int totalBlocks = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
-            FillResult result = blocksCore.fillBoxInto(sink, request, resolveWorldKey(request.world),
-                minX, minY, minZ, maxX, maxY, maxZ, totalBlocks);
-            if (result.success()) {
-                return new TaskExecutionResult(true, null, "Filled " + result.blocksSet() + " blocks, failed " + result.blocksFailed());
-            }
-            return new TaskExecutionResult(false, result.error(), null);
+            Req request = objectMapper.treeToValue(task.getTaskData(), requestClass);
+            return operation.apply(request).thenApply(result -> toExecutionResult(result, successMessage));
         } catch (Exception e) {
-            return new TaskExecutionResult(false, "Failed to parse BLOCK_FILL task data: " + e.getMessage(), null);
+            return CompletableFuture.completedFuture(parseFailure(task, e));
         }
     }
 
-    private TaskExecutionResult dispatchPrefabDoorInto(BuildTask task, BlockSink sink) {
-        try {
-            DoorRequest request = objectMapper.treeToValue(task.getTaskData(), DoorRequest.class);
-            DoorResult result = prefabCore.placeDoorInto(sink, request, resolveWorldKey(request.world));
-            if (result.success()) {
-                return new TaskExecutionResult(true, null, "Placed " + result.doors_placed() + " doors");
-            }
-            return new TaskExecutionResult(false, result.error(), null);
-        } catch (Exception e) {
-            return new TaskExecutionResult(false, "Failed to parse PREFAB_DOOR task data: " + e.getMessage(), null);
-        }
+    private <Res extends OperationResult> TaskExecutionResult toExecutionResult(
+            Res result, java.util.function.Function<Res, String> successMessage) {
+        return result.success()
+            ? new TaskExecutionResult(true, null, successMessage.apply(result))
+            : new TaskExecutionResult(false, result.error(), null);
     }
 
-    private TaskExecutionResult dispatchPrefabStairsInto(BuildTask task, BlockSink sink) {
-        try {
-            StairRequest request = objectMapper.treeToValue(task.getTaskData(), StairRequest.class);
-            StairResult result = prefabCore.placeStairsInto(sink, request, resolveWorldKey(request.world));
-            if (result.success()) {
-                return new TaskExecutionResult(true, null, "Placed " + result.blocks_placed() + " stair blocks");
-            }
-            return new TaskExecutionResult(false, result.error(), null);
-        } catch (Exception e) {
-            return new TaskExecutionResult(false, "Failed to parse PREFAB_STAIRS task data: " + e.getMessage(), null);
-        }
+    private TaskExecutionResult parseFailure(BuildTask task, Exception e) {
+        return new TaskExecutionResult(false,
+            "Failed to parse " + task.getTaskType() + " task data: " + e.getMessage(), null);
     }
 
-    private TaskExecutionResult dispatchPrefabWindowInto(BuildTask task, BlockSink sink) {
-        try {
-            WindowPaneRequest request = objectMapper.treeToValue(task.getTaskData(), WindowPaneRequest.class);
-            WindowPaneResult result = prefabCore.placeWindowPaneInto(sink, request, resolveWorldKey(request.world));
-            if (result.success()) {
-                return new TaskExecutionResult(true, null, "Placed " + result.panes_placed() + " window panes");
-            }
-            return new TaskExecutionResult(false, result.error(), null);
-        } catch (Exception e) {
-            return new TaskExecutionResult(false, "Failed to parse PREFAB_WINDOW task data: " + e.getMessage(), null);
-        }
+    private FillResult fillInto(BlockSink sink, FillBoxRequest request) {
+        int minX = Math.min(request.x1, request.x2);
+        int maxX = Math.max(request.x1, request.x2);
+        int minY = Math.min(request.y1, request.y2);
+        int maxY = Math.max(request.y1, request.y2);
+        int minZ = Math.min(request.z1, request.z2);
+        int maxZ = Math.max(request.z1, request.z2);
+        int totalBlocks = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+        return blocksCore.fillBoxInto(sink, request, resolveWorldKey(request.world),
+            minX, minY, minZ, maxX, maxY, maxZ, totalBlocks);
     }
 
-    private TaskExecutionResult dispatchPrefabTorchInto(BuildTask task, BlockSink sink) {
-        try {
-            TorchRequest request = objectMapper.treeToValue(task.getTaskData(), TorchRequest.class);
-            TorchResult result = prefabCore.placeTorchInto(sink, request, resolveWorldKey(request.world));
-            if (result.success()) {
-                return new TaskExecutionResult(true, null,
-                    "Placed torch at (" + result.position().get("x") + ", " +
-                    result.position().get("y") + ", " + result.position().get("z") + ")");
-            }
-            return new TaskExecutionResult(false, result.error(), null);
-        } catch (Exception e) {
-            return new TaskExecutionResult(false, "Failed to parse PREFAB_TORCH task data: " + e.getMessage(), null);
-        }
+    private static String blockSetMessage(BlockSetResult r) {
+        return "Set " + r.blocksSet() + " blocks, skipped " + r.blocksSkipped();
     }
 
-    private TaskExecutionResult dispatchPrefabSignInto(BuildTask task, BlockSink sink) {
-        try {
-            SignRequest request = objectMapper.treeToValue(task.getTaskData(), SignRequest.class);
-            SignResult result = prefabCore.placeSignInto(sink, request, resolveWorldKey(request.world));
-            if (result.success()) {
-                return new TaskExecutionResult(true, null,
-                    "Placed sign at (" + result.position().get("x") + ", " +
-                    result.position().get("y") + ", " + result.position().get("z") + ")");
-            }
-            return new TaskExecutionResult(false, result.error(), null);
-        } catch (Exception e) {
-            return new TaskExecutionResult(false, "Failed to parse PREFAB_SIGN task data: " + e.getMessage(), null);
-        }
+    private static String blockFillMessage(FillResult r) {
+        return "Filled " + r.blocksSet() + " blocks, failed " + r.blocksFailed();
     }
 
-    private TaskExecutionResult dispatchPrefabLadderInto(BuildTask task, BlockSink sink) {
-        try {
-            LadderRequest request = objectMapper.treeToValue(task.getTaskData(), LadderRequest.class);
-            LadderResult result = prefabCore.placeLadderInto(sink, request, resolveWorldKey(request.world));
-            if (result.success()) {
-                return new TaskExecutionResult(true, null,
-                    "Placed " + result.blocks_placed() + " ladder blocks facing " + result.facing());
-            }
-            return new TaskExecutionResult(false, result.error(), null);
-        } catch (Exception e) {
-            return new TaskExecutionResult(false, "Failed to parse PREFAB_LADDER task data: " + e.getMessage(), null);
-        }
+    private static String doorMessage(DoorResult r) {
+        return "Placed " + r.doors_placed() + " doors";
+    }
+
+    private static String stairsMessage(StairResult r) {
+        return "Placed " + r.blocks_placed() + " stair blocks";
+    }
+
+    private static String windowMessage(WindowPaneResult r) {
+        return "Placed " + r.panes_placed() + " window panes";
+    }
+
+    private static String torchMessage(TorchResult r) {
+        return "Placed torch at (" + r.position().get("x") + ", "
+            + r.position().get("y") + ", " + r.position().get("z") + ")";
+    }
+
+    private static String signMessage(SignResult r) {
+        return "Placed sign at (" + r.position().get("x") + ", "
+            + r.position().get("y") + ", " + r.position().get("z") + ")";
+    }
+
+    private static String ladderMessage(LadderResult r) {
+        return "Placed " + r.blocks_placed() + " ladder blocks facing " + r.facing();
     }
 
     private TaskExecutionResult dispatchRailSegmentInto(BuildTask task, BlockSink sink, String mode) {
@@ -292,183 +271,6 @@ public class TaskExecutor {
         }
     }
 
-    /**
-     * Executes a BLOCK_SET task using BlocksEndpointCore.
-     */
-    private CompletableFuture<TaskExecutionResult> executeBlockSetTask(BuildTask task) {
-        try {
-            BlockSetRequest request = objectMapper.treeToValue(task.getTaskData(), BlockSetRequest.class);
-            
-            return blocksCore.setBlocks(request)
-                .thenApply(result -> {
-                    if (result.success()) {
-                        return new TaskExecutionResult(true, null, 
-                            "Set " + result.blocksSet() + " blocks, skipped " + result.blocksSkipped());
-                    } else {
-                        return new TaskExecutionResult(false, result.error(), null);
-                    }
-                });
-        } catch (Exception e) {
-            return CompletableFuture.completedFuture(
-                new TaskExecutionResult(false, "Failed to parse BLOCK_SET task data: " + e.getMessage(), null));
-        }
-    }
-
-    /**
-     * Executes a BLOCK_FILL task using BlocksEndpointCore.
-     */
-    private CompletableFuture<TaskExecutionResult> executeBlockFillTask(BuildTask task) {
-        try {
-            FillBoxRequest request = objectMapper.treeToValue(task.getTaskData(), FillBoxRequest.class);
-            
-            return blocksCore.fillBox(request)
-                .thenApply(result -> {
-                    if (result.success()) {
-                        return new TaskExecutionResult(true, null, 
-                            "Filled " + result.blocksSet() + " blocks, failed " + result.blocksFailed());
-                    } else {
-                        return new TaskExecutionResult(false, result.error(), null);
-                    }
-                });
-        } catch (Exception e) {
-            return CompletableFuture.completedFuture(
-                new TaskExecutionResult(false, "Failed to parse BLOCK_FILL task data: " + e.getMessage(), null));
-        }
-    }
-
-    /**
-     * Executes a PREFAB_DOOR task using PrefabEndpointCore.
-     */
-    private CompletableFuture<TaskExecutionResult> executePrefabDoorTask(BuildTask task) {
-        try {
-            DoorRequest request = objectMapper.treeToValue(task.getTaskData(), DoorRequest.class);
-            
-            return prefabCore.placeDoor(request)
-                .thenApply(result -> {
-                    if (result.success()) {
-                        return new TaskExecutionResult(true, null, 
-                            "Placed " + result.doors_placed() + " doors");
-                    } else {
-                        return new TaskExecutionResult(false, result.error(), null);
-                    }
-                });
-        } catch (Exception e) {
-            return CompletableFuture.completedFuture(
-                new TaskExecutionResult(false, "Failed to parse PREFAB_DOOR task data: " + e.getMessage(), null));
-        }
-    }
-
-    /**
-     * Executes a PREFAB_STAIRS task using PrefabEndpointCore.
-     */
-    private CompletableFuture<TaskExecutionResult> executePrefabStairsTask(BuildTask task) {
-        try {
-            StairRequest request = objectMapper.treeToValue(task.getTaskData(), StairRequest.class);
-            
-            return prefabCore.placeStairs(request)
-                .thenApply(result -> {
-                    if (result.success()) {
-                        return new TaskExecutionResult(true, null, 
-                            "Placed " + result.blocks_placed() + " stair blocks");
-                    } else {
-                        return new TaskExecutionResult(false, result.error(), null);
-                    }
-                });
-        } catch (Exception e) {
-            return CompletableFuture.completedFuture(
-                new TaskExecutionResult(false, "Failed to parse PREFAB_STAIRS task data: " + e.getMessage(), null));
-        }
-    }
-
-    /**
-     * Executes a PREFAB_WINDOW task using PrefabEndpointCore.
-     */
-    private CompletableFuture<TaskExecutionResult> executePrefabWindowTask(BuildTask task) {
-        try {
-            WindowPaneRequest request = objectMapper.treeToValue(task.getTaskData(), WindowPaneRequest.class);
-            
-            return prefabCore.placeWindowPane(request)
-                .thenApply(result -> {
-                    if (result.success()) {
-                        return new TaskExecutionResult(true, null, 
-                            "Placed " + result.panes_placed() + " window panes");
-                    } else {
-                        return new TaskExecutionResult(false, result.error(), null);
-                    }
-                });
-        } catch (Exception e) {
-            return CompletableFuture.completedFuture(
-                new TaskExecutionResult(false, "Failed to parse PREFAB_WINDOW task data: " + e.getMessage(), null));
-        }
-    }
-
-    /**
-     * Executes a PREFAB_TORCH task using PrefabEndpointCore.
-     */
-    private CompletableFuture<TaskExecutionResult> executePrefabTorchTask(BuildTask task) {
-        try {
-            TorchRequest request = objectMapper.treeToValue(task.getTaskData(), TorchRequest.class);
-            
-            return prefabCore.placeTorch(request)
-                .thenApply(result -> {
-                    if (result.success()) {
-                        return new TaskExecutionResult(true, null, 
-                            "Placed torch at (" + result.position().get("x") + ", " + 
-                            result.position().get("y") + ", " + result.position().get("z") + ")");
-                    } else {
-                        return new TaskExecutionResult(false, result.error(), null);
-                    }
-                });
-        } catch (Exception e) {
-            return CompletableFuture.completedFuture(
-                new TaskExecutionResult(false, "Failed to parse PREFAB_TORCH task data: " + e.getMessage(), null));
-        }
-    }
-
-    /**
-     * Executes a PREFAB_SIGN task using PrefabEndpointCore.
-     */
-    private CompletableFuture<TaskExecutionResult> executePrefabSignTask(BuildTask task) {
-        try {
-            SignRequest request = objectMapper.treeToValue(task.getTaskData(), SignRequest.class);
-            
-            return prefabCore.placeSign(request)
-                .thenApply(result -> {
-                    if (result.success()) {
-                        return new TaskExecutionResult(true, null, 
-                            "Placed sign at (" + result.position().get("x") + ", " + 
-                            result.position().get("y") + ", " + result.position().get("z") + ")");
-                    } else {
-                        return new TaskExecutionResult(false, result.error(), null);
-                    }
-                });
-        } catch (Exception e) {
-            return CompletableFuture.completedFuture(
-                new TaskExecutionResult(false, "Failed to parse PREFAB_SIGN task data: " + e.getMessage(), null));
-        }
-    }
-
-    /**
-     * Executes a PREFAB_LADDER task using PrefabEndpointCore.
-     */
-    private CompletableFuture<TaskExecutionResult> executePrefabLadderTask(BuildTask task) {
-        try {
-            LadderRequest request = objectMapper.treeToValue(task.getTaskData(), LadderRequest.class);
-            
-            return prefabCore.placeLadder(request)
-                .thenApply(result -> {
-                    if (result.success()) {
-                        return new TaskExecutionResult(true, null, 
-                            "Placed " + result.blocks_placed() + " ladder blocks facing " + result.facing());
-                    } else {
-                        return new TaskExecutionResult(false, result.error(), null);
-                    }
-                });
-        } catch (Exception e) {
-            return CompletableFuture.completedFuture(
-                new TaskExecutionResult(false, "Failed to parse PREFAB_LADDER task data: " + e.getMessage(), null));
-        }
-    }
 
     private CompletableFuture<TaskExecutionResult> executeRailSegmentTask(BuildTask task, String mode) {
         CompletableFuture<TaskExecutionResult> future = new CompletableFuture<>();
@@ -480,12 +282,10 @@ public class TaskExecutor {
                     return;
                 }
 
-                RegistryKey<World> worldKey = segment.world() != null
-                    ? RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(segment.world()))
-                    : World.OVERWORLD;
-                ServerWorld world = server.getWorld(worldKey);
+                RegistryKey<World> worldKey = resolveWorldKey(segment.world());
+                ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
                 if (world == null) {
-                    future.complete(new TaskExecutionResult(false, "Unknown world: " + worldKey, null));
+                    future.complete(new TaskExecutionResult(false, "Unknown world: " + segment.world(), null));
                     return;
                 }
 
@@ -866,8 +666,13 @@ public class TaskExecutor {
     }
 
     private static Direction directionBetween(RailPoint from, RailPoint to) {
-        int dx = Integer.compare(to.x(), from.x());
-        int dz = Integer.compare(to.z(), from.z());
+        return directionBetween(from.x(), from.z(), to.x(), to.z());
+    }
+
+    /** Dominant horizontal direction of travel from one point to the next. */
+    static Direction directionBetween(int fromX, int fromZ, int toX, int toZ) {
+        int dx = Integer.compare(toX, fromX);
+        int dz = Integer.compare(toZ, fromZ);
         if (Math.abs(dx) >= Math.abs(dz)) {
             return dx >= 0 ? Direction.EAST : Direction.WEST;
         }

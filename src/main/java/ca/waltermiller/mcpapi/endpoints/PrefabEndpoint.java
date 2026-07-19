@@ -1,166 +1,87 @@
 package ca.waltermiller.mcpapi.endpoints;
 
 import io.javalin.Javalin;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import net.minecraft.server.MinecraftServer;
 
-public class PrefabEndpoint extends APIEndpoint{
+public class PrefabEndpoint extends APIEndpoint {
+    private static final int TIMEOUT_SECONDS = 10;
+
     private final PrefabEndpointCore core;
-    
+
     public PrefabEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
         super(app, server, logger);
         this.core = new PrefabEndpointCore(server, logger);
         init();
     }
+
     private void init() {
-        registerDoor();
-        registerStairs();
-        registerWindowPane();
-        registerTorch();
-        registerSign();
-        registerLadder();
-    }
-    private void registerDoor() {
         app.post("/api/world/prefabs/door", ctx -> {
             DoorRequest req = ctx.bodyAsClass(DoorRequest.class);
-
-            // Delegate to core method
-            CompletableFuture<DoorResult> future = core.placeDoor(req);
-
-            // Wait for result and respond
-            try {
-                DoorResult result = future.get(10, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    ctx.json(Map.of(
-                        "success", true,
-                        "world", result.world(),
-                        "doors_placed", result.doors_placed(),
-                        "facing", result.facing(),
-                        "hinge", result.hinge(),
-                        "open", result.open()
-                    ));
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for door placement"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, core.placeDoor(req), TIMEOUT_SECONDS, "door placement",
+                DoorResult::success, DoorResult::error,
+                result -> Map.of(
+                    "success", true,
+                    "world", result.world(),
+                    "doors_placed", result.doors_placed(),
+                    "facing", result.facing(),
+                    "hinge", result.hinge(),
+                    "open", result.open()
+                ));
         });
-    }
 
-    private void registerStairs() {
         app.post("/api/world/prefabs/stairs", ctx -> {
             StairRequest req = ctx.bodyAsClass(StairRequest.class);
-
-            // Delegate to core method
-            CompletableFuture<StairResult> future = core.placeStairs(req);
-
-            // Wait for result and respond
-            try {
-                StairResult result = future.get(10, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    ctx.json(Map.of(
-                        "success", true,
-                        "world", result.world(),
-                        "blocks_placed", result.blocks_placed(),
-                        "staircase_direction", result.staircase_direction(),
-                        "fill_support", result.fill_support()
-                    ));
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for stair placement"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, core.placeStairs(req), TIMEOUT_SECONDS, "stair placement",
+                StairResult::success, StairResult::error,
+                result -> Map.of(
+                    "success", true,
+                    "world", result.world(),
+                    "blocks_placed", result.blocks_placed(),
+                    "staircase_direction", result.staircase_direction(),
+                    "fill_support", result.fill_support()
+                ));
         });
-    }
 
-    private void registerWindowPane() {
         app.post("/api/world/prefabs/window-pane", ctx -> {
             WindowPaneRequest req = ctx.bodyAsClass(WindowPaneRequest.class);
-
-            // Delegate to core method
-            CompletableFuture<WindowPaneResult> future = core.placeWindowPane(req);
-
-            // Wait for result and respond
-            try {
-                WindowPaneResult result = future.get(10, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    ctx.json(Map.of(
-                        "success", true,
-                        "world", result.world(),
-                        "panes_placed", result.panes_placed(),
-                        "orientation", result.orientation(),
-                        "waterlogged", result.waterlogged()
-                    ));
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for window pane placement"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, core.placeWindowPane(req), TIMEOUT_SECONDS, "window pane placement",
+                WindowPaneResult::success, WindowPaneResult::error,
+                result -> Map.of(
+                    "success", true,
+                    "world", result.world(),
+                    "panes_placed", result.panes_placed(),
+                    "orientation", result.orientation(),
+                    "waterlogged", result.waterlogged()
+                ));
         });
-    }
 
-    private void registerTorch() {
         app.post("/api/world/prefabs/torch", ctx -> {
             TorchRequest req = ctx.bodyAsClass(TorchRequest.class);
-
-            // Delegate to core method
-            CompletableFuture<TorchResult> future = core.placeTorch(req);
-
-            // Wait for result and respond
-            try {
-                TorchResult result = future.get(10, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    Map<String, Object> response = Map.of(
+            respond(ctx, core.placeTorch(req), TIMEOUT_SECONDS, "torch placement",
+                TorchResult::success, TorchResult::error,
+                result -> {
+                    Map<String, Object> response = new HashMap<>(Map.of(
                         "success", true,
                         "world", result.world(),
                         "position", result.position(),
                         "block_type", result.block_type(),
                         "wall_mounted", result.wall_mounted()
-                    );
-                    
-                    // Add facing if it's a wall torch
+                    ));
                     if (result.wall_mounted() && result.facing() != null) {
-                        response = new java.util.HashMap<>(response);
                         response.put("facing", result.facing());
                     }
-                    
-                    ctx.json(response);
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for torch placement"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+                    return response;
+                });
         });
-    }
 
-    private void registerSign() {
         app.post("/api/world/prefabs/sign", ctx -> {
             SignRequest req = ctx.bodyAsClass(SignRequest.class);
-
-            // Delegate to core method
-            CompletableFuture<SignResult> future = core.placeSign(req);
-
-            // Wait for result and respond
-            try {
-                SignResult result = future.get(10, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    Map<String, Object> response = new java.util.HashMap<>(Map.of(
+            respond(ctx, core.placeSign(req), TIMEOUT_SECONDS, "sign placement",
+                SignResult::success, SignResult::error,
+                result -> {
+                    Map<String, Object> response = new HashMap<>(Map.of(
                         "success", true,
                         "world", result.world(),
                         "position", result.position(),
@@ -168,51 +89,27 @@ public class PrefabEndpoint extends APIEndpoint{
                         "sign_type", result.sign_type(),
                         "glowing", result.glowing()
                     ));
-                    
-                    // Add facing or rotation based on sign type
                     if ("wall".equals(result.sign_type()) && result.facing() != null) {
                         response.put("facing", result.facing());
                     } else if ("standing".equals(result.sign_type()) && result.rotation() != null) {
                         response.put("rotation", result.rotation());
                     }
-                    
-                    ctx.json(response);
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for sign placement"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+                    return response;
+                });
         });
-    }
 
-    private void registerLadder() {
         app.post("/api/world/prefabs/ladder", ctx -> {
             LadderRequest req = ctx.bodyAsClass(LadderRequest.class);
-
-            // Delegate to core method
-            CompletableFuture<LadderResult> future = core.placeLadder(req);
-
-            // Wait for result and respond
-            try {
-                LadderResult result = future.get(10, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(500).json(Map.of("error", result.error()));
-                } else {
-                    ctx.json(Map.of(
-                        "success", true,
-                        "world", result.world(),
-                        "blocks_placed", result.blocks_placed(),
-                        "facing", result.facing(),
-                        "start_position", result.start_position(),
-                        "end_position", result.end_position()
-                    ));
-                }
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for ladder placement"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
+            respond(ctx, core.placeLadder(req), TIMEOUT_SECONDS, "ladder placement",
+                LadderResult::success, LadderResult::error,
+                result -> Map.of(
+                    "success", true,
+                    "world", result.world(),
+                    "blocks_placed", result.blocks_placed(),
+                    "facing", result.facing(),
+                    "start_position", result.start_position(),
+                    "end_position", result.end_position()
+                ));
         });
     }
 

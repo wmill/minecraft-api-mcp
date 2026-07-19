@@ -26,62 +26,28 @@ public final class TaskDataTranslator {
 
         switch (taskType) {
             case BLOCK_SET:
-                requireFields(copy, "start_x", "start_y", "start_z");
-                shift(copy, "start_x", dx);
-                shift(copy, "start_y", dy);
-                shift(copy, "start_z", dz);
-                return copy;
+            case PREFAB_DOOR:
+                return shiftPoint(copy, "start_x", "start_y", "start_z", dx, dy, dz);
 
             case BLOCK_FILL:
-                requireFields(copy, "x1", "y1", "z1", "x2", "y2", "z2");
-                shift(copy, "x1", dx);
-                shift(copy, "y1", dy);
-                shift(copy, "z1", dz);
-                shift(copy, "x2", dx);
-                shift(copy, "y2", dy);
-                shift(copy, "z2", dz);
-                return copy;
-
-            case PREFAB_DOOR:
-                requireFields(copy, "start_x", "start_y", "start_z");
-                shift(copy, "start_x", dx);
-                shift(copy, "start_y", dy);
-                shift(copy, "start_z", dz);
-                return copy;
+                shiftPoint(copy, "x1", "y1", "z1", dx, dy, dz);
+                return shiftPoint(copy, "x2", "y2", "z2", dx, dy, dz);
 
             case PREFAB_STAIRS:
-                requireFields(copy, "start_x", "start_y", "start_z", "end_x", "end_y", "end_z");
-                shift(copy, "start_x", dx);
-                shift(copy, "start_y", dy);
-                shift(copy, "start_z", dz);
-                shift(copy, "end_x", dx);
-                shift(copy, "end_y", dy);
-                shift(copy, "end_z", dz);
-                return copy;
+                shiftPoint(copy, "start_x", "start_y", "start_z", dx, dy, dz);
+                return shiftPoint(copy, "end_x", "end_y", "end_z", dx, dy, dz);
 
             case PREFAB_WINDOW:
-                requireFields(copy, "start_x", "start_y", "start_z", "end_x", "end_z");
-                shift(copy, "start_x", dx);
-                shift(copy, "start_y", dy);
-                shift(copy, "start_z", dz);
+                shiftPoint(copy, "start_x", "start_y", "start_z", dx, dy, dz);
+                requireFields(copy, "end_x", "end_z");
                 shift(copy, "end_x", dx);
                 shift(copy, "end_z", dz);
                 return copy;
 
             case PREFAB_LADDER:
-                requireFields(copy, "x", "y", "z");
-                shift(copy, "x", dx);
-                shift(copy, "y", dy);
-                shift(copy, "z", dz);
-                return copy;
-
             case PREFAB_TORCH:
             case PREFAB_SIGN:
-                requireFields(copy, "x", "y", "z");
-                shift(copy, "x", dx);
-                shift(copy, "y", dy);
-                shift(copy, "z", dz);
-                return copy;
+                return shiftPoint(copy, "x", "y", "z", dx, dy, dz);
 
             case RAIL_SURFACE_SEGMENT:
             case RAIL_BRIDGE_SEGMENT:
@@ -91,15 +57,20 @@ public final class TaskDataTranslator {
             case NBT_STRUCTURE:
                 // Unreachable via BuildService.translateBuild today: recordNbtPlacement always
                 // marks the build COMPLETED. Kept for switch-exhaustiveness with BoundingBox.fromTaskData.
-                requireFields(copy, "x", "y", "z");
-                shift(copy, "x", dx);
-                shift(copy, "y", dy);
-                shift(copy, "z", dz);
-                return copy;
+                return shiftPoint(copy, "x", "y", "z", dx, dy, dz);
 
             default:
                 throw new IllegalArgumentException("Unsupported task type for translation: " + taskType);
         }
+    }
+
+    private static ObjectNode shiftPoint(ObjectNode node, String xField, String yField, String zField,
+                                         int dx, int dy, int dz) {
+        requireFields(node, xField, yField, zField);
+        shift(node, xField, dx);
+        shift(node, yField, dy);
+        shift(node, zField, dz);
+        return node;
     }
 
     private static JsonNode translateRailSegment(ObjectNode copy, int dx, int dy, int dz) {

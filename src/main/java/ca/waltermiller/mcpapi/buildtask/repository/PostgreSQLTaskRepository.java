@@ -1,12 +1,12 @@
 package ca.waltermiller.mcpapi.buildtask.repository;
 
+import ca.waltermiller.mcpapi.buildtask.Json;
 import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
 import ca.waltermiller.mcpapi.buildtask.model.TaskStatus;
 import ca.waltermiller.mcpapi.buildtask.model.TaskType;
 import ca.waltermiller.mcpapi.buildtask.model.BoundingBox;
 import ca.waltermiller.mcpapi.database.DatabaseConfig;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,73 +22,77 @@ import java.util.UUID;
  */
 public class PostgreSQLTaskRepository implements TaskRepository {
     private static final Logger LOGGER = LoggerFactory.getLogger(PostgreSQLTaskRepository.class);
-    
+
+    private static final String TASK_COLUMNS =
+        "id, build_id, task_order, task_type, task_data, status, executed_at, error_message, " +
+        "min_x, min_y, min_z, max_x, max_y, max_z, description";
+
     private final DatabaseConfig databaseConfig;
-    private final ObjectMapper objectMapper;
-    
+
     public PostgreSQLTaskRepository(DatabaseConfig databaseConfig) {
         this.databaseConfig = databaseConfig;
-        this.objectMapper = new ObjectMapper();
     }
-    
+
     @Override
     public BuildTask create(BuildTask task) throws SQLException {
+        try (Connection conn = databaseConfig.getConnection()) {
+            createWithConnection(conn, task);
+            return task;
+        }
+    }
+
+    private void createWithConnection(Connection conn, BuildTask task) throws SQLException {
         String sql = """
-            INSERT INTO build_tasks (id, build_id, task_order, task_type, task_data, status, 
+            INSERT INTO build_tasks (id, build_id, task_order, task_type, task_data, status,
                                    executed_at, error_message, min_x, min_y, min_z, max_x, max_y, max_z, description)
             VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+
             stmt.setObject(1, task.getId());
             stmt.setObject(2, task.getBuildId());
             stmt.setInt(3, task.getTaskOrder());
             stmt.setString(4, task.getTaskType().name());
             stmt.setString(5, task.getTaskData() != null ? task.getTaskData().toString() : null);
             stmt.setString(6, task.getStatus().name());
-            stmt.setTimestamp(7, task.getExecutedAt() != null ? 
+            stmt.setTimestamp(7, task.getExecutedAt() != null ?
                 Timestamp.from(task.getExecutedAt()) : null);
             stmt.setString(8, task.getErrorMessage());
-            
-            // Set coordinate information
-            BoundingBox coords = task.getCoordinates();
-            if (coords != null) {
-                stmt.setInt(9, coords.getMinX());
-                stmt.setInt(10, coords.getMinY());
-                stmt.setInt(11, coords.getMinZ());
-                stmt.setInt(12, coords.getMaxX());
-                stmt.setInt(13, coords.getMaxY());
-                stmt.setInt(14, coords.getMaxZ());
-            } else {
-                stmt.setNull(9, Types.INTEGER);
-                stmt.setNull(10, Types.INTEGER);
-                stmt.setNull(11, Types.INTEGER);
-                stmt.setNull(12, Types.INTEGER);
-                stmt.setNull(13, Types.INTEGER);
-                stmt.setNull(14, Types.INTEGER);
-            }
+            bindCoordinates(stmt, 9, task.getCoordinates());
             stmt.setString(15, task.getDescription());
-            
+
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected == 0) {
                 throw new SQLException("Creating task failed, no rows affected");
             }
-            
+
             LOGGER.debug("Created task with ID: {}", task.getId());
-            return task;
         }
     }
-    
+
+    /**
+     * Binds the six bounding-box columns (min then max, xyz order) starting at firstIndex,
+     * writing SQL NULLs when the task has no coordinates.
+     */
+    private void bindCoordinates(PreparedStatement stmt, int firstIndex, BoundingBox coords) throws SQLException {
+        if (coords != null) {
+            stmt.setInt(firstIndex, coords.getMinX());
+            stmt.setInt(firstIndex + 1, coords.getMinY());
+            stmt.setInt(firstIndex + 2, coords.getMinZ());
+            stmt.setInt(firstIndex + 3, coords.getMaxX());
+            stmt.setInt(firstIndex + 4, coords.getMaxY());
+            stmt.setInt(firstIndex + 5, coords.getMaxZ());
+        } else {
+            for (int i = 0; i < 6; i++) {
+                stmt.setNull(firstIndex + i, Types.INTEGER);
+            }
+        }
+    }
+
     @Override
     public Optional<BuildTask> findById(UUID id) throws SQLException {
-        String sql = """
-            SELECT id, build_id, task_order, task_type, task_data, status, executed_at, error_message,
-                   min_x, min_y, min_z, max_x, max_y, max_z, description
-            FROM build_tasks
-            WHERE id = ?
-            """;
+        String sql = "SELECT " + TASK_COLUMNS + " FROM build_tasks WHERE id = ?";
         
         try (Connection conn = databaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -151,25 +155,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
             stmt.setTimestamp(5, task.getExecutedAt() != null ?
                 Timestamp.from(task.getExecutedAt()) : null);
             stmt.setString(6, task.getErrorMessage());
-
-            // Set coordinate information
-            BoundingBox coords = task.getCoordinates();
-            if (coords != null) {
-                stmt.setInt(7, coords.getMinX());
-                stmt.setInt(8, coords.getMinY());
-                stmt.setInt(9, coords.getMinZ());
-                stmt.setInt(10, coords.getMaxX());
-                stmt.setInt(11, coords.getMaxY());
-                stmt.setInt(12, coords.getMaxZ());
-            } else {
-                stmt.setNull(7, Types.INTEGER);
-                stmt.setNull(8, Types.INTEGER);
-                stmt.setNull(9, Types.INTEGER);
-                stmt.setNull(10, Types.INTEGER);
-                stmt.setNull(11, Types.INTEGER);
-                stmt.setNull(12, Types.INTEGER);
-            }
-
+            bindCoordinates(stmt, 7, task.getCoordinates());
             stmt.setString(13, task.getDescription());
             stmt.setObject(14, task.getId());
 
@@ -204,27 +190,25 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     
     @Override
     public List<BuildTask> findByBuildIdOrdered(UUID buildId) throws SQLException {
-        String sql = """
-            SELECT id, build_id, task_order, task_type, task_data, status, executed_at, error_message,
-                   min_x, min_y, min_z, max_x, max_y, max_z, description
-            FROM build_tasks
-            WHERE build_id = ?
-            ORDER BY task_order ASC
-            """;
-        
+        String sql = "SELECT " + TASK_COLUMNS + " FROM build_tasks WHERE build_id = ? ORDER BY task_order ASC";
+
         try (Connection conn = databaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
+
             stmt.setObject(1, buildId);
-            
+
             try (ResultSet rs = stmt.executeQuery()) {
-                List<BuildTask> tasks = new ArrayList<>();
-                while (rs.next()) {
-                    tasks.add(mapResultSetToTask(rs));
-                }
-                return tasks;
+                return readTasks(rs);
             }
         }
+    }
+
+    private List<BuildTask> readTasks(ResultSet rs) throws SQLException {
+        List<BuildTask> tasks = new ArrayList<>();
+        while (rs.next()) {
+            tasks.add(mapResultSetToTask(rs));
+        }
+        return tasks;
     }
     
     @Override
@@ -242,21 +226,21 @@ public class PostgreSQLTaskRepository implements TaskRepository {
         Connection conn = databaseConfig.getConnection();
         try {
             conn.setAutoCommit(false);
-            
-            // Delete existing tasks for this build
-            deleteByBuildId(buildId);
-            
-            // Insert tasks in new order
+
+            // Delete existing tasks for this build, then insert in new order,
+            // all on this connection so the whole swap is one transaction
+            deleteByBuildIdWithConnection(conn, buildId);
+
             for (int i = 0; i < tasks.size(); i++) {
                 BuildTask task = tasks.get(i);
                 task.setBuildId(buildId);
                 task.setTaskOrder(i + 1);
-                create(task);
+                createWithConnection(conn, task);
             }
-            
+
             conn.commit();
             LOGGER.debug("Updated task queue for build: {}", buildId);
-            
+
         } catch (SQLException e) {
             conn.rollback();
             throw e;
@@ -300,37 +284,33 @@ public class PostgreSQLTaskRepository implements TaskRepository {
         
         try (Connection conn = databaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
+
             stmt.setString(1, world);
-            stmt.setInt(2, boundingBox.getMaxX());
-            stmt.setInt(3, boundingBox.getMinX());
-            stmt.setInt(4, boundingBox.getMaxY());
-            stmt.setInt(5, boundingBox.getMinY());
-            stmt.setInt(6, boundingBox.getMaxZ());
-            stmt.setInt(7, boundingBox.getMinZ());
-            
+            JdbcSupport.bindBoxIntersection(stmt, 2, boundingBox);
+
             try (ResultSet rs = stmt.executeQuery()) {
-                List<BuildTask> tasks = new ArrayList<>();
-                while (rs.next()) {
-                    tasks.add(mapResultSetToTask(rs));
-                }
-                return tasks;
+                return readTasks(rs);
             }
         }
     }
     
     @Override
     public int deleteByBuildId(UUID buildId) throws SQLException {
+        try (Connection conn = databaseConfig.getConnection()) {
+            return deleteByBuildIdWithConnection(conn, buildId);
+        }
+    }
+
+    private int deleteByBuildIdWithConnection(Connection conn, UUID buildId) throws SQLException {
         String sql = "DELETE FROM build_tasks WHERE build_id = ?";
-        
-        try (Connection conn = databaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+
             stmt.setObject(1, buildId);
-            
+
             int rowsAffected = stmt.executeUpdate();
             LOGGER.debug("Deleted {} tasks for build: {}", rowsAffected, buildId);
-            
+
             return rowsAffected;
         }
     }
@@ -345,14 +325,10 @@ public class PostgreSQLTaskRepository implements TaskRepository {
         task.setDescription(rs.getString("description"));
 
         // Parse JSON task data
-        String taskDataJson = rs.getString("task_data");
-        if (taskDataJson != null) {
-            try {
-                JsonNode taskData = objectMapper.readTree(taskDataJson);
-                task.setTaskData(taskData);
-            } catch (Exception e) {
-                LOGGER.warn("Failed to parse task data JSON for task {}: {}", task.getId(), e.getMessage());
-            }
+        JsonNode taskData = JdbcSupport.parseJsonOrNull(rs.getString("task_data"), LOGGER,
+            "task data for task " + task.getId());
+        if (taskData != null) {
+            task.setTaskData(taskData);
         }
         
         Timestamp executedAt = rs.getTimestamp("executed_at");

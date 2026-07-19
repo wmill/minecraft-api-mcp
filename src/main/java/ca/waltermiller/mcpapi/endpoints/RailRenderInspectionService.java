@@ -361,7 +361,7 @@ final class RailRenderInspectionService {
     }
 
     private static boolean isRailState(BlockState state) {
-        return state.isOf(Blocks.RAIL) || state.isOf(Blocks.POWERED_RAIL);
+        return TaskExecutor.isRailState(state);
     }
 
     private static boolean isBlockingTunnelCell(BlockState state) {
@@ -399,12 +399,7 @@ final class RailRenderInspectionService {
     }
 
     private static Direction directionBetween(BlockPos from, BlockPos to) {
-        int dx = Integer.compare(to.getX(), from.getX());
-        int dz = Integer.compare(to.getZ(), from.getZ());
-        if (Math.abs(dx) >= Math.abs(dz)) {
-            return dx >= 0 ? Direction.EAST : Direction.WEST;
-        }
-        return dz >= 0 ? Direction.SOUTH : Direction.NORTH;
+        return TaskExecutor.directionBetween(from.getX(), from.getZ(), to.getX(), to.getZ());
     }
 
     private static RailShape getRailShape(BlockState state) {

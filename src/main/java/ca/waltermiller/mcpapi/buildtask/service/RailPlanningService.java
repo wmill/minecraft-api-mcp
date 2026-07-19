@@ -5,6 +5,7 @@ import ca.waltermiller.mcpapi.buildtask.model.BuildStatus;
 import ca.waltermiller.mcpapi.buildtask.model.RailPlanningJob;
 import ca.waltermiller.mcpapi.buildtask.model.RailPlanningStatus;
 import ca.waltermiller.mcpapi.buildtask.model.TaskType;
+import ca.waltermiller.mcpapi.buildtask.Json;
 import ca.waltermiller.mcpapi.buildtask.repository.BuildRepository;
 import ca.waltermiller.mcpapi.buildtask.repository.RailPlanningJobRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,7 +46,7 @@ public class RailPlanningService {
     private final BuildService buildService;
     private final RailPlanningJobRepository jobRepository;
     private final BlocksEndpointCore blocksCore;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = Json.MAPPER;
     private final ExecutorService executorService;
 
     public RailPlanningService(BuildRepository buildRepository,
@@ -57,7 +58,6 @@ public class RailPlanningService {
         this.buildService = buildService;
         this.jobRepository = jobRepository;
         this.blocksCore = new BlocksEndpointCore(server, logger);
-        this.objectMapper = new ObjectMapper();
         this.executorService = Executors.newSingleThreadExecutor();
     }
 
