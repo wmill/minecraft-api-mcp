@@ -58,6 +58,8 @@ public class APIEndpoint {
         }
         return error.startsWith("Invalid")
             || error.startsWith("Area too large")
+            || error.startsWith("Box too large")
+            || error.startsWith("Chunk size too large")
             || error.startsWith("Unknown world");
     }
 }
