@@ -98,27 +98,38 @@ uv run python -c "from schematic_service.config import load_config; from schemat
 ### Core Java Components
 
 #### Mod Initialization
-- **ExampleMod** (`src/main/java/ca/waltermiller/mcpapi/ExampleMod.java`): Main mod entrypoint that initializes database and API server when Minecraft server starts
-- **APIServer** (`src/main/java/ca/waltermiller/mcpapi/APIServer.java`): Javalin-based web server running on port 7070, orchestrates endpoint registration and initializes build system
+- **McpApiMod** (`src/main/java/ca/waltermiller/mcpapi/McpApiMod.java`): Main mod entrypoint that starts the API server when the Minecraft server starts (database initialization is owned by the build task system inside `APIServer`)
+- **APIServer** (`src/main/java/ca/waltermiller/mcpapi/APIServer.java`): Javalin-based web server on port 7070 (override with `-Dapi.port`), orchestrates endpoint registration and initializes build system
 
 #### Endpoint System
 **Location**: `src/main/java/ca/waltermiller/mcpapi/endpoints/`
 
-All endpoints extend `APIEndpoint` base class and receive:
-- Javalin app instance for route registration
-- MinecraftServer reference for world access
-- Logger for consistent logging
+All endpoints extend the `APIEndpoint` base class, which provides:
+- Javalin app instance, MinecraftServer reference, and logger via constructor
+- `respond(ctx, future, timeout, ...)` — shared async responder that waits on a `CompletableFuture`, maps validation failures to 400 (via the `isClientError` message-prefix heuristic) and everything else to 500
+- Route registration happens in each endpoint's private `init()` method
+
+**Shared helpers:**
+- `WorldResolver.resolveWorldKey(String)` - single place that maps world identifier strings to registry keys (null/blank → overworld, malformed → null; callers treat null as "unknown world" and return 400)
+- `OperationResult` - common `success()`/`error()` interface implemented by all core result records, used by `TaskExecutor`'s generic dispatch helpers
 
 **Key Endpoints:**
 - `PlayersEndpoint` - Query online players with positions/rotations
-- `BlocksEndpoint` - Read/write block data, handle chunks, heightmap queries
+- `BlocksEndpoint` - Read/write block data, handle chunks, heightmap queries (core logic in `BlocksEndpointCore`)
 - `EntitiesEndpoint` - List entity types, spawn entities
 - `MessageEndpoint` - Send messages to players (broadcast or targeted)
 - `PlayerTeleportEndpoint` - Teleport players to coordinates
-- `PrefabEndpoint` - Place prefab structures: doors, stairs, windows, torches, signs, ladders
+- `PrefabEndpoint` - Place prefab structures: doors, stairs, windows, torches, signs, ladders (core logic in `PrefabEndpointCore`)
 - `NBTStructureEndpoint` - Place NBT data structures
-- `BuildTaskEndpoint` - Complex build task management with database persistence; includes audit, replay, rail planning, and location query routes
-- `TaskExecutor` - Executes queued build tasks on the Minecraft server thread
+- `RainFireEndpoint` - Rain fire effect over a radius
+- `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, clone, translate, preview, rail planning, and location query routes
+- `TaskExecutor` - Executes queued build tasks on the Minecraft server thread; generic `executeAsync`/`dispatch` helpers parse task data and route it to the endpoint cores
+- `RailRenderInspectionService` - Dry-run rail placement inspection used by the audit route
+
+#### Preview Rendering
+**Location**: `src/main/java/ca/waltermiller/mcpapi/preview/`
+
+Isometric PNG preview of builds and terrain: `BlockSink` abstraction (`WorldBlockSink` writes to the world, `RecordingBlockSink` records for dry runs), `BlockGrid` sparse voxel container, `IsoRenderer` (scale bounds `MIN_SCALE`/`MAX_SCALE`), `Palette`, `TerrainHeightmapGridAdapter`.
 
 #### Build Task System
 **Location**: `src/main/java/ca/waltermiller/mcpapi/buildtask/`
@@ -244,14 +255,15 @@ SCHEMATIC_INDEX=minecraft_schematics
 
 ### Key Patterns
 
-1. **Endpoint Pattern**: Extend `APIEndpoint`, register routes in constructor, use `server.execute()` for Minecraft operations
+1. **Endpoint Pattern**: Extend `APIEndpoint`, register routes in a private `init()` called from the constructor, use `server.execute()` for Minecraft operations
 2. **Thread Safety**: Always wrap Minecraft world modifications with `server.execute()` to run on server thread
-3. **JSON Serialization**: Use Java Records for automatic Jackson serialization of DTOs
-4. **Database Access**: Use repository pattern with connection pooling via HikariCP
-5. **Async Operations**: Use `CompletableFuture` for non-blocking build task execution
-6. **Error Handling**: Return proper HTTP status codes with JSON error objects
-7. **MCP Tool Design**: Each tool handler returns `CallToolResult` with formatted text content
-8. **Optional Services**: Schematic service and Elasticsearch must fail gracefully from MCP and must not affect Minecraft startup
+3. **JSON Serialization**: Use Java Records for automatic Jackson serialization of DTOs; the build task system shares one `ObjectMapper` via `buildtask.Json.MAPPER`
+4. **Database Access**: Use repository pattern with connection pooling via HikariCP; shared JDBC helpers live in `repository/JdbcSupport`; multi-statement writes use `*WithConnection` variants so they run in one transaction
+5. **Async Operations**: Use `CompletableFuture` for non-blocking build task execution; endpoints wait on futures via `APIEndpoint.respond()` with an explicit timeout
+6. **Error Handling**: Validation/bad-input errors return 400, server-side failures 500, as JSON `{"error": ...}` objects; `BuildTaskEndpoint.handle()` maps `IllegalArgumentException`→400, `IllegalStateException`→409, `SQLException`→500
+7. **World Resolution**: Never inline `RegistryKey.of(RegistryKeys.WORLD, ...)` — use `WorldResolver.resolveWorldKey()`
+8. **MCP Tool Design**: Each tool handler returns `CallToolResult` with formatted text content
+9. **Optional Services**: Schematic service and Elasticsearch must fail gracefully from MCP and must not affect Minecraft startup
 
 ### Dependencies
 
@@ -284,8 +296,7 @@ SCHEMATIC_INDEX=minecraft_schematics
 **Mod Metadata**: `src/main/resources/fabric.mod.json`
 - Mod ID: "mcpapi"
 - Version: 0.0.1
-- Entrypoints: Main (`ca.waltermiller.mcpapi.ExampleMod`), Client (`ca.waltermiller.mcpapi.ExampleModClient`)
-- Mixins: `mcpapi.mixins.json`
+- Entrypoint: Main (`ca.waltermiller.mcpapi.McpApiMod`); no client entrypoint or mixins
 - Requires: FabricLoader >=0.16.14, Minecraft ~1.21.7, Java >=21
 
 ## Testing
@@ -294,10 +305,10 @@ SCHEMATIC_INDEX=minecraft_schematics
 **Location**: `src/test/java/ca/waltermiller/mcpapi/`
 
 **Test Categories:**
-- Database layer tests: `DatabaseManagerTest`, `DatabaseConfigTest`, `DatabaseIntegrationTest`
-- Endpoint core logic tests: `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`
-- Build system tests: `TaskExecutorTest`, `BuildTaskEndpointIntegrationTest`, `TaskDataValidatorTest`
-- Utility tests: `CoordinateUtilsTest`
+- Database layer tests: `DatabaseManagerTest`, `DatabaseConfigTest`, `DatabaseIntegrationTest` (integration gated behind `DB_TEST` env var)
+- Endpoint tests: `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `RailRenderInspectionServiceTest`, `EndpointRefactoringTest`
+- Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `TaskDataValidatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`
+- Preview tests: `BlockGridTest`, `IsoRendererTest`, `PaletteTest`, `TerrainHeightmapGridAdapterTest`
 
 **Python Tests** (`mcp/`):
 - `test_backward_compatibility.py` - Backward compatibility tests
@@ -327,7 +338,7 @@ Minecraft uses a right-handed 3D coordinate system:
 
 ## Development Notes
 
-- Mod ID is "mcpapi" (defined in `ExampleMod.MOD_ID`)
+- Mod ID is "mcpapi" (defined in `McpApiMod.MOD_ID`)
 - Web API server runs on port 7070, starts automatically with Minecraft server
 - Optional schematic service runs on port 7080 when started
 - Database schema auto-creates on first server start
