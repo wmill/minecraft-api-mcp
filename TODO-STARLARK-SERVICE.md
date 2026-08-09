@@ -76,7 +76,7 @@ MCP LLM → build_starlark_structure ──POST /build──▶ starlark-service
 - [x] Add `STARLARK_SERVICE_URL=http://starlark-service:7090` to the `mcp` compose service env
 - [x] `.gitignore` — add `starlark-service-data/`
 - [x] Container smoke test: image builds; in-container health, build (66ms), cache hit, and gzipped NBT download all verified. Found + fixed: 512MB `RLIMIT_AS` SIGABRTs the Rust starlark runtime — switched to `RLIMIT_DATA`, default `STARLARK_BUILD_MEMORY_MB=2048` (values below ~1024 abort every build; the container limit is the real boundary)
-- [ ] E2E smoke with live Minecraft: `docker compose --profile starlark up` → build cottage source → place via MCP `place_starlark_structure` → verify `build_id` + in-world structure at y_offset-adjusted origin (needs the Minecraft server running)
+- [x] E2E smoke with live Minecraft: starlark-service via compose profile → broken script returned caret-annotated diagnostics → cottage example built (`slk_bd6a08b404b2657e`, 13x13x11, 607 blocks) → placed via the MCP handler at (178, 69, -692), recorded as build `01678d1d-29e3-4790-9396-c6931eb1d4c2` → block reads confirmed cobblestone foundation, terracotta walls, oak frame, windows, and campfire in-world
 
 ## Phase 5 — Docs, OpenAPI, Bruno
 
