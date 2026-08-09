@@ -1,0 +1,4 @@
+name: Local starlark service
+variables:
+  - name: baseUrl
+    value: http://localhost:7090

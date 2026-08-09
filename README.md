@@ -27,6 +27,12 @@ The optional schematic service defaults to `http://localhost:7080`. Override it 
 SCHEMATIC_SERVICE_URL="http://localhost:7080"
 ```
 
+The optional Starlark build service defaults to `http://localhost:7090`. Override it in `mcp/.env` with:
+
+```bash
+STARLARK_SERVICE_URL="http://localhost:7090"
+```
+
 ## MCP Client config
 
 There's a sample Claude Desktop Config in `mcp/mcp_config.json`. You'll need to change the paths.
@@ -105,6 +111,48 @@ MCP tools added for this flow:
 - `search_schematics`
 - `get_schematic`
 - `place_schematic`
+
+## Starlark build service
+
+There is an optional Starlark build service in `starlark-service/`. MCP users submit Starlark build scripts; the service compiles them into structure NBT with [starlark-to-nbt](https://github.com/wmill/starlark-to-nbt), returns structured diagnostics on failure (so the LLM can edit and resubmit), caches successful builds by content hash, and serves the NBT so MCP can place it through the existing `/api/world/structure/place` endpoint.
+
+The starlark-to-nbt tool is vendored as a **git submodule** at `starlark-service/starlark-to-nbt`. After cloning this repo (or pulling this change), run:
+
+```bash
+git submodule update --init
+```
+
+Start the service with:
+
+```bash
+docker compose --profile starlark up -d starlark-service
+curl http://localhost:7090/health
+```
+
+The artifact cache lives under `starlark-service-data/` (git-ignored). Builds run in a killable subprocess with a wall-clock timeout, memory rlimit, and volume/output-size caps; `load()` in submitted scripts is confined to the vendored `lib/` component library.
+
+For local service development:
+
+```bash
+cd starlark-service
+uv sync
+uv run starlark-service          # or: uv run uvicorn starlark_service.app:app --host 0.0.0.0 --port 7090
+uv run pytest                    # service tests
+```
+
+Useful endpoints:
+
+- `GET http://localhost:7090/health`
+- `POST http://localhost:7090/build` — `{"source": "...", "entry": "build", "props": {}, "root_size": [w, h, l]}`
+- `GET http://localhost:7090/artifacts/{artifact_id}` and `.../nbt`
+- `GET http://localhost:7090/docs/catalog` — the script API reference
+- `GET http://localhost:7090/examples` and `GET http://localhost:7090/examples/{name}`
+
+MCP tools added for this flow:
+
+- `build_starlark_structure` — compile source; success returns an artifact id, failure returns diagnostics to fix and resubmit
+- `place_starlark_structure` — place a built artifact (applies the artifact's `y_offset` automatically)
+- `get_starlark_docs`, `list_starlark_examples`, `get_starlark_example`
 
 ## Rail planning debug loop
 

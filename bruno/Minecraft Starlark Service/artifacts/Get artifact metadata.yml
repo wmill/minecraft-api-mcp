@@ -1,0 +1,46 @@
+info:
+  name: Get artifact metadata
+  type: http
+  seq: 1
+  tags:
+    - artifacts
+
+http:
+  method: GET
+  url: "{{baseUrl}}/artifacts/:artifact_id"
+  params:
+    - name: artifact_id
+      value: "slk_d33c698e147858c4"
+      type: path
+      description: Artifact id returned by POST /build
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 404 Response
+    description: Artifact evicted or never built
+    request:
+      url: "{{baseUrl}}/artifacts/:artifact_id"
+      method: GET
+      params:
+        - name: artifact_id
+          value: "slk_d33c698e147858c4"
+          type: path
+          description: Artifact id returned by POST /build
+    response:
+      status: 404
+      statusText: Not Found
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "detail": "artifact not found (evicted or never built); rebuilding the same source yields the same id"
+          }

@@ -1,0 +1,353 @@
+openapi: 3.1.0
+info:
+  title: Minecraft Starlark Build Service
+  description: Optional build service on port 7090 that compiles Starlark build scripts into Minecraft structure NBT. Builds run in a resource-limited subprocess; successful builds are cached on disk keyed by content hash (artifact id) and served for placement via the Minecraft mod's NBT placement endpoint.
+  version: 0.0.1
+
+servers:
+  - url: http://localhost:7090
+    description: Local starlark build service
+
+tags:
+  - name: system
+    description: Health
+  - name: build
+    description: Compile Starlark source into a cached structure NBT artifact
+  - name: artifacts
+    description: Built artifact metadata and NBT download
+  - name: reference
+    description: Script API documentation and example scripts
+
+paths:
+
+  /health:
+    get:
+      tags: [system]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /build:
+    post:
+      tags: [build]
+      summary: Compile a Starlark script into a structure NBT artifact
+      description: Returns 200 for both build success and build failure; a build that ran and produced diagnostics is a successful request. Non-200 codes cover malformed requests (400), a full build queue (429), and internal errors (500).
+      operationId: buildStructure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuildRequest"
+      responses:
+        "200":
+          description: Build result — success with artifact metadata, or failure with diagnostics
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/BuildSuccess"
+                  - $ref: "#/components/schemas/BuildFailure"
+        "400":
+          description: Malformed request, invalid root_size, or source exceeds the byte limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Build queue full; retry shortly
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /artifacts/{artifact_id}:
+    get:
+      tags: [artifacts]
+      summary: Get metadata for a built artifact
+      operationId: getArtifact
+      parameters:
+        - $ref: "#/components/parameters/ArtifactId"
+      responses:
+        "200":
+          description: Artifact metadata (same shape as the build success response)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildSuccess"
+        "400":
+          description: Invalid artifact id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Artifact not found (evicted or never built); rebuilding the same source yields the same id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /artifacts/{artifact_id}/nbt:
+    get:
+      tags: [artifacts]
+      summary: Download the gzipped structure NBT for a built artifact
+      operationId: getArtifactNbt
+      parameters:
+        - $ref: "#/components/parameters/ArtifactId"
+      responses:
+        "200":
+          description: Gzipped Minecraft structure NBT
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid artifact id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Artifact not found (evicted or never built)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /docs/catalog:
+    get:
+      tags: [reference]
+      summary: Get the Starlark script API reference (component catalog)
+      operationId: getCatalog
+      responses:
+        "200":
+          description: The component catalog as markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+        "503":
+          description: Catalog unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /examples:
+    get:
+      tags: [reference]
+      summary: List example Starlark build scripts
+      operationId: listExamples
+      responses:
+        "200":
+          description: Example names and one-line summaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExamplesResponse"
+        "503":
+          description: Examples unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /examples/{name}:
+    get:
+      tags: [reference]
+      summary: Get the source of one example script
+      operationId: getExample
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Example name (lowercase letters, digits, underscores)
+          schema:
+            type: string
+            pattern: "^[a-z0-9_]+$"
+      responses:
+        "200":
+          description: Starlark source text
+          content:
+            text/plain:
+              schema:
+                type: string
+        "400":
+          description: Invalid example name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Example not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  parameters:
+    ArtifactId:
+      name: artifact_id
+      in: path
+      required: true
+      description: Artifact id returned by POST /build (slk_ followed by 16 hex chars)
+      schema:
+        type: string
+        pattern: "^slk_[0-9a-f]{16}$"
+
+  schemas:
+    BuildRequest:
+      type: object
+      required: [source]
+      properties:
+        source:
+          type: string
+          description: Full Starlark script source; must define the entry function
+        entry:
+          type: string
+          default: build
+          description: Entry function name
+        props:
+          type: object
+          description: Keyword arguments passed to the entry function
+        root_size:
+          type: array
+          items:
+            type: integer
+          minItems: 3
+          maxItems: 3
+          description: Optional [width, height, length] root bounds; not needed when the root component declares min_size or width/height/length are all in props
+
+    BuildSuccess:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        artifact_id:
+          type: string
+        cached:
+          type: boolean
+          description: True when the artifact was served from the cache without rebuilding
+        build_ms:
+          type: integer
+        entry:
+          type: string
+        props:
+          type: object
+        created_at:
+          type: string
+        size:
+          type: array
+          items:
+            type: integer
+          description: "[width, height, length] of the structure bounds"
+        block_count:
+          type: integer
+        entity_count:
+          type: integer
+        ground_level:
+          type: integer
+        y_offset:
+          type: integer
+          description: Add to the placement y so the structure's ground level lands at the requested elevation
+        nbt_bytes:
+          type: integer
+        palette:
+          type: array
+          items:
+            type: object
+            properties:
+              block:
+                type: string
+              count:
+                type: integer
+
+    BuildFailure:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: false
+        error_kind:
+          type: string
+          enum: [starlark_error, build_error, timeout, resource_limit, crash]
+        diagnostics:
+          type: array
+          items:
+            $ref: "#/components/schemas/Diagnostic"
+        hint:
+          type: string
+          description: One-line guidance for fixing and resubmitting
+
+    Diagnostic:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Stable error code (see the component catalog's error list)
+        message:
+          type: string
+        component_path:
+          type: string
+        file:
+          type: [string, "null"]
+        line:
+          type: [integer, "null"]
+          description: Only Starlark syntax/eval errors carry file:line; build-rule diagnostics identify the component path
+        region:
+          type: [object, "null"]
+        coordinates:
+          type: [array, "null"]
+          items:
+            type: integer
+        details:
+          type: object
+
+    ExamplesResponse:
+      type: object
+      properties:
+        examples:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              summary:
+                type: string
+        count:
+          type: integer
+
+    HealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        lib_dir_exists:
+          type: boolean
+        lib_fingerprint:
+          type: string
+          description: Hash of the vendored component library; part of the artifact cache key
+        cache:
+          type: object
+          properties:
+            artifacts:
+              type: integer
+            bytes:
+              type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string

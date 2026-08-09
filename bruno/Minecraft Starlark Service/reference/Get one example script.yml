@@ -1,0 +1,22 @@
+info:
+  name: Get one example script
+  type: http
+  seq: 3
+  tags:
+    - reference
+
+http:
+  method: GET
+  url: "{{baseUrl}}/examples/:name"
+  params:
+    - name: name
+      value: "cottage"
+      type: path
+      description: Example name from GET /examples
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

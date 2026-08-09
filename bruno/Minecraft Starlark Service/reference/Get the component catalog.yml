@@ -1,0 +1,17 @@
+info:
+  name: Get the component catalog
+  type: http
+  seq: 1
+  tags:
+    - reference
+
+http:
+  method: GET
+  url: "{{baseUrl}}/docs/catalog"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

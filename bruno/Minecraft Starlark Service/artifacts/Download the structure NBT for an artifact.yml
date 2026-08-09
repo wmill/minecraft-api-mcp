@@ -1,0 +1,22 @@
+info:
+  name: Download the structure NBT for an artifact
+  type: http
+  seq: 2
+  tags:
+    - artifacts
+
+http:
+  method: GET
+  url: "{{baseUrl}}/artifacts/:artifact_id/nbt"
+  params:
+    - name: artifact_id
+      value: "slk_d33c698e147858c4"
+      type: path
+      description: Artifact id returned by POST /build
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1825,6 +1825,140 @@ TOOL_PLACE_SCHEMATIC = Tool(
     }
 )
 
+# Starlark Build Service Tools
+TOOL_BUILD_STARLARK_STRUCTURE = Tool(
+    name="build_starlark_structure",
+    description=(
+        "Compile a Starlark build script into a placeable structure via the optional Starlark "
+        "build service. Returns an artifact_id on success, or structured diagnostics to fix and "
+        "resubmit — iterate on the source until the build succeeds, then use "
+        "place_starlark_structure. Call get_starlark_docs first for the script API reference."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "source": {
+                "type": "string",
+                "description": (
+                    "Full Starlark script source. Must define an entry function (default 'build') "
+                    "returning a component tree. Load the shared component library with "
+                    "load(\"../lib/structural.star\", ...) etc."
+                )
+            },
+            "entry": {
+                "type": "string",
+                "description": "Entry function name to call",
+                "default": "build"
+            },
+            "props": {
+                "type": "object",
+                "description": "Keyword arguments passed to the entry function (e.g. width, height, length)"
+            },
+            "root_size": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "minItems": 3,
+                "maxItems": 3,
+                "description": (
+                    "Optional [width, height, length] root bounds. Not needed when the root "
+                    "component declares min_size or width/height/length are all in props"
+                )
+            }
+        },
+        "required": ["source"]
+    }
+)
+
+TOOL_PLACE_STARLARK_STRUCTURE = Tool(
+    name="place_starlark_structure",
+    description=(
+        "Place a structure previously compiled by build_starlark_structure into the world. "
+        "The artifact's y_offset is applied automatically so its ground level lands at your y"
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "artifact_id": {
+                "type": "string",
+                "description": "Artifact ID returned by build_starlark_structure (slk_...)"
+            },
+            "x": {
+                "type": "integer",
+                "description": "X coordinate to place structure (east positive, west negative)"
+            },
+            "y": {
+                "type": "integer",
+                "description": "Y coordinate to place structure (elevation: -64 to 320, sea level at 63)"
+            },
+            "z": {
+                "type": "integer",
+                "description": "Z coordinate to place structure (south positive, north negative)"
+            },
+            "world": {
+                "type": "string",
+                "description": "World name (optional, defaults to minecraft:overworld)",
+                "default": "minecraft:overworld"
+            },
+            "rotation": {
+                "type": "string",
+                "description": "Structure rotation",
+                "enum": ["NONE", "CLOCKWISE_90", "CLOCKWISE_180", "COUNTERCLOCKWISE_90"],
+                "default": "NONE"
+            },
+            "include_entities": {
+                "type": "boolean",
+                "description": "Whether to include entities from the structure",
+                "default": True
+            },
+            "apply_y_offset": {
+                "type": "boolean",
+                "description": "Apply the artifact's y_offset so its ground level lands at y",
+                "default": True
+            }
+        },
+        "required": ["artifact_id", "x", "y", "z"]
+    }
+)
+
+TOOL_GET_STARLARK_DOCS = Tool(
+    name="get_starlark_docs",
+    description=(
+        "Get the Starlark build script reference: language rules, layout combinators, block "
+        "placement primitives, the reusable component library, and error codes. Read this "
+        "before writing a script for build_starlark_structure"
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
+)
+
+TOOL_LIST_STARLARK_EXAMPLES = Tool(
+    name="list_starlark_examples",
+    description="List available example Starlark build scripts (cottage, church, castle, ...)",
+    inputSchema={
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
+)
+
+TOOL_GET_STARLARK_EXAMPLE = Tool(
+    name="get_starlark_example",
+    description="Get the full source of one example Starlark build script to learn from or adapt",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Example name from list_starlark_examples, such as cottage"
+            }
+        },
+        "required": ["name"]
+    }
+)
+
 #    "handle_coordinate_conventions"
 TOOL_HANDLE_COORDINATE_CONVENTIONS = Tool(
     name = "get_coordinate_conventions",
@@ -1899,4 +2033,10 @@ TOOL_SCHEMAS = [
     TOOL_SEARCH_SCHEMATICS,
     TOOL_GET_SCHEMATIC,
     TOOL_PLACE_SCHEMATIC,
+    # Starlark build service tools
+    TOOL_BUILD_STARLARK_STRUCTURE,
+    TOOL_PLACE_STARLARK_STRUCTURE,
+    TOOL_GET_STARLARK_DOCS,
+    TOOL_LIST_STARLARK_EXAMPLES,
+    TOOL_GET_STARLARK_EXAMPLE,
 ]

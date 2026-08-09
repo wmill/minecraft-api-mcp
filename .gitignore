@@ -64,3 +64,6 @@ server.properties
 
 # schematic service data
 schematic-service-data/
+
+# starlark build service artifact cache
+starlark-service-data/

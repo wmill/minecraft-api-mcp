@@ -1,0 +1,3 @@
+[submodule "starlark-service/starlark-to-nbt"]
+	path = starlark-service/starlark-to-nbt
+	url = https://github.com/wmill/starlark-to-nbt

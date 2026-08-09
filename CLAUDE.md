@@ -12,6 +12,7 @@ This is a Minecraft 1.21.7 Fabric mod combined with a Python Model Context Proto
 - PostgreSQL database for persistent build task management
 - Optional Python schematic catalog service on port 7080
 - Optional Elasticsearch-backed schematic search index
+- Optional Python Starlark build service on port 7090 (starlark-to-nbt vendored as a git submodule at `starlark-service/starlark-to-nbt`; run `git submodule update --init` after cloning)
 - Docker containerization for deployment
 
 ## Build and Development Commands
@@ -67,6 +68,10 @@ docker-compose down       # Stop all services
 # Optional schematic catalog/search stack
 docker compose --profile schematics up -d elasticsearch schematic-service
 curl -X POST http://localhost:7080/index/rebuild
+
+# Optional Starlark build service
+docker compose --profile starlark up -d starlark-service
+curl http://localhost:7090/health
 ```
 
 ### Python MCP Server
@@ -91,6 +96,17 @@ uv run uvicorn schematic_service.app:app --host 0.0.0.0 --port 7080  # equivalen
 
 # Smoke-check local catalog loading
 uv run python -c "from schematic_service.config import load_config; from schematic_service.catalog import load_catalog; c=load_config(); docs=load_catalog(c.catalog_path,c.nbt_dir,c.images_dir); print(len(docs), sum(1 for d in docs if d['placeable']))"
+```
+
+### Python Starlark Build Service
+```bash
+cd starlark-service
+git submodule update --init   # once, after cloning: vendors starlark-to-nbt
+uv sync
+
+uv run starlark-service                                                # main.py entrypoint (port 7090)
+uv run uvicorn starlark_service.app:app --host 0.0.0.0 --port 7090     # equivalent direct form
+uv run pytest                                                          # service tests
 ```
 
 ## Architecture
@@ -253,6 +269,53 @@ SCHEMATIC_INDEX=minecraft_schematics
 
 `place_schematic` fetches NBT bytes from the schematic service, then calls the Minecraft NBT placement endpoint via multipart upload. Keep this orchestration in MCP unless there is a strong reason to couple the Minecraft mod directly to the schematic service.
 
+### Optional Starlark Build Service Architecture
+
+**Location**: `/starlark-service/`
+
+Compiles Starlark build scripts submitted by MCP users into placeable structure NBT using [starlark-to-nbt](https://github.com/wmill/starlark-to-nbt), which is vendored as a **git submodule** at `starlark-service/starlark-to-nbt` (run `git submodule update --init` after cloning). Like the schematic service, it is intentionally separate from the Minecraft mod and must fail gracefully when unavailable.
+
+**Design:**
+- **Stateless with a content-addressed cache**: every `POST /build` carries the full script source; successful builds are cached on disk keyed by `artifact_id = "slk_" + sha256(source, entry, props, root_size, lib_fingerprint)[:16]`. Output is deterministic, so identical sources always yield the same artifact id — an evicted artifact is recovered by rebuilding the same source.
+- **Sandboxed builds**: the tool has no evaluation budget of its own, so each build runs in a killable subprocess (`starlark_service/runner.py`) under a wall-clock timeout (SIGKILL), an `RLIMIT_DATA` memory cap, and root-volume/NBT-byte caps. Do not lower `STARLARK_BUILD_MEMORY_MB` below ~1024: the Rust starlark runtime reserves ~1GB of data mappings up front and SIGABRTs under smaller caps.
+- **Confined `load()`**: submitted scripts can only load from the vendored `lib/` component library (upstream `loader_root` confinement; uniform "module not found" errors prevent filesystem probing). Scripts use `load("../lib/structural.star", ...)`, the same convention as the upstream `examples/`.
+- **Build failures are HTTP 200** with `{ok: false, error_kind, diagnostics, hint}` — a build that ran and produced diagnostics is a successful request, keeping the MCP edit→build-error→edit loop exception-free. `error_kind` is one of `starlark_error`, `build_error`, `timeout`, `resource_limit`, `crash`.
+
+**Service modules:**
+- `app.py` - FastAPI routes (factory `create_app(config)`)
+- `config.py` - env-driven `STARLARK_*` settings
+- `sandbox.py` - subprocess orchestration, concurrency cap (429 when full), timeout kill
+- `runner.py` - in-subprocess build worker (`build_source` → NBT + result JSON on stdout)
+- `cache.py` - artifact hashing, sharded disk layout, LRU eviction, lib fingerprint
+
+**Configuration via environment variables (or `.env` in `starlark-service/`):**
+```bash
+STARLARK_TOOL_DIR=starlark-to-nbt        # submodule root (lib/, docs/, examples/)
+STARLARK_CACHE_DIR=../starlark-service-data
+STARLARK_BUILD_TIMEOUT_S=15
+STARLARK_BUILD_MEMORY_MB=2048            # RLIMIT_DATA in the build subprocess; keep >= 1024
+STARLARK_MAX_SOURCE_BYTES=262144
+STARLARK_MAX_ROOT_VOLUME=2000000         # voxels
+STARLARK_MAX_NBT_BYTES=16777216
+STARLARK_MAX_CONCURRENT_BUILDS=2
+STARLARK_CACHE_MAX_BYTES=1073741824
+```
+
+**HTTP API:**
+- `GET /health`
+- `POST /build` — `{source, entry?, props?, root_size?}`
+- `GET /artifacts/{artifact_id}` and `GET /artifacts/{artifact_id}/nbt`
+- `GET /docs/catalog` — the script API reference (component catalog markdown)
+- `GET /examples` and `GET /examples/{name}`
+
+**MCP tools using this service:**
+- `build_starlark_structure` — compile source; failure text lists numbered diagnostics for the edit loop
+- `place_starlark_structure` — fetch artifact NBT, apply its `y_offset`, place via the mod's NBT placement endpoint
+- `get_starlark_docs`
+- `list_starlark_examples` / `get_starlark_example`
+
+As with schematics, placement orchestration stays in MCP: `place_starlark_structure` fetches NBT bytes from the starlark service and posts them to the Minecraft `/api/world/structure/place` endpoint.
+
 ### Key Patterns
 
 1. **Endpoint Pattern**: Extend `APIEndpoint`, register routes in a private `init()` called from the constructor, use `server.execute()` for Minecraft operations
@@ -263,7 +326,8 @@ SCHEMATIC_INDEX=minecraft_schematics
 6. **Error Handling**: Validation/bad-input errors return 400, server-side failures 500, as JSON `{"error": ...}` objects; `BuildTaskEndpoint.handle()` maps `IllegalArgumentException`→400, `IllegalStateException`→409, `SQLException`→500
 7. **World Resolution**: Never inline `RegistryKey.of(RegistryKeys.WORLD, ...)` — use `WorldResolver.resolveWorldKey()`
 8. **MCP Tool Design**: Each tool handler returns `CallToolResult` with formatted text content
-9. **Optional Services**: Schematic service and Elasticsearch must fail gracefully from MCP and must not affect Minecraft startup
+9. **Optional Services**: Schematic service, Elasticsearch, and the Starlark build service must fail gracefully from MCP and must not affect Minecraft startup
+10. **Starlark Build Loop**: `build_starlark_structure` failures return HTTP 200 with structured diagnostics (not exceptions) so the MCP user can edit and resubmit; untrusted script execution stays in the service's sandboxed subprocess
 
 ### Dependencies
 
@@ -291,6 +355,12 @@ SCHEMATIC_INDEX=minecraft_schematics
 - python-dotenv >= 1.0.0 - Environment configuration
 - uvicorn >= 0.30.0 - ASGI server
 
+**Starlark Service (`starlark-service/pyproject.toml`):** requires Python >= 3.13 (starlark-pyo3 wheels)
+- fastapi >= 0.115.0 - HTTP API
+- python-dotenv >= 1.0.0 - Environment configuration
+- uvicorn >= 0.30.0 - ASGI server
+- starlark-to-nbt - path dependency on the vendored submodule (pulls nbtlib and starlark-pyo3)
+
 ### Resource Structure
 
 **Mod Metadata**: `src/main/resources/fabric.mod.json`
@@ -316,10 +386,16 @@ SCHEMATIC_INDEX=minecraft_schematics
 - `test_debug_mode.py` - Debug mode tests
 - `test_final_verification.py` - Final verification tests
 - `test_schematic_tools.py` - Schematic MCP tool registration/config tests
+- `test_starlark_tools.py` - Starlark MCP tool registration/config tests
 
 **Schematic Service Tests** (`schematic-service/`):
 - `test_catalog.py` - Catalog normalization and metadata sanitization
 - `test_search.py` - Local fallback search behavior
+
+**Starlark Service Tests** (`starlark-service/`, run with `uv run pytest`):
+- `test_app.py` - Build success/failure/diagnostics, cache hits, artifact routes, examples/catalog
+- `test_cache.py` - Artifact id hashing, LRU eviction, lib fingerprint
+- `test_sandbox.py` - Timeout kill, resource-limit rejections, queue-full 429
 
 **Testing Best Practices** (see TESTING.md):
 - Extract pure logic from endpoints into testable helper methods
@@ -341,6 +417,7 @@ Minecraft uses a right-handed 3D coordinate system:
 - Mod ID is "mcpapi" (defined in `McpApiMod.MOD_ID`)
 - Web API server runs on port 7070, starts automatically with Minecraft server
 - Optional schematic service runs on port 7080 when started
+- Optional Starlark build service runs on port 7090 when started; its artifact cache in `starlark-service-data/` is git-ignored and safe to delete (artifacts regenerate deterministically)
 - Database schema auto-creates on first server start
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
 - Build tasks are executed asynchronously and can be queried by location for spatial awareness
@@ -365,6 +442,7 @@ The project includes full Docker containerization with PostgreSQL:
 - `nginx` - Optional reverse proxy with basic auth support
 - `elasticsearch` - Optional schematic search index, enabled by the `schematics` profile
 - `schematic-service` - Optional schematic catalog/NBT service on port 7080, enabled by the `schematics` profile
+- `starlark-service` - Optional Starlark build service on port 7090, enabled by the `starlark` profile (Docker build requires the submodule: `git submodule update --init`)
 
 **Database access:**
 ```bash

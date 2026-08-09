@@ -104,6 +104,7 @@ services:
       - "3737:3737"
     environment:
       - BASE_URL=http://minecraft:7070
+      - STARLARK_SERVICE_URL=http://starlark-service:7090
     depends_on:
       - minecraft
     restart: unless-stopped
@@ -148,6 +149,25 @@ services:
       elasticsearch:
         condition: service_healthy
     restart: unless-stopped
+
+  starlark-service:
+    build:
+      context: ./starlark-service
+      dockerfile: Dockerfile
+    image: ghcr.io/wmill/minecraft-starlark-service:latest
+    container_name: minecraft-starlark-service
+    profiles:
+      - starlark
+    ports:
+      - "127.0.0.1:7090:7090"
+    volumes:
+      # rw, unlike the schematic data dir: this is the artifact cache
+      - ./starlark-service-data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 3G
 
 volumes:
   postgres_data:

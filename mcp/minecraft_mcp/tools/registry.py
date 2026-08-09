@@ -8,7 +8,7 @@ registry for tool discovery and routing.
 from typing import Callable, Optional
 from mcp.types import CallToolResult
 
-from ..handlers import world, blocks, messages, prefabs, builds, system, effects, schematics
+from ..handlers import world, blocks, messages, prefabs, builds, system, effects, schematics, starlark
 
 
 # Tool handler type
@@ -82,6 +82,13 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "search_schematics": schematics.handle_search_schematics,
     "get_schematic": schematics.handle_get_schematic,
     "place_schematic": schematics.handle_place_schematic,
+
+    # Starlark build service tools
+    "build_starlark_structure": starlark.handle_build_starlark_structure,
+    "place_starlark_structure": starlark.handle_place_starlark_structure,
+    "get_starlark_docs": starlark.handle_get_starlark_docs,
+    "list_starlark_examples": starlark.handle_list_starlark_examples,
+    "get_starlark_example": starlark.handle_get_starlark_example,
 }
 
 

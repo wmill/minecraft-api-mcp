@@ -1,0 +1,42 @@
+info:
+  name: Health check
+  type: http
+  seq: 1
+  tags:
+    - system
+
+http:
+  method: GET
+  url: "{{baseUrl}}/health"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Service health status
+    request:
+      url: "{{baseUrl}}/health"
+      method: GET
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "ok": true,
+            "lib_dir_exists": true,
+            "lib_fingerprint": "c5dffbcee8324221",
+            "cache": {
+              "artifacts": 0,
+              "bytes": 0
+            }
+          }

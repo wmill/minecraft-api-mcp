@@ -1,0 +1,17 @@
+info:
+  name: List example scripts
+  type: http
+  seq: 2
+  tags:
+    - reference
+
+http:
+  method: GET
+  url: "{{baseUrl}}/examples"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
