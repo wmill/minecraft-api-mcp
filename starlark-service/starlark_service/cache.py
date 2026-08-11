@@ -44,6 +44,10 @@ def meta_path(cache_dir: Path, identifier: str) -> Path:
     return cache_dir / identifier[4:6] / f"{identifier}.json"
 
 
+def source_path(cache_dir: Path, identifier: str) -> Path:
+    return cache_dir / identifier[4:6] / f"{identifier}.star"
+
+
 def load_metadata(cache_dir: Path, identifier: str) -> dict[str, Any] | None:
     nbt = nbt_path(cache_dir, identifier)
     meta = meta_path(cache_dir, identifier)
@@ -58,15 +62,22 @@ def store_metadata(cache_dir: Path, identifier: str, metadata: dict[str, Any]) -
     path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def store_source(cache_dir: Path, identifier: str, source: str) -> None:
+    """Persist the Starlark source alongside the artifact for inspection."""
+    path = source_path(cache_dir, identifier)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source, encoding="utf-8")
+
+
 def stats(cache_dir: Path) -> dict[str, int]:
     artifacts = 0
     total = 0
     for path in cache_dir.glob("*/slk_*.nbt"):
         artifacts += 1
         total += path.stat().st_size
-        meta = path.with_suffix(".json")
-        if meta.exists():
-            total += meta.stat().st_size
+        for companion in (path.with_suffix(".json"), path.with_suffix(".star")):
+            if companion.exists():
+                total += companion.stat().st_size
     return {"artifacts": artifacts, "bytes": total}
 
 
@@ -75,16 +86,17 @@ def evict(cache_dir: Path, max_bytes: int) -> None:
     entries = []
     total = 0
     for path in cache_dir.glob("*/slk_*.nbt"):
-        meta = path.with_suffix(".json")
-        size = path.stat().st_size + (meta.stat().st_size if meta.exists() else 0)
-        entries.append((path.stat().st_mtime, path, meta, size))
+        companions = [path.with_suffix(".json"), path.with_suffix(".star")]
+        size = path.stat().st_size + sum(c.stat().st_size for c in companions if c.exists())
+        entries.append((path.stat().st_mtime, path, companions, size))
         total += size
     entries.sort()
-    for _, path, meta, size in entries:
+    for _, path, companions, size in entries:
         if total <= max_bytes:
             break
         path.unlink(missing_ok=True)
-        meta.unlink(missing_ok=True)
+        for companion in companions:
+            companion.unlink(missing_ok=True)
         total -= size
 
 

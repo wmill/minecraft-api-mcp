@@ -84,6 +84,7 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
                ("size", "block_count", "entity_count", "ground_level", "y_offset",
                 "nbt_bytes", "palette")},
         }
+        cache.store_source(cfg.cache_dir, identifier, request.source)
         cache.store_metadata(cfg.cache_dir, identifier, metadata)
         cache.evict(cfg.cache_dir, cfg.cache_max_bytes)
         return {**metadata, "cached": False}
