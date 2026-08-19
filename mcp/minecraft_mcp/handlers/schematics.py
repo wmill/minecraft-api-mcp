@@ -17,6 +17,11 @@ def _schematic_client() -> SchematicServiceClient:
     return SchematicServiceClient(SCHEMATIC_SERVICE_URL)
 
 
+def _ground_level(row: dict) -> int:
+    placement = (row.get("image_metadata") or {}).get("placement") or {}
+    return placement.get("ground_level") or 0
+
+
 def _unavailable(error: Exception) -> CallToolResult:
     return CallToolResult(
         content=[
@@ -99,16 +104,18 @@ async def handle_search_schematics(
     for row in rows:
         size = row.get("size") or {}
         size_text = "x".join(str(size.get(axis, "?")) for axis in ("width", "height", "depth"))
-        lines.append(
-            "- {id}: {title} [{kind}, {style}, {size}] blocks={blocks}".format(
-                id=row.get("schematic_id"),
-                title=row.get("title", "Untitled"),
-                kind=row.get("structure_type", "unknown"),
-                style=row.get("style", "unknown"),
-                size=size_text,
-                blocks=row.get("non_air_block_count", "?"),
-            )
+        line = "- {id}: {title} [{kind}, {style}, {size}] blocks={blocks}".format(
+            id=row.get("schematic_id"),
+            title=row.get("title", "Untitled"),
+            kind=row.get("structure_type", "unknown"),
+            style=row.get("style", "unknown"),
+            size=size_text,
+            blocks=row.get("non_air_block_count", "?"),
         )
+        ground_level = _ground_level(row)
+        if ground_level:
+            line += f" ground_level={ground_level}"
+        lines.append(line)
     return format_success_response("\n".join(lines))
 
 
@@ -141,6 +148,12 @@ async def handle_get_schematic(
     ]
     if top_block_text:
         lines.append(f"Top blocks: {top_block_text}")
+    ground_level = _ground_level(row)
+    if ground_level:
+        lines.append(
+            f"Ground level: {ground_level} (this many bottom layers are terrain-fill; "
+            "place_schematic embeds them below the requested y by default)"
+        )
     return format_success_response("\n".join(line for line in lines if line))
 
 
@@ -154,6 +167,7 @@ async def handle_place_schematic(
     rotation: str = "NONE",
     include_entities: bool = True,
     replace_blocks: bool = True,
+    apply_ground_offset: bool = True,
     **arguments,
 ) -> CallToolResult:
     client = _schematic_client()
@@ -169,12 +183,14 @@ async def handle_place_schematic(
     except Exception as exc:
         return format_error_response(exc, "loading schematic NBT")
 
+    ground_level = _ground_level(metadata)
+    place_y = y - ground_level if apply_ground_offset else y
     try:
         result = await api_client.place_nbt_structure_bytes(
             nbt_bytes,
             f"{schematic_id}.nbt",
             x,
-            y,
+            place_y,
             z,
             world,
             rotation,
@@ -190,7 +206,9 @@ async def handle_place_schematic(
         )
 
     title = metadata.get("title", f"Schematic {schematic_id}")
-    msg = f"Placed schematic {schematic_id} ({title}) at ({x}, {y}, {z}) with rotation {rotation}."
+    msg = f"Placed schematic {schematic_id} ({title}) at ({x}, {place_y}, {z}) with rotation {rotation}."
+    if apply_ground_offset and ground_level:
+        msg += f"\nApplied ground_level offset {ground_level} (requested y was {y})."
     if result.get("build_id"):
         msg += f"\nRecorded as build: {result['build_id']}"
     return format_success_response(msg)

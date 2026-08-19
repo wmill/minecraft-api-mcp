@@ -145,6 +145,11 @@ services:
       - SCHEMATIC_DATA_DIR=/data
     volumes:
       - ./schematic-service-data:/data:ro
+      # schematic-service-data/schematic-images is a symlink to the sibling nbt-image-classification
+      # repo's output dir; Docker can't follow it across the bind-mount boundary, so mount the real
+      # target directly at the path the symlink points to. Without this, image_metadata (top_blocks,
+      # placement/has_base, ground_level) never reaches the container or Elasticsearch.
+      - ../tools/nbt-image-classification/nbt-out:/data/schematic-images:ro
     depends_on:
       elasticsearch:
         condition: service_healthy

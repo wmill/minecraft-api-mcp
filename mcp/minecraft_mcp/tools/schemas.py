@@ -1779,7 +1779,11 @@ TOOL_GET_SCHEMATIC = Tool(
 
 TOOL_PLACE_SCHEMATIC = Tool(
     name="place_schematic",
-    description="Place a converted NBT schematic from the optional local schematic library",
+    description=(
+        "Place a converted NBT schematic from the optional local schematic library. "
+        "The schematic's ground_level is applied automatically so its detected terrain-fill "
+        "foundation lands below your y"
+    ),
     inputSchema={
         "type": "object",
         "properties": {
@@ -1818,6 +1822,11 @@ TOOL_PLACE_SCHEMATIC = Tool(
             "replace_blocks": {
                 "type": "boolean",
                 "description": "Whether to replace existing blocks",
+                "default": True
+            },
+            "apply_ground_offset": {
+                "type": "boolean",
+                "description": "Apply the schematic's detected ground_level so its foundation lands below y",
                 "default": True
             }
         },
