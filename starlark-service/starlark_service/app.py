@@ -14,9 +14,10 @@ from pydantic import BaseModel, Field
 
 from . import cache
 from .config import ServiceConfig, load_config
+from .docs import UnknownDocs, catalog_view
 from .sandbox import BuildQueueFull, Sandbox
 
-EXAMPLE_NAME = re.compile(r"^[a-z0-9_]+$")
+EXAMPLE_NAME = re.compile(r"^[a-z0-9_-]+$")
 
 
 class BuildRequest(BaseModel):
@@ -105,11 +106,14 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         return FileResponse(path, media_type="application/octet-stream", filename=path.name)
 
     @app.get("/docs/catalog")
-    async def get_catalog() -> PlainTextResponse:
-        if not cfg.catalog_path.exists():
-            raise HTTPException(status_code=503, detail="component catalog unavailable")
-        return PlainTextResponse(cfg.catalog_path.read_text(encoding="utf-8"),
-                                 media_type="text/markdown")
+    async def get_catalog(topic: str = "full", component: str | None = None) -> PlainTextResponse:
+        try:
+            content = catalog_view(cfg.tool_dir, topic, component)
+        except UnknownDocs as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except (OSError, SyntaxError, KeyError) as exc:
+            raise HTTPException(status_code=503, detail="component catalog unavailable") from exc
+        return PlainTextResponse(content, media_type="text/markdown")
 
     @app.get("/examples")
     async def list_examples() -> dict[str, Any]:

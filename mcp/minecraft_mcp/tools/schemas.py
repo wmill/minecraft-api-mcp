@@ -5,7 +5,8 @@ This module contains all tool schemas separated from their implementations.
 Each schema defines the tool's name, description, and input parameters.
 """
 
-from mcp.types import Tool
+from mcp.types import Tool, ToolAnnotations
+from ..utils.starlark_models import Placement, StarlarkResult
 
 
 # World Tools
@@ -1838,11 +1839,14 @@ TOOL_PLACE_SCHEMATIC = Tool(
 TOOL_BUILD_STARLARK_STRUCTURE = Tool(
     name="build_starlark_structure",
     description=(
-        "Compile a Starlark build script into a placeable structure via the optional Starlark "
-        "build service. Returns an artifact_id on success, or structured diagnostics to fix and "
-        "resubmit — iterate on the source until the build succeeds, then use "
-        "place_starlark_structure. Call get_starlark_docs first for the script API reference."
+        "Compile a custom Starlark structure. Optionally supply placement to also place it in "
+        "the world after compilation succeeds (replaces blocks; may spawn entities). Without "
+        "placement, returns an artifact_id for place_starlark_structure. Read get_starlark_docs "
+        "once for the short quickstart; look up individual components as needed. Failures return "
+        "compact diagnostics. Never blindly retry an unknown placement outcome."
     ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False),
+    outputSchema=StarlarkResult.model_json_schema(),
     inputSchema={
         "type": "object",
         "properties": {
@@ -1878,67 +1882,42 @@ TOOL_BUILD_STARLARK_STRUCTURE = Tool(
     }
 )
 
+TOOL_BUILD_STARLARK_STRUCTURE.inputSchema["properties"]["placement"] = {
+    **Placement.model_json_schema(),
+    "description": "Optional world placement after successful compilation. Omit to compile only.",
+}
+
 TOOL_PLACE_STARLARK_STRUCTURE = Tool(
     name="place_starlark_structure",
     description=(
-        "Place a structure previously compiled by build_starlark_structure into the world. "
-        "The artifact's y_offset is applied automatically so its ground level lands at your y"
+        "Place a compiled artifact into the world, replacing blocks and optionally spawning entities. "
+        "The ground offset is applied automatically. Inspect the world before retrying an unknown outcome."
     ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False),
+    outputSchema=StarlarkResult.model_json_schema(),
     inputSchema={
-        "type": "object",
+        **Placement.model_json_schema(),
         "properties": {
-            "artifact_id": {
-                "type": "string",
-                "description": "Artifact ID returned by build_starlark_structure (slk_...)"
-            },
-            "x": {
-                "type": "integer",
-                "description": "X coordinate to place structure (east positive, west negative)"
-            },
-            "y": {
-                "type": "integer",
-                "description": "Y coordinate to place structure (elevation: -64 to 320, sea level at 63)"
-            },
-            "z": {
-                "type": "integer",
-                "description": "Z coordinate to place structure (south positive, north negative)"
-            },
-            "world": {
-                "type": "string",
-                "description": "World name (optional, defaults to minecraft:overworld)",
-                "default": "minecraft:overworld"
-            },
-            "rotation": {
-                "type": "string",
-                "description": "Structure rotation",
-                "enum": ["NONE", "CLOCKWISE_90", "CLOCKWISE_180", "COUNTERCLOCKWISE_90"],
-                "default": "NONE"
-            },
-            "include_entities": {
-                "type": "boolean",
-                "description": "Whether to include entities from the structure",
-                "default": True
-            },
-            "apply_y_offset": {
-                "type": "boolean",
-                "description": "Apply the artifact's y_offset so its ground level lands at y",
-                "default": True
-            }
+            "artifact_id": {"type": "string", "description": "Artifact ID returned by build_starlark_structure"},
+            **Placement.model_json_schema()["properties"],
         },
-        "required": ["artifact_id", "x", "y", "z"]
-    }
+        "required": ["artifact_id", "x", "y", "z"],
+    },
 )
 
 TOOL_GET_STARLARK_DOCS = Tool(
     name="get_starlark_docs",
     description=(
-        "Get the Starlark build script reference: language rules, layout combinators, block "
-        "placement primitives, the reusable component library, and error codes. Read this "
-        "before writing a script for build_starlark_structure"
+        "Get a short runnable quickstart by default. Select topic for DSL, composition, errors, "
+        "components index, a library module, or full reference. Select an exact component name "
+        "for its import, signature, size, and constraints; component takes precedence over topic."
     ),
     inputSchema={
         "type": "object",
-        "properties": {},
+        "properties": {
+            "topic": {"type": "string", "default": "quickstart"},
+            "component": {"type": "string", "description": "Exact name, e.g. GableRoof"},
+        },
         "required": []
     }
 )

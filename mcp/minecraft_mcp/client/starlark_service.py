@@ -40,9 +40,10 @@ class StarlarkServiceClient:
             response.raise_for_status()
             return response.content
 
-    async def get_catalog(self) -> str:
+    async def get_catalog(self, topic: str = "quickstart", component: str | None = None) -> str:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(f"{self.base_url}/docs/catalog")
+            params = {"component": component} if component is not None else {"topic": topic}
+            response = await client.get(f"{self.base_url}/docs/catalog", params=params)
             response.raise_for_status()
             return response.text
 

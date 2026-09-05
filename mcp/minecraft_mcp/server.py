@@ -68,7 +68,7 @@ class MinecraftMCPServer:
             return TOOL_SCHEMAS
         
         @self.server.call_tool()
-        async def call_tool(name: str, arguments: Dict[str, Any]) -> List[ContentBlock]:
+        async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
             """
             Handle tool calls by routing to appropriate handlers.
             
@@ -94,16 +94,17 @@ class MinecraftMCPServer:
                 # Call the handler with the API client and arguments
                 result = await handler(self.api_client, **arguments)
                 
-                # Return the content from the result
-                return result.content
+                # Preserve structured output and error flags as well as text/images.
+                return result
                 
             except Exception as e:
                 print(f"Tool error: {e}", file=sys.stderr)
                 # Return error as CallToolResult content
                 error_result = CallToolResult(
-                    content=[TextContent(type="text", text=f"Error: {str(e)}")]
+                    content=[TextContent(type="text", text=f"Error: {str(e)}")],
+                    isError=True,
                 )
-                return error_result.content
+                return error_result
             
         @self.server.list_resources()
         async def list_resources() -> list[Resource]:

@@ -121,3 +121,55 @@ def test_health_reports_lib_and_cache(config):
     assert health["lib_dir_exists"] is True
     assert health["lib_fingerprint"]
     assert health["cache"] == {"artifacts": 0, "bytes": 0}
+
+
+def test_quickstart_is_small_and_compiles(config):
+    import re
+    client = client_for(config)
+    docs = client.get("/docs/catalog", params={"topic": "quickstart"})
+    assert docs.status_code == 200
+    assert len(docs.content) < 6000
+    source = re.search(r"```python\n(.*?)```", docs.text, re.S)[1]
+    built = client.post("/build", json={"source": source}).json()
+    assert built["ok"], built
+    assert built["size"] == [13, 6, 13]
+    assert built["y_offset"] == -1
+
+
+def test_focused_docs_and_exact_signatures(config):
+    client = client_for(config)
+    for topic in ("dsl", "composition", "errors", "components", "structural", "openings", "roofs",
+                  "fixtures", "outdoor", "dwellings", "fortifications", "dungeons", "redstone", "random", "full"):
+        response = client.get("/docs/catalog", params={"topic": topic})
+        assert response.status_code == 200, (topic, response.text)
+    roof = client.get("/docs/catalog", params={"component": "GableRoof"}).text
+    assert 'load("../lib/roofs.star", "GableRoof")' in roof
+    assert "minecraft:oak_stairs" in roof
+    assert "ShedRoof(" not in roof
+    assert "[width, (width+1)//2, length]" in roof
+    for params in ({"topic": "unknown"}, {"component": "unknown"}):
+        response = client.get("/docs/catalog", params=params)
+        assert response.status_code == 400
+        assert "Valid" in response.json()["detail"]
+
+
+def test_every_example_is_fetchable(config):
+    client = client_for(config)
+    names = [item["name"] for item in client.get("/examples").json()["examples"]]
+    assert "arcane-tower" in names
+    for name in names:
+        assert client.get(f"/examples/{name}").status_code == 200
+
+
+def test_component_catalog_covers_public_library_constructors(config):
+    from starlark_service.docs import ROW, _signatures, catalog_view
+
+    reference = catalog_view(config.tool_dir)
+    documented = {match[1] for match in ROW.finditer(reference)}
+    signatures = _signatures(config.lib_dir)
+    public = {name for name in signatures if name[0].isupper()}
+    assert public <= documented
+    for name in public:
+        focused = catalog_view(config.tool_dir, component=name)
+        assert signatures[name] in focused
+        assert "load(" in focused

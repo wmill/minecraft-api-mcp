@@ -555,7 +555,8 @@ class MinecraftAPIClient:
             "nbt_file": (filename, nbt_file_data, "application/octet-stream")
         }
         
-        async with httpx.AsyncClient() as client:
+        # The server allows 30 seconds for world placement.
+        async with httpx.AsyncClient(timeout=40.0) as client:
             response = await client.post(
                 f"{self.base_url}/api/world/structure/place",
                 data=data,

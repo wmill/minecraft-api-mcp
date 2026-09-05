@@ -5,7 +5,7 @@ description = "MCP Server for Minecraft Fabric Mod API - Modular Package"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "mcp>=1.11.0",
+    "mcp>=1.20,<2",
     "httpx>=0.25.0",
     "python-dotenv>=0.9.9",
     "starlette>=0.27.0",
