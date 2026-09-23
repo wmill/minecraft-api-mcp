@@ -4,6 +4,7 @@ import ca.waltermiller.mcpapi.preview.BlockGrid;
 import ca.waltermiller.mcpapi.preview.IsoRenderer;
 import ca.waltermiller.mcpapi.preview.PreviewViewDirection;
 import ca.waltermiller.mcpapi.preview.TerrainHeightmapGridAdapter;
+import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import io.javalin.Javalin;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -24,7 +25,11 @@ public class BlocksEndpoint extends APIEndpoint {
     private final BlocksEndpointCore core;
 
     public BlocksEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
-        this(app, server, logger, new BlocksEndpointCore(server, logger));
+        this(app, server, logger, new AreaLockService());
+    }
+
+    public BlocksEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger, AreaLockService locks) {
+        this(app, server, logger, new BlocksEndpointCore(server, logger, locks));
     }
 
     BlocksEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger, BlocksEndpointCore core) {
@@ -45,7 +50,7 @@ public class BlocksEndpoint extends APIEndpoint {
         // null will be used to indicate blocks that will not be changed.
         app.post("/api/world/blocks/set", ctx -> {
             BlockSetRequest req = ctx.bodyAsClass(BlockSetRequest.class);
-            respond(ctx, core.setBlocks(req), WRITE_TIMEOUT_SECONDS, "block operation",
+            respond(ctx, core.setBlocks(req, ctx.header(AreaLockService.HEADER)), WRITE_TIMEOUT_SECONDS, "block operation",
                 BlockSetResult::success, BlockSetResult::error,
                 result -> Map.of(
                     "success", true,
@@ -73,7 +78,7 @@ public class BlocksEndpoint extends APIEndpoint {
         // Fill a box/cuboid with a specific block type between two coordinates
         app.post("/api/world/blocks/fill", ctx -> {
             FillBoxRequest req = ctx.bodyAsClass(FillBoxRequest.class);
-            respond(ctx, core.fillBox(req), BULK_TIMEOUT_SECONDS, "box fill operation",
+            respond(ctx, core.fillBox(req, ctx.header(AreaLockService.HEADER)), BULK_TIMEOUT_SECONDS, "box fill operation",
                 FillResult::success, FillResult::error,
                 result -> Map.of(
                     "success", true,

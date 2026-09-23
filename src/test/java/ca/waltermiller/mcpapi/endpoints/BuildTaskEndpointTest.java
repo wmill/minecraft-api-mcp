@@ -110,7 +110,7 @@ class BuildTaskEndpointTest {
     @Test
     void executeBuildReturnsAccepted() throws Exception {
         UUID buildId = UUID.randomUUID();
-        when(buildService.executeBuild(buildId))
+        when(buildService.executeBuild(buildId, null))
             .thenReturn(CompletableFuture.completedFuture(
                 new BuildService.BuildExecutionResult(buildId, true, 0, 0, List.of(), null)));
 

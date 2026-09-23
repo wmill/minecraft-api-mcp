@@ -9,6 +9,8 @@ servers:
     description: Local Minecraft server
 
 tags:
+  - name: area-locks
+    description: Optional cuboid reservations with idle expiry
   - name: system
     description: Health and connectivity
   - name: players
@@ -29,6 +31,127 @@ tags:
     description: Build task CRUD, execution, audit, preview, and rail planning
 
 paths:
+
+  /api/area-locks:
+    post:
+      tags: [area-locks]
+      summary: Reserve a cuboid
+      operationId: acquireAreaLock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bounds]
+              properties:
+                bounds:
+                  $ref: "#/components/schemas/AreaBounds"
+                world:
+                  $ref: "#/components/schemas/World"
+                label:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/AreaLockGranted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
+    get:
+      tags: [area-locks]
+      summary: List reservations without disclosing tokens
+      operationId: listAreaLocks
+      description: Filter by world and optionally all six inclusive bounds coordinates. Does not renew reservations.
+      parameters:
+        - name: world
+          in: query
+          schema:
+            type: string
+        - name: min_x
+          in: query
+          schema:
+            type: integer
+            format: int32
+        - name: min_y
+          in: query
+          schema:
+            type: integer
+            format: int32
+        - name: min_z
+          in: query
+          schema:
+            type: integer
+            format: int32
+        - name: max_x
+          in: query
+          schema:
+            type: integer
+            format: int32
+        - name: max_y
+          in: query
+          schema:
+            type: integer
+            format: int32
+        - name: max_z
+          in: query
+          schema:
+            type: integer
+            format: int32
+      responses:
+        "200":
+          description: Active reservations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  locks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AreaLockMetadata"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/area-locks/{lock_id}:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockPathId"
+    patch:
+      tags: [area-locks]
+      summary: Renew or resize a reservation
+      operationId: updateAreaLock
+      description: An empty object renews. Replacement bounds resize atomically; a failed resize preserves the old bounds and expiry. The world cannot change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bounds:
+                  $ref: "#/components/schemas/AreaBounds"
+      responses:
+        "200":
+          $ref: "#/components/responses/AreaLockGranted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
+    delete:
+      tags: [area-locks]
+      summary: Release a reservation (idempotent)
+      operationId: releaseAreaLock
+      responses:
+        "200":
+          description: Reservation released or already absent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
 
   # ── System ──────────────────────────────────────────────────────────────────
 
@@ -150,6 +273,8 @@ paths:
                   $ref: "#/components/schemas/BlockInfo"
 
   /api/world/blocks/set:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [blocks]
       summary: Set a 3-D array of blocks
@@ -161,6 +286,8 @@ paths:
             schema:
               $ref: "#/components/schemas/BlockSetRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Blocks placed
           content:
@@ -192,6 +319,8 @@ paths:
           $ref: "#/components/responses/ServerError"
 
   /api/world/blocks/fill:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [blocks]
       summary: Fill a rectangular region with a single block type
@@ -203,6 +332,8 @@ paths:
             schema:
               $ref: "#/components/schemas/FillBoxRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Fill completed
           content:
@@ -308,6 +439,8 @@ paths:
   # ── Prefabs ──────────────────────────────────────────────────────────────────
 
   /api/world/prefabs/door:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
       summary: Place one or more doors
@@ -319,6 +452,8 @@ paths:
             schema:
               $ref: "#/components/schemas/DoorRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Doors placed
           content:
@@ -329,6 +464,8 @@ paths:
           $ref: "#/components/responses/ServerError"
 
   /api/world/prefabs/stairs:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
       summary: Build a staircase
@@ -340,6 +477,8 @@ paths:
             schema:
               $ref: "#/components/schemas/StairsRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Staircase placed
           content:
@@ -350,6 +489,8 @@ paths:
           $ref: "#/components/responses/ServerError"
 
   /api/world/prefabs/window-pane:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
       summary: Place a wall of window panes
@@ -361,6 +502,8 @@ paths:
             schema:
               $ref: "#/components/schemas/WindowPaneRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Window panes placed
           content:
@@ -371,6 +514,8 @@ paths:
           $ref: "#/components/responses/ServerError"
 
   /api/world/prefabs/torch:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
       summary: Place a torch
@@ -382,6 +527,8 @@ paths:
             schema:
               $ref: "#/components/schemas/TorchRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Torch placed
           content:
@@ -392,6 +539,8 @@ paths:
           $ref: "#/components/responses/ServerError"
 
   /api/world/prefabs/sign:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
       summary: Place a sign with text
@@ -403,6 +552,8 @@ paths:
             schema:
               $ref: "#/components/schemas/SignRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Sign placed
           content:
@@ -413,6 +564,8 @@ paths:
           $ref: "#/components/responses/ServerError"
 
   /api/world/prefabs/ladder:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
       summary: Place a vertical ladder
@@ -424,6 +577,8 @@ paths:
             schema:
               $ref: "#/components/schemas/LadderRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Ladder placed
           content:
@@ -436,6 +591,8 @@ paths:
   # ── Structures ───────────────────────────────────────────────────────────────
 
   /api/world/structure/place:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [structures]
       summary: Place an NBT structure (multipart upload)
@@ -447,6 +604,8 @@ paths:
             schema:
               $ref: "#/components/schemas/NbtStructurePlaceRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Structure placed
           content:
@@ -461,6 +620,8 @@ paths:
   # ── Effects ──────────────────────────────────────────────────────────────────
 
   /api/world/effects/rain-fire:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [effects]
       summary: Rain fire over a circular area
@@ -472,6 +633,8 @@ paths:
             schema:
               $ref: "#/components/schemas/RainFireRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "200":
           description: Fire placed
           content:
@@ -673,6 +836,8 @@ paths:
           $ref: "#/components/responses/ServerError"
 
   /api/builds/{id}/execute:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [builds]
       summary: Start executing a build asynchronously
@@ -680,6 +845,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/BuildId"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "202":
           description: Execution started
           content:
@@ -690,6 +857,8 @@ paths:
           $ref: "#/components/responses/ServerError"
 
   /api/builds/{id}/replay:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [builds]
       summary: Reset and re-execute all tasks for a build
@@ -697,6 +866,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/BuildId"
       responses:
+        "409":
+          $ref: "#/components/responses/AreaLockConflict"
         "202":
           description: Replay started
           content:
@@ -825,6 +996,19 @@ paths:
 components:
 
   parameters:
+    AreaLockHeader:
+      name: X-Area-Lock-Id
+      in: header
+      required: false
+      description: Optional reservation token. Writes must fit inside its world and cuboid. Unknown or expired tokens fail; absence only permits writes outside reserved areas. Execute/replay carries the token into each task and stops on a lock failure.
+      schema:
+        type: string
+    AreaLockPathId:
+      name: lock_id
+      in: path
+      required: true
+      schema:
+        type: string
     BuildId:
       name: id
       in: path
@@ -844,6 +1028,18 @@ components:
         format: uuid
 
   responses:
+    AreaLockGranted:
+      description: Reservation including its usable token and idle expiry
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AreaLock"
+    AreaLockConflict:
+      description: Conflicting reservation, write outside its reservation, or unknown/expired token. No blocks are written by the rejected operation. Queued task failures are reported in build status instead.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AreaLockError"
     BadRequest:
       description: Invalid request
       content:
@@ -873,6 +1069,73 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    AreaBounds:
+      type: object
+      description: Inclusive block bounds; each minimum must not exceed its maximum.
+      required: [min_x, min_y, min_z, max_x, max_y, max_z]
+      properties:
+        min_x:
+          type: integer
+          format: int32
+        min_y:
+          type: integer
+          format: int32
+        min_z:
+          type: integer
+          format: int32
+        max_x:
+          type: integer
+          format: int32
+        max_y:
+          type: integer
+          format: int32
+        max_z:
+          type: integer
+          format: int32
+    AreaLockMetadata:
+      type: object
+      required: [world, bounds, label, expires_at, idle_timeout_seconds]
+      properties:
+        world:
+          type: string
+        bounds:
+          $ref: "#/components/schemas/AreaBounds"
+        label:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        idle_timeout_seconds:
+          type: integer
+          default: 900
+    AreaLock:
+      allOf:
+        - $ref: "#/components/schemas/AreaLockMetadata"
+        - type: object
+          required: [lock_id]
+          properties:
+            lock_id:
+              type: string
+              format: uuid
+    AreaLockError:
+      type: object
+      required: [success, code, error]
+      properties:
+        success:
+          type: boolean
+          const: false
+        code:
+          type: string
+          enum: [area_locked, outside_area_lock, invalid_area_lock]
+        error:
+          type: string
+        reservation:
+          $ref: "#/components/schemas/AreaLockMetadata"
+        requested_world:
+          type: string
+        requested_bounds:
+          type: object
+          description: Inclusive operation bounds; empty for a no-op with a mismatched world.
 
     # ── Shared primitives ──────────────────────────────────────────────────────
 
@@ -995,6 +1258,8 @@ components:
         executed_at:
           type: string
           format: date-time
+        lock_error:
+          $ref: "#/components/schemas/AreaLockError"
         error_message:
           type: string
       required: [id, build_id, task_order, task_type, status, task_data]

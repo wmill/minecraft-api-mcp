@@ -189,6 +189,10 @@ public class BuildService {
      * Requirements: 3.1, 3.4
      */
     public CompletableFuture<BuildExecutionResult> executeBuild(UUID buildId) {
+        return executeBuild(buildId, null);
+    }
+
+    public CompletableFuture<BuildExecutionResult> executeBuild(UUID buildId, String lockId) {
         if (buildId == null) {
             return CompletableFuture.completedFuture(
                 new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build ID cannot be null"));
@@ -234,7 +238,7 @@ public class BuildService {
                     }
                     
                     try {
-                        TaskExecutor.TaskExecutionResult result = taskExecutor.executeTask(task);
+                        TaskExecutor.TaskExecutionResult result = lockId == null ? taskExecutor.executeTask(task) : taskExecutor.executeTask(task, lockId);
                         
                         // Update task in database
                         taskRepository.update(task);
@@ -245,6 +249,7 @@ public class BuildService {
                         } else {
                             tasksFailed++;
                             LOGGER.error("Task {} failed: {}", task.getId(), result.errorMessage());
+                            if (result.lockError() != null) break;
                         }
                     } catch (Exception e) {
                         tasksFailed++;
@@ -282,6 +287,10 @@ public class BuildService {
      * Requirements: Allows re-running completed or failed builds.
      */
     public CompletableFuture<BuildExecutionResult> replayBuild(UUID buildId) {
+        return replayBuild(buildId, null);
+    }
+
+    public CompletableFuture<BuildExecutionResult> replayBuild(UUID buildId, String lockId) {
         if (buildId == null) {
             return CompletableFuture.completedFuture(
                 new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build ID cannot be null"));
@@ -323,7 +332,7 @@ public class BuildService {
 
             // Now execute the build normally
             try {
-                return executeBuild(buildId).get();
+                return executeBuild(buildId, lockId).get();
             } catch (Exception e) {
                 LOGGER.error("Error during replay execution", e);
                 return new BuildExecutionResult(buildId, false, 0, 0, List.of(),

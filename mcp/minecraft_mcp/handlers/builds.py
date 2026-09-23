@@ -920,6 +920,8 @@ async def handle_get_build_status(
 
                     if task.get('error_message'):
                         response_text += f"   - Error: {task['error_message']}\n"
+                    if task.get('lock_error'):
+                        response_text += f"   - Reservation conflict: {task['lock_error']}\n"
 
             bb = result.get("bounding_box")
             if bb:
@@ -929,7 +931,7 @@ async def handle_get_build_status(
                     f"[{bb['size_x']} x {bb['size_y']} x {bb['size_z']} blocks]\n"
                 )
 
-            return format_success_response(response_text)
+            return CallToolResult(content=[TextContent(type="text", text=response_text)], structuredContent=result)
         else:
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to get build status: {result.get('error', 'Unknown error')}")]

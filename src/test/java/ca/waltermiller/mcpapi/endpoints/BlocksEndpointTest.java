@@ -70,6 +70,21 @@ class BlocksEndpointTest {
     }
 
     @Test
+    void writePropagatesTokenAndReturnsStructuredConflict() throws Exception {
+        var conflict = new ca.waltermiller.mcpapi.arealock.AreaLockException("area_locked", "reserved", Map.of("reservation", Map.of("label", "house")));
+        when(mockCore.fillBox(any(), org.mockito.ArgumentMatchers.eq("owner")))
+            .thenReturn(CompletableFuture.failedFuture(conflict));
+        var request = HttpRequest.newBuilder(URI.create(baseUrl + "/api/world/blocks/fill"))
+            .header("Content-Type", "application/json").header("X-Area-Lock-Id", "owner")
+            .POST(HttpRequest.BodyPublishers.ofString("{\"x1\":0,\"y1\":60,\"z1\":0,\"x2\":1,\"y2\":61,\"z2\":1,\"block_type\":\"minecraft:stone\"}"))
+            .build();
+        var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(409);
+        assertThat(readJson(response).get("code").asText()).isEqualTo("area_locked");
+        assertThat(readJson(response).get("reservation").get("label").asText()).isEqualTo("house");
+    }
+
+    @Test
     void previewHeightmapRejectsInvalidViewDirection() throws Exception {
         HttpResponse<String> response = sendJson("/api/world/blocks/heightmap/preview", Map.of(
             "x1", 0,

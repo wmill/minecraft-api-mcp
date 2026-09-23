@@ -13,6 +13,8 @@ import ca.waltermiller.mcpapi.preview.IsoRenderer;
 import ca.waltermiller.mcpapi.preview.PreviewViewDirection;
 import ca.waltermiller.mcpapi.preview.RecordingBlockSink;
 import com.fasterxml.jackson.databind.JsonNode;
+import ca.waltermiller.mcpapi.arealock.AreaLockService;
+import ca.waltermiller.mcpapi.arealock.AreaLockException;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import net.minecraft.registry.RegistryKey;
@@ -89,6 +91,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
     private void handle(Context ctx, String operation, RouteLogic logic) {
         try {
             logic.run();
+        } catch (AreaLockException e) {
+            ctx.status(409).json(e.payload());
         } catch (IllegalArgumentException e) {
             ctx.status(400).json(Map.of("error", Objects.toString(e.getMessage(), "Invalid request")));
         } catch (IllegalStateException e) {
@@ -142,6 +146,18 @@ public class BuildTaskEndpoint extends APIEndpoint {
         }
         if (task.getErrorMessage() != null) {
             taskMap.put("error_message", task.getErrorMessage());
+            if (task.getErrorMessage().startsWith("{")) {
+                try {
+                    JsonNode error = new com.fasterxml.jackson.databind.ObjectMapper().readTree(task.getErrorMessage());
+                    if (java.util.Set.of("area_locked", "outside_area_lock", "invalid_area_lock")
+                        .contains(error.path("code").asText()) && error.has("error")) {
+                        taskMap.put("lock_error", error);
+                        taskMap.put("error_message", error.get("error").asText());
+                    }
+                } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+                    // Older task errors remain plain text.
+                }
+            }
         }
         return taskMap;
     }
@@ -392,7 +408,9 @@ public class BuildTaskEndpoint extends APIEndpoint {
             }
 
             // Execute build asynchronously; clients poll build status for progress
-            buildService.executeBuild(buildId)
+            String lockId = ctx.header(AreaLockService.HEADER);
+            taskExecutor.validateLockToken(lockId);
+            buildService.executeBuild(buildId, lockId)
                 .exceptionally(throwable -> {
                     LOGGER.error("Error during build execution", throwable);
                     return null;
@@ -418,7 +436,9 @@ public class BuildTaskEndpoint extends APIEndpoint {
             }
 
             // Replay build asynchronously (resets tasks and re-executes)
-            buildService.replayBuild(buildId)
+            String lockId = ctx.header(AreaLockService.HEADER);
+            taskExecutor.validateLockToken(lockId);
+            buildService.replayBuild(buildId, lockId)
                 .exceptionally(throwable -> {
                     LOGGER.error("Error during build replay", throwable);
                     return null;

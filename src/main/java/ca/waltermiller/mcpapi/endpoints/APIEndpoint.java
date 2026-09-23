@@ -1,5 +1,6 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.arealock.AreaLockException;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import net.minecraft.server.MinecraftServer;
@@ -44,6 +45,15 @@ public class APIEndpoint {
         } catch (TimeoutException e) {
             ctx.status(500).json(Map.of("error", "Timeout waiting for " + operationName));
         } catch (Exception e) {
+            AreaLockException conflict = AreaLockException.find(e);
+            if (conflict != null) {
+                ctx.status(409).json(conflict.payload());
+                return;
+            }
+            if (e.getCause() instanceof IllegalArgumentException invalid) {
+                ctx.status(400).json(Map.of("error", invalid.getMessage()));
+                return;
+            }
             ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
         }
     }

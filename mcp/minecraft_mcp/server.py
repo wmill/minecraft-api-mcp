@@ -29,6 +29,7 @@ from mcp.server.lowlevel.helper_types import ReadResourceContents
 
 from .client.minecraft_api import MinecraftAPIClient
 from .tools.schemas import TOOL_SCHEMAS
+from .tools.area_locks import LOCK_WRITE_TOOLS
 from .tools.registry import get_handler
 from .utils.helpers import safe_url, coordinate_info_blurb
 
@@ -82,7 +83,7 @@ class MinecraftMCPServer:
             Raises:
                 ValueError: If the tool name is unknown
             """
-            print(f"call_tool: {name} with args: {arguments}", file=sys.stderr)
+            print(f"call_tool: {name}", file=sys.stderr)
             
             try:
                 # Get the handler for this tool
@@ -92,7 +93,14 @@ class MinecraftMCPServer:
                     raise ValueError(f"Unknown tool: {name}")
                 
                 # Call the handler with the API client and arguments
-                result = await handler(self.api_client, **arguments)
+                client = self.api_client
+                if name in LOCK_WRITE_TOOLS:
+                    arguments = dict(arguments)
+                    lock_id = arguments.pop("lock_id", None)
+                    if lock_id is not None:
+                        client = self.api_client.with_area_lock(lock_id)
+                result = await handler(client, **arguments)
+
                 
                 # Preserve structured output and error flags as well as text/images.
                 return result
@@ -225,25 +233,10 @@ class MinecraftMCPServer:
                 method = scope.get("method", "UNKNOWN")
                 path = scope.get("path", "")
                 query_string = scope.get("query_string", b"").decode("utf-8", errors="replace")
-                headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
+
 
                 print(f"[StreamableHTTP] {method} {path}{'?' + query_string if query_string else ''}", file=sys.stderr)
-                print(f"[StreamableHTTP] Headers: {headers}", file=sys.stderr)
-
-                # For POST requests, we need to capture the body
-                body_parts = []
-
-                async def logging_receive():
-                    message = await receive()
-                    if message.get("type") == "http.request":
-                        body = message.get("body", b"")
-                        body_parts.append(body)
-                        if body:
-                            try:
-                                print(f"[StreamableHTTP] Body: {body.decode('utf-8', errors='replace')[:1000]}", file=sys.stderr)
-                            except Exception as e:
-                                print(f"[StreamableHTTP] Body decode error: {e}", file=sys.stderr)
-                    return message
+                # Avoid logging request headers or bodies containing reservation tokens.
 
                 # Capture response status
                 async def logging_send(message):
@@ -253,17 +246,10 @@ class MinecraftMCPServer:
                         if status >= 400:
                             resp_headers = {k.decode(): v.decode() for k, v in message.get("headers", [])}
                             print(f"[StreamableHTTP] Response headers: {resp_headers}", file=sys.stderr)
-                    elif message.get("type") == "http.response.body":
-                        body = message.get("body", b"")
-                        if body and scope.get("method") == "GET":  # Log body for failed GETs
-                            try:
-                                print(f"[StreamableHTTP] Response body: {body.decode('utf-8', errors='replace')[:500]}", file=sys.stderr)
-                            except Exception:
-                                pass
                     await send(message)
 
                 try:
-                    await session_manager.handle_request(scope, logging_receive, logging_send)
+                    await session_manager.handle_request(scope, receive, logging_send)
                 except Exception as e:
                     print(f"[StreamableHTTP] Exception: {type(e).__name__}: {e}", file=sys.stderr)
                     raise

@@ -54,6 +54,7 @@ class StarlarkResult(BaseModel):
     palette: list[dict[str, Any]] | None = None
     placement: PlacementResult | None = None
     error_kind: str | None = None
+    lock_error: dict[str, Any] | None = None
     message: str | None = None
     hint: str | None = None
     diagnostics: list[DiagnosticGroup] | None = None

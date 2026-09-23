@@ -6,6 +6,7 @@ Provides typed methods for each API endpoint with error handling.
 """
 
 import base64
+from urllib.parse import quote
 
 import httpx
 from typing import Any, Dict, List, Optional
@@ -14,7 +15,7 @@ from typing import Any, Dict, List, Optional
 class MinecraftAPIClient:
     """HTTP client for the Minecraft Fabric mod REST API."""
     
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, lock_id: str | None = None):
         """
         Initialize the API client.
         
@@ -22,7 +23,46 @@ class MinecraftAPIClient:
             base_url: Base URL of the Minecraft API (e.g., "http://localhost:7070")
         """
         self.base_url = base_url
+        self.lock_id = lock_id
     
+    def with_area_lock(self, lock_id: str) -> "MinecraftAPIClient":
+        """Create a call-local client; never modify the shared server client."""
+        return MinecraftAPIClient(self.base_url, lock_id)
+
+    def _http_client(self, **kwargs):
+        if self.lock_id is not None:
+            kwargs["headers"] = {"X-Area-Lock-Id": self.lock_id}
+        return httpx.AsyncClient(**kwargs)
+
+    async def acquire_area_lock(self, bounds, world="minecraft:overworld", label="") -> dict:
+        async with self._http_client() as client:
+            response = await client.post(f"{self.base_url}/api/area-locks",
+                                         json={"bounds": bounds, "world": world, "label": label})
+            response.raise_for_status()
+            return response.json()
+
+    async def update_area_lock(self, lock_id, bounds=None) -> dict:
+        async with self._http_client() as client:
+            response = await client.patch(f"{self.base_url}/api/area-locks/{quote(lock_id, safe='')}",
+                                          json={} if bounds is None else {"bounds": bounds})
+            response.raise_for_status()
+            return response.json()
+
+    async def release_area_lock(self, lock_id) -> dict:
+        async with self._http_client() as client:
+            response = await client.delete(f"{self.base_url}/api/area-locks/{quote(lock_id, safe='')}")
+            response.raise_for_status()
+            return response.json()
+
+    async def list_area_locks(self, world=None, bounds=None) -> dict:
+        params = dict(bounds or {})
+        if world is not None:
+            params["world"] = world
+        async with self._http_client() as client:
+            response = await client.get(f"{self.base_url}/api/area-locks", params=params)
+            response.raise_for_status()
+            return response.json()
+
     async def get_players(self) -> dict:
         """
         Get list of all players currently online.
@@ -33,7 +73,7 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.get(f"{self.base_url}/api/world/players")
             response.raise_for_status()
             return response.json()
@@ -48,7 +88,7 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.get(f"{self.base_url}/api/world/entities")
             response.raise_for_status()
             return response.json()
@@ -86,7 +126,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/entities/spawn",
                 json=payload
@@ -104,7 +144,7 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.get(f"{self.base_url}/api/world/blocks/list")
             response.raise_for_status()
             return response.json()
@@ -142,7 +182,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/blocks/set",
                 json=payload
@@ -189,7 +229,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/blocks/chunk",
                 json=payload
@@ -242,7 +282,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
 
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/blocks/fill",
                 json=payload
@@ -286,7 +326,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/blocks/heightmap",
                 json=payload
@@ -357,7 +397,7 @@ class MinecraftAPIClient:
         if view_direction is not None:
             payload["view_direction"] = view_direction
 
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/blocks/heightmap/preview",
                 json=payload,
@@ -398,7 +438,7 @@ class MinecraftAPIClient:
             "action_bar": action_bar
         }
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/message/broadcast",
                 json=payload
@@ -441,7 +481,7 @@ class MinecraftAPIClient:
         if player_name:
             payload["name"] = player_name
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/message/player",
                 json=payload
@@ -483,7 +523,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
 
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/effects/rain-fire",
                 json=payload,
@@ -556,7 +596,7 @@ class MinecraftAPIClient:
         }
         
         # The server allows 30 seconds for world placement.
-        async with httpx.AsyncClient(timeout=40.0) as client:
+        async with self._http_client(timeout=40.0) as client:
             response = await client.post(
                 f"{self.base_url}/api/world/structure/place",
                 data=data,
@@ -613,7 +653,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/prefabs/door",
                 json=payload
@@ -672,7 +712,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/prefabs/stairs",
                 json=payload
@@ -725,9 +765,9 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
-                f"{self.base_url}/api/world/prefabs/window",
+                f"{self.base_url}/api/world/prefabs/window-pane",
                 json=payload
             )
             response.raise_for_status()
@@ -770,7 +810,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/prefabs/torch",
                 json=payload
@@ -830,7 +870,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/prefabs/sign",
                 json=payload
@@ -878,7 +918,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/world/prefabs/ladder",
                 json=payload
@@ -914,7 +954,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds",
                 json=payload
@@ -954,7 +994,7 @@ class MinecraftAPIClient:
         if task_order is not None:
             payload["task_order"] = task_order
 
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/{build_id}/tasks",
                 json=payload
@@ -980,7 +1020,7 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.delete(
                 f"{self.base_url}/api/builds/{build_id}/tasks/{task_id}"
             )
@@ -1015,7 +1055,7 @@ class MinecraftAPIClient:
         if description is not None:
             payload["description"] = description
 
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.patch(
                 f"{self.base_url}/api/builds/{build_id}/tasks/{task_id}",
                 json=payload
@@ -1039,7 +1079,7 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/{build_id}/audit"
             )
@@ -1069,7 +1109,7 @@ class MinecraftAPIClient:
             httpx.HTTPError: For network-level failures.
         """
         payload = {"dx": dx, "dy": dy, "dz": dz}
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/{build_id}/translate",
                 json=payload
@@ -1091,7 +1131,7 @@ class MinecraftAPIClient:
             dict: {"success": True, "new_build_id": "...", "tasks_cloned": N, ...} on success,
                   or {"success": False, "error": "..."} on rejection.
         """
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/{build_id}/clone"
             )
@@ -1121,7 +1161,7 @@ class MinecraftAPIClient:
         """
 
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/{build_id}/execute"
             )
@@ -1144,7 +1184,7 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/{build_id}/replay"
             )
@@ -1193,7 +1233,7 @@ class MinecraftAPIClient:
         if world:
             payload["world"] = world
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/query-location",
                 json=payload
@@ -1217,7 +1257,7 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.get(
                 f"{self.base_url}/api/builds/{build_id}"
             )
@@ -1256,7 +1296,7 @@ class MinecraftAPIClient:
             params["terrain_margin"] = terrain_margin
         if view_direction is not None:
             params["view_direction"] = view_direction
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.get(
                 f"{self.base_url}/api/builds/{build_id}/preview",
                 params=params,
@@ -1303,7 +1343,7 @@ class MinecraftAPIClient:
         if weight_overrides:
             payload["weight_overrides"] = weight_overrides
 
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/{build_id}/plan-rail",
                 json=payload
@@ -1315,7 +1355,7 @@ class MinecraftAPIClient:
         self,
         job_id: str
     ) -> dict:
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.get(
                 f"{self.base_url}/api/rail-plans/{job_id}"
             )
@@ -1361,7 +1401,7 @@ class MinecraftAPIClient:
         if dimension:
             payload["dimension"] = dimension
         
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.post(
                 f"{self.base_url}/api/players/teleport",
                 json=payload
@@ -1379,7 +1419,7 @@ class MinecraftAPIClient:
         Raises:
             httpx.HTTPError: If the request fails
         """
-        async with httpx.AsyncClient() as client:
+        async with self._http_client() as client:
             response = await client.get(f"{self.base_url}/api/test")
             response.raise_for_status()
             return {"message": response.text.strip()}

@@ -76,4 +76,12 @@ Similarly positive Z is south.
 
 The facing attribute generally means something attached to the wall needs to be placed facing the wall. 
 Also something attached to the wall needs to be placed in the block next to the wall with the correct facing value.
+
+Concurrent building:
+Read the player's location once, then acquire_area_lock for a fixed cuboid before planning.
+Use inclusive bounds and include all clearance, foundations, supports, and rotated structure offsets.
+Pass the returned lock_id on every placement and on execute_build/replay_build. Queue editing and previews do not renew a lock.
+Successful writes renew its idle timeout (15 minutes by default); call update_area_lock during long planning, with optional replacement bounds to resize.
+Keep the original build coordinates when the player moves. Never automatically relocate, reacquire, or omit a token to bypass a conflict.
+release_area_lock when finished; abandoned locks expire. Reservations clear on Minecraft server restart.
 """

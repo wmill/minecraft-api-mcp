@@ -20,6 +20,8 @@ import ca.waltermiller.mcpapi.endpoints.PlayersEndpoint;
 import ca.waltermiller.mcpapi.endpoints.PrefabEndpoint;
 import ca.waltermiller.mcpapi.endpoints.RainFireEndpoint;
 import ca.waltermiller.mcpapi.endpoints.TaskExecutor;
+import ca.waltermiller.mcpapi.arealock.AreaLockService;
+import ca.waltermiller.mcpapi.endpoints.AreaLockEndpoint;
 import io.javalin.Javalin;
 import net.minecraft.server.MinecraftServer;
 
@@ -45,24 +47,27 @@ public class APIServer {
                 logger.warn("Invalid api.port value '{}', falling back to {}", portOverride, DEFAULT_PORT);
             }
         }
+        AreaLockService locks = new AreaLockService();
         app = Javalin.create().start(port);
         logger.info("Web server started on port {}", port);
 
         app.get("/api/test", ctx -> ctx.result("Server is running"));
 
+        new AreaLockEndpoint(app, server, locks);
+
         // Initialize existing endpoints
         new EntitiesEndpoint(app, server, logger);
-        new BlocksEndpoint(app, server, logger);
+        new BlocksEndpoint(app, server, logger, locks);
         new PlayersEndpoint(app, server, logger);
         new MessageEndpoint(app, server, logger);
         new PlayerTeleportEndpoint(app, server, logger);
-        NBTStructureEndpoint nbtEndpoint = new NBTStructureEndpoint(app, server, logger);
-        new PrefabEndpoint(app, server, logger);
-        new RainFireEndpoint(app, server, logger);
+        NBTStructureEndpoint nbtEndpoint = new NBTStructureEndpoint(app, server, logger, locks);
+        new PrefabEndpoint(app, server, logger, locks);
+        new RainFireEndpoint(app, server, logger, locks);
 
         // Initialize build task management system
         try {
-            initializeBuildTaskSystem(app, server, logger, nbtEndpoint);
+            initializeBuildTaskSystem(app, server, logger, nbtEndpoint, locks);
         } catch (SQLException | RuntimeException e) {
             logger.error("Failed to initialize build task system", e);
             // Continue without build task system if database is not available
@@ -71,7 +76,7 @@ public class APIServer {
     }
     
     private static void initializeBuildTaskSystem(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
-                                                   NBTStructureEndpoint nbtEndpoint) throws SQLException {
+                                                   NBTStructureEndpoint nbtEndpoint, AreaLockService locks) throws SQLException {
         logger.info("Initializing build task management system...");
         
         // Initialize database
@@ -84,7 +89,7 @@ public class APIServer {
         RailPlanningJobRepository railPlanningJobRepository = new PostgreSQLRailPlanningJobRepository(databaseManager.getDatabaseConfig());
         
         // Create task executor
-        TaskExecutor taskExecutor = new TaskExecutor(server);
+        TaskExecutor taskExecutor = new TaskExecutor(server, locks);
         
         // Create services
         BuildService buildService = new BuildService(buildRepository, taskRepository, taskExecutor);

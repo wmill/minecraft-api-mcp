@@ -33,4 +33,11 @@ public class PrefabEndpointCoreTest {
         // Test that the core can be instantiated without issues
         assertNotNull(core, "PrefabEndpointCore should be instantiable");
     }
+
+    @Test
+    void previewSignTextNeverAccessesLiveBlockEntity() {
+        var recorder = new ca.waltermiller.mcpapi.preview.RecordingBlockSink(null);
+        // Any live-world access would fail: preview sign text must be skipped entirely.
+        assertDoesNotThrow(() -> core.applySignText(recorder, net.minecraft.util.math.BlockPos.ORIGIN, new SignRequest()));
+    }
 }

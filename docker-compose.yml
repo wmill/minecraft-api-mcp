@@ -75,6 +75,8 @@ services:
       - DB_NAME=minecraft_builds
       - DB_USER=minecraft
       - DB_PASSWORD=minecraft_password
+      # Idle timeout for API area reservations (seconds)
+      - AREA_LOCK_IDLE_SECONDS=${AREA_LOCK_IDLE_SECONDS:-900}
       # JVM memory settings
       - JAVA_OPTS=-Xmx2G -Xms1G -XX:+UseG1GC -XX:+UseStringDeduplication
       # Optional: Set server properties via environment

@@ -1,5 +1,6 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import ca.waltermiller.mcpapi.preview.BlockSink;
 import ca.waltermiller.mcpapi.preview.WorldBlockSink;
 import net.minecraft.block.Block;
@@ -26,10 +27,16 @@ public class BlocksEndpointCore {
     static final int MAX_FILL_BLOCKS = 100_000;
     static final int MAX_HEIGHTMAP_POINTS = 10_000;
 
+    private final AreaLockService locks;
     private final MinecraftServer server;
     private final org.slf4j.Logger logger;
 
     public BlocksEndpointCore(MinecraftServer server, org.slf4j.Logger logger) {
+        this(server, logger, new AreaLockService());
+    }
+
+    public BlocksEndpointCore(MinecraftServer server, org.slf4j.Logger logger, AreaLockService locks) {
+        this.locks = locks;
         this.server = server;
         this.logger = logger;
     }
@@ -49,6 +56,10 @@ public class BlocksEndpointCore {
      * Set blocks in a 3D array pattern
      */
     public CompletableFuture<BlockSetResult> setBlocks(BlockSetRequest request) {
+        return setBlocks(request, null);
+    }
+
+    public CompletableFuture<BlockSetResult> setBlocks(BlockSetRequest request, String lockId) {
         CompletableFuture<BlockSetResult> future = new CompletableFuture<>();
 
         // Validate world
@@ -64,7 +75,8 @@ public class BlocksEndpointCore {
             worldKey.getValue(), request.start_x, request.start_y, request.start_z);
 
         // Execute on server thread
-        server.execute(() -> future.complete(setBlocksInto(new WorldBlockSink(world), request, worldKey)));
+        GuardedPlacement.submit(server::execute, locks, worldKey.getValue().toString(), lockId,
+            () -> PlacementBounds.of(request), () -> setBlocksInto(new WorldBlockSink(world), request, worldKey), BlockSetResult::success, future);
 
         return future;
     }
@@ -185,6 +197,10 @@ public class BlocksEndpointCore {
      * Fill a box/cuboid with a specific block type
      */
     public CompletableFuture<FillResult> fillBox(FillBoxRequest request) {
+        return fillBox(request, null);
+    }
+
+    public CompletableFuture<FillResult> fillBox(FillBoxRequest request, String lockId) {
         CompletableFuture<FillResult> future = new CompletableFuture<>();
         
         // Validate world
@@ -220,8 +236,8 @@ public class BlocksEndpointCore {
             worldKey.getValue(), minX, minY, minZ, maxX, maxY, maxZ, totalBlocks, request.block_type);
 
         // Execute on server thread
-        server.execute(() -> future.complete(
-            fillBoxInto(new WorldBlockSink(world), request, worldKey, minX, minY, minZ, maxX, maxY, maxZ, totalBlocks)));
+        GuardedPlacement.submit(server::execute, locks, worldKey.getValue().toString(), lockId,
+            () -> PlacementBounds.of(request), () -> fillBoxInto(new WorldBlockSink(world), request, worldKey, minX, minY, minZ, maxX, maxY, maxZ, totalBlocks), FillResult::success, future);
 
         return future;
     }

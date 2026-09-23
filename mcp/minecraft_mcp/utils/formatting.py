@@ -4,6 +4,8 @@ Response formatting utilities for the Minecraft MCP server.
 Provides consistent formatting for success and error responses across all tool handlers.
 """
 
+import json
+import httpx
 from typing import Any, Dict, List, Optional
 from mcp.types import CallToolResult, TextContent
 
@@ -23,6 +25,20 @@ def format_success_response(text: str) -> CallToolResult:
     )
 
 
+def area_lock_error(error: Exception) -> dict | None:
+    if not isinstance(error, httpx.HTTPStatusError) or error.response.status_code != 409:
+        return None
+    try:
+        payload = error.response.json()
+    except ValueError:
+        return None
+    if isinstance(payload, dict) and payload.get("code") in {
+        "area_locked", "invalid_area_lock", "outside_area_lock",
+    }:
+        return payload
+    return None
+
+
 def format_error_response(error: Exception, context: str = "") -> CallToolResult:
     """
     Format an error response with consistent error messaging.
@@ -34,6 +50,10 @@ def format_error_response(error: Exception, context: str = "") -> CallToolResult
     Returns:
         CallToolResult with the formatted error message
     """
+    conflict = area_lock_error(error)
+    if conflict is not None:
+        return CallToolResult(isError=True, structuredContent=conflict,
+                              content=[TextContent(type="text", text=json.dumps(conflict))])
     error_text = f"Error connecting to Minecraft API: {str(error)}"
     if context:
         error_text = f"Error {context}: {str(error)}"

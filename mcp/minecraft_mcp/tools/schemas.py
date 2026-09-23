@@ -7,6 +7,7 @@ Each schema defines the tool's name, description, and input parameters.
 
 from mcp.types import Tool, ToolAnnotations
 from ..utils.starlark_models import Placement, StarlarkResult
+from .area_locks import AREA_LOCK_TOOLS, LOCK_ID_SCHEMA, LOCK_WRITE_TOOLS
 
 
 # World Tools
@@ -2028,3 +2029,9 @@ TOOL_SCHEMAS = [
     TOOL_LIST_STARLARK_EXAMPLES,
     TOOL_GET_STARLARK_EXAMPLE,
 ]
+
+# Apply the same optional token contract to every world-write tool.
+for tool in TOOL_SCHEMAS:
+    if tool.name in LOCK_WRITE_TOOLS:
+        tool.inputSchema["properties"]["lock_id"] = dict(LOCK_ID_SCHEMA)
+TOOL_SCHEMAS.extend(AREA_LOCK_TOOLS)

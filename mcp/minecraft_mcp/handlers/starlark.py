@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from ..client.minecraft_api import MinecraftAPIClient
 from ..client.starlark_service import StarlarkServiceClient
 from ..config import STARLARK_SERVICE_URL
-from ..utils.formatting import format_success_response
+from ..utils.formatting import area_lock_error, format_success_response
 from ..utils.starlark_diagnostics import compact_diagnostics, diagnostic_text
 from ..utils.starlark_models import Placement, StarlarkResult
 
@@ -85,6 +85,11 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
             placement.world, placement.rotation, placement.include_entities, True)
     except Exception as exc:
         # A timeout/disconnect or server error may occur after the world write.
+        conflict = area_lock_error(exc)
+        if conflict is not None:
+            return _failure(conflict["code"], conflict["error"],
+                            "Keep the original build location. Explicitly renew, resize, or coordinate the reservation before retrying; never omit lock_id to bypass the error.",
+                            artifact_id=artifact_id, placement=outcome, lock_error=conflict)
         rejected = (isinstance(exc, httpx.HTTPStatusError)
                     and 400 <= exc.response.status_code < 500 and exc.response.status_code != 408)
         outcome["status"] = "failed" if rejected else "unknown"

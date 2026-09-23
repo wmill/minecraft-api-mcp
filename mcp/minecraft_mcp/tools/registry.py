@@ -8,7 +8,7 @@ registry for tool discovery and routing.
 from typing import Callable, Optional
 from mcp.types import CallToolResult
 
-from ..handlers import world, blocks, messages, prefabs, builds, system, effects, schematics, starlark
+from ..handlers import area_locks, world, blocks, messages, prefabs, builds, system, effects, schematics, starlark
 
 
 # Tool handler type
@@ -17,7 +17,12 @@ ToolHandler = Callable[..., CallToolResult]
 
 # Map tool names to handler functions
 TOOL_HANDLERS: dict[str, ToolHandler] = {
+    "acquire_area_lock": area_locks.handle_acquire_area_lock,
+    "update_area_lock": area_locks.handle_update_area_lock,
+    "release_area_lock": area_locks.handle_release_area_lock,
+    "list_area_locks": area_locks.handle_list_area_locks,
     # World tools
+
     "get_players": world.handle_get_players,
     "get_entities": world.handle_get_entities,
     "spawn_entity": world.handle_spawn_entity,

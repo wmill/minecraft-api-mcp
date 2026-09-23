@@ -1,6 +1,9 @@
 package ca.waltermiller.mcpapi.endpoints;
 
 import ca.waltermiller.mcpapi.preview.WorldBlockSink;
+import ca.waltermiller.mcpapi.arealock.AreaBounds;
+import ca.waltermiller.mcpapi.arealock.AreaLockService;
+import ca.waltermiller.mcpapi.arealock.AreaLockException;
 import io.javalin.Javalin;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -19,11 +22,17 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 public class RainFireEndpoint extends APIEndpoint {
+    private final AreaLockService locks;
     private static final int MAX_RADIUS = 56;
     private static final int TIMEOUT_SECONDS = 30;
 
     public RainFireEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
+        this(app, server, logger, new AreaLockService());
+    }
+
+    public RainFireEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger, AreaLockService locks) {
         super(app, server, logger);
+        this.locks = locks;
         init();
     }
 
@@ -49,7 +58,11 @@ public class RainFireEndpoint extends APIEndpoint {
             }
 
             CompletableFuture<RainFireResult> future = new CompletableFuture<>();
-            server.execute(() -> future.complete(rainFire(world, worldKey, req)));
+            String lockId = ctx.header(AreaLockService.HEADER);
+            server.execute(() -> {
+                try { future.complete(rainFire(world, worldKey, req, lockId)); }
+                catch (Exception e) { future.completeExceptionally(e); }
+            });
 
             respond(ctx, future, TIMEOUT_SECONDS, "rain_fire",
                 RainFireResult::success, RainFireResult::error,
@@ -65,7 +78,7 @@ public class RainFireEndpoint extends APIEndpoint {
         });
     }
 
-    private RainFireResult rainFire(ServerWorld world, RegistryKey<World> worldKey, RainFireRequest req) {
+    private RainFireResult rainFire(ServerWorld world, RegistryKey<World> worldKey, RainFireRequest req, String lockId) {
         try {
             WorldBlockSink sink = new WorldBlockSink(world);
             BlockState fireState = Blocks.FIRE.getDefaultState();
@@ -76,7 +89,8 @@ public class RainFireEndpoint extends APIEndpoint {
             int r = req.radius;
             long r2 = (long) r * r;
             int columnsConsidered = 0;
-            int firesPlaced = 0;
+            java.util.List<BlockPos> targets = new java.util.ArrayList<>();
+            AreaBounds bounds = null;
 
             BlockPos.Mutable placePos = new BlockPos.Mutable();
             BlockPos.Mutable belowPos = new BlockPos.Mutable();
@@ -101,11 +115,19 @@ public class RainFireEndpoint extends APIEndpoint {
                     }
 
                     placePos.set(x, y, z);
-                    if (sink.setBlockState(placePos, fireState, Block.NOTIFY_ALL)) {
-                        firesPlaced++;
-                    }
+                    targets.add(placePos.toImmutable());
+                    AreaBounds point = new AreaBounds(x, y, z, x, y, z);
+                    bounds = bounds == null ? point : bounds.union(point);
                 }
             }
+
+            int firesPlaced = locks.execute(worldKey.getValue().toString(), bounds, lockId, () -> {
+                int count = 0;
+                for (BlockPos target : targets) {
+                    if (sink.setBlockState(target, fireState, Block.NOTIFY_ALL)) count++;
+                }
+                return count;
+            }, count -> count > 0);
 
             LOGGER.info("rain_fire placed {} fires across {} columns at ({}, {}) r={} density={} in world {}",
                 firesPlaced, columnsConsidered, req.x, req.z, r, req.density, worldKey.getValue());
@@ -114,6 +136,8 @@ public class RainFireEndpoint extends APIEndpoint {
                 true, null, worldKey.getValue().toString(),
                 firesPlaced, columnsConsidered,
                 Map.of("x", req.x, "z", req.z), r, req.density);
+        } catch (AreaLockException e) {
+            throw e;
         } catch (Exception e) {
             LOGGER.error("Error in rain_fire", e);
             return new RainFireResult(

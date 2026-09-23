@@ -2,6 +2,9 @@ package ca.waltermiller.mcpapi.endpoints;
 
 import ca.waltermiller.mcpapi.buildtask.model.Build;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
+import ca.waltermiller.mcpapi.arealock.AreaBounds;
+import ca.waltermiller.mcpapi.arealock.AreaLockService;
+import ca.waltermiller.mcpapi.arealock.AreaLockException;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.javalin.http.UploadedFile;
@@ -30,12 +33,18 @@ import net.minecraft.structure.StructureTemplateManager;
 import org.jetbrains.annotations.NotNull;
 
 public class NBTStructureEndpoint extends APIEndpoint {
+    private final AreaLockService locks;
     private static final int TIMEOUT_SECONDS = 30;
 
     private BuildService buildService;
 
     public NBTStructureEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
+        this(app, server, logger, new AreaLockService());
+    }
+
+    public NBTStructureEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger, AreaLockService locks) {
         super(app, server, logger);
+        this.locks = locks;
         init();
     }
 
@@ -144,10 +153,14 @@ public class NBTStructureEndpoint extends APIEndpoint {
             // Place the structure at the specified position
             BlockPos pos = new BlockPos(x, y, z);
 
+            String lockId = ctx.header(AreaLockService.HEADER);
             // Execute on server thread
             server.execute(() -> {
                 try {
-                    boolean success = template.place(world, pos, pos, placementData, Random.create(), 2);
+                    Vec3i dimensions = template.getSize();
+                    AreaBounds bounds = PlacementBounds.structure(x, y, z, dimensions.getX(), dimensions.getY(), dimensions.getZ(), rotation.name());
+                    boolean success = locks.execute(worldKey.getValue().toString(), bounds, lockId,
+                        () -> template.place(world, pos, pos, placementData, Random.create(), 2), Boolean.TRUE::equals);
 
                     if (success) {
                         // Get structure size for response
@@ -172,7 +185,9 @@ public class NBTStructureEndpoint extends APIEndpoint {
                                     nbtFile.filename(), worldName, x, y, z,
                                     size.getX(), size.getY(), size.getZ(), rotation.toString());
                                 response.put("build_id", recorded.getId().toString());
-                            } catch (Exception e) {
+                            } catch (AreaLockException | IllegalArgumentException e) {
+                    future.completeExceptionally(e);
+                } catch (Exception e) {
                                 LOGGER.warn("Failed to record NBT placement in build system: {}", e.getMessage());
                             }
                         }

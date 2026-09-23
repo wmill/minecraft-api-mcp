@@ -1,5 +1,7 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.arealock.AreaLockService;
+import ca.waltermiller.mcpapi.arealock.AreaLockException;
 import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
 import ca.waltermiller.mcpapi.buildtask.service.TaskDataValidator;
 import ca.waltermiller.mcpapi.preview.BlockSink;
@@ -41,14 +43,20 @@ public class TaskExecutor {
     
     private final BlocksEndpointCore blocksCore;
     private final PrefabEndpointCore prefabCore;
+    private final AreaLockService locks;
     private final MinecraftServer server;
     private final ObjectMapper objectMapper;
     private final TaskDataValidator validator;
 
     public TaskExecutor(MinecraftServer server) {
+        this(server, new AreaLockService());
+    }
+
+    public TaskExecutor(MinecraftServer server, AreaLockService locks) {
+        this.locks = locks;
         this.server = server;
-        this.blocksCore = new BlocksEndpointCore(server, LOGGER);
-        this.prefabCore = new PrefabEndpointCore(server, LOGGER);
+        this.blocksCore = new BlocksEndpointCore(server, LOGGER, locks);
+        this.prefabCore = new PrefabEndpointCore(server, LOGGER, locks);
         this.objectMapper = new ObjectMapper();
         this.validator = new TaskDataValidator();
     }
@@ -58,6 +66,10 @@ public class TaskExecutor {
      * Requirements: 3.1, 3.2, 3.3
      */
     public TaskExecutionResult executeTask(BuildTask task) {
+        return executeTask(task, (String) null);
+    }
+
+    public TaskExecutionResult executeTask(BuildTask task, String lockId) {
         if (task == null) {
             return new TaskExecutionResult(false, "Task cannot be null", null);
         }
@@ -80,17 +92,17 @@ public class TaskExecutor {
         try {
             // Execute based on task type
             CompletableFuture<TaskExecutionResult> future = switch (task.getTaskType()) {
-                case BLOCK_SET -> executeAsync(task, BlockSetRequest.class, blocksCore::setBlocks, TaskExecutor::blockSetMessage);
-                case BLOCK_FILL -> executeAsync(task, FillBoxRequest.class, blocksCore::fillBox, TaskExecutor::blockFillMessage);
-                case PREFAB_DOOR -> executeAsync(task, DoorRequest.class, prefabCore::placeDoor, TaskExecutor::doorMessage);
-                case PREFAB_STAIRS -> executeAsync(task, StairRequest.class, prefabCore::placeStairs, TaskExecutor::stairsMessage);
-                case PREFAB_WINDOW -> executeAsync(task, WindowPaneRequest.class, prefabCore::placeWindowPane, TaskExecutor::windowMessage);
-                case PREFAB_TORCH -> executeAsync(task, TorchRequest.class, prefabCore::placeTorch, TaskExecutor::torchMessage);
-                case PREFAB_SIGN -> executeAsync(task, SignRequest.class, prefabCore::placeSign, TaskExecutor::signMessage);
-                case PREFAB_LADDER -> executeAsync(task, LadderRequest.class, prefabCore::placeLadder, TaskExecutor::ladderMessage);
-                case RAIL_SURFACE_SEGMENT -> executeRailSegmentTask(task, "surface");
-                case RAIL_BRIDGE_SEGMENT -> executeRailSegmentTask(task, "bridge");
-                case RAIL_TUNNEL_SEGMENT -> executeRailSegmentTask(task, "tunnel");
+                case BLOCK_SET -> executeAsync(task, BlockSetRequest.class, req -> blocksCore.setBlocks(req, lockId), TaskExecutor::blockSetMessage);
+                case BLOCK_FILL -> executeAsync(task, FillBoxRequest.class, req -> blocksCore.fillBox(req, lockId), TaskExecutor::blockFillMessage);
+                case PREFAB_DOOR -> executeAsync(task, DoorRequest.class, req -> prefabCore.placeDoor(req, lockId), TaskExecutor::doorMessage);
+                case PREFAB_STAIRS -> executeAsync(task, StairRequest.class, req -> prefabCore.placeStairs(req, lockId), TaskExecutor::stairsMessage);
+                case PREFAB_WINDOW -> executeAsync(task, WindowPaneRequest.class, req -> prefabCore.placeWindowPane(req, lockId), TaskExecutor::windowMessage);
+                case PREFAB_TORCH -> executeAsync(task, TorchRequest.class, req -> prefabCore.placeTorch(req, lockId), TaskExecutor::torchMessage);
+                case PREFAB_SIGN -> executeAsync(task, SignRequest.class, req -> prefabCore.placeSign(req, lockId), TaskExecutor::signMessage);
+                case PREFAB_LADDER -> executeAsync(task, LadderRequest.class, req -> prefabCore.placeLadder(req, lockId), TaskExecutor::ladderMessage);
+                case RAIL_SURFACE_SEGMENT -> executeRailSegmentTask(task, "surface", lockId);
+                case RAIL_BRIDGE_SEGMENT -> executeRailSegmentTask(task, "bridge", lockId);
+                case RAIL_TUNNEL_SEGMENT -> executeRailSegmentTask(task, "tunnel", lockId);
                 case NBT_STRUCTURE -> CompletableFuture.completedFuture(
                     new TaskExecutionResult(false, "NBT_STRUCTURE tasks cannot be replayed — NBT data is not stored", null));
                 default -> CompletableFuture.completedFuture(
@@ -112,6 +124,13 @@ public class TaskExecutor {
             return result;
 
         } catch (Exception e) {
+            AreaLockException conflict = AreaLockException.find(e);
+            if (conflict != null) {
+                // Keep conflict metadata in the existing persisted error column, without the token.
+                String error = objectMapper.valueToTree(conflict.payload()).toString();
+                task.markFailed(error);
+                return new TaskExecutionResult(false, error, null, conflict.payload());
+            }
             String errorMessage = "Exception during task execution: " + e.getMessage();
             task.markFailed(errorMessage);
             LOGGER.error("Task {} failed with exception", task.getId(), e);
@@ -161,6 +180,20 @@ public class TaskExecutor {
             };
         } catch (Exception e) {
             return new TaskExecutionResult(false, "Exception during task execution: " + e.getMessage(), null);
+        }
+    }
+
+    public void validateLockToken(String lockId) throws Exception {
+        if (lockId == null) return;
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        server.execute(() -> {
+            try { locks.validateToken(lockId); future.complete(null); }
+            catch (Exception e) { future.completeExceptionally(e); }
+        });
+        try { future.get(EXECUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS); }
+        catch (java.util.concurrent.ExecutionException e) {
+            if (e.getCause() instanceof AreaLockException conflict) throw conflict;
+            throw e;
         }
     }
 
@@ -271,7 +304,7 @@ public class TaskExecutor {
     }
 
 
-    private CompletableFuture<TaskExecutionResult> executeRailSegmentTask(BuildTask task, String mode) {
+    private CompletableFuture<TaskExecutionResult> executeRailSegmentTask(BuildTask task, String mode, String lockId) {
         CompletableFuture<TaskExecutionResult> future = new CompletableFuture<>();
         server.execute(() -> {
             try {
@@ -288,9 +321,11 @@ public class TaskExecutor {
                     return;
                 }
 
-                future.complete(executeRailSegmentInto(new WorldBlockSink(world), segment, mode));
+                future.complete(locks.execute(worldKey.getValue().toString(),
+                    PlacementBounds.rail(task.getTaskData().get("path"), mode), lockId,
+                    () -> executeRailSegmentInto(new WorldBlockSink(world), segment, mode), TaskExecutionResult::success));
             } catch (Exception e) {
-                future.complete(new TaskExecutionResult(false, "Failed to execute rail segment: " + e.getMessage(), null));
+                future.completeExceptionally(e);
             }
         });
         return future;
@@ -811,7 +846,11 @@ public class TaskExecutor {
     /**
      * Result of task execution.
      */
-    public record TaskExecutionResult(boolean success, String errorMessage, String details) {}
+    public record TaskExecutionResult(boolean success, String errorMessage, String details, Map<String, Object> lockError) {
+        public TaskExecutionResult(boolean success, String errorMessage, String details) {
+            this(success, errorMessage, details, null);
+        }
+    }
 
     static record RailPoint(int x, int y, int z) {}
 

@@ -192,6 +192,42 @@ class BuildServiceTest {
         verify(taskRepository, atLeastOnce()).update(task);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullSource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"owner-token"})
+    void lockFailureStopsQueueAndPreservesCompletedTasks(String token) throws Exception {
+        UUID id = UUID.randomUUID();
+        Build build = new Build("reserved house", "desc");
+        build.setId(id);
+        BuildTask done = new BuildTask(id, 0, TaskType.BLOCK_FILL, validFillData(), "done");
+        done.markCompleted();
+        BuildTask blocked = new BuildTask(id, 1, TaskType.BLOCK_FILL, validFillData(), "blocked");
+        BuildTask pending = new BuildTask(id, 2, TaskType.BLOCK_FILL, validFillData(), "pending");
+        when(buildRepository.findById(id)).thenReturn(Optional.of(build));
+        when(taskRepository.findByBuildIdOrdered(id)).thenReturn(List.of(done, blocked, pending));
+        var conflict = java.util.Map.<String, Object>of("code", "invalid_area_lock", "error", "expired");
+        org.mockito.stubbing.Answer<TaskExecutor.TaskExecutionResult> failure = invocation -> {
+            blocked.markFailed("expired");
+            return new TaskExecutor.TaskExecutionResult(false, "expired", null, conflict);
+        };
+        if (token == null) when(taskExecutor.executeTask(blocked)).thenAnswer(failure);
+        else when(taskExecutor.executeTask(blocked, token)).thenAnswer(failure);
+
+        var result = buildService.executeBuild(id, token).get(5, TimeUnit.SECONDS);
+
+        assertThat(result.success).isFalse();
+        assertThat(result.tasksExecuted).isEqualTo(1);
+        assertThat(result.tasksFailed).isEqualTo(1);
+        assertThat(done.getStatus()).isEqualTo(TaskStatus.COMPLETED);
+        assertThat(blocked.getStatus()).isEqualTo(TaskStatus.FAILED);
+        assertThat(pending.getStatus()).isEqualTo(TaskStatus.QUEUED);
+        assertThat(build.getStatus()).isEqualTo(BuildStatus.FAILED);
+        verify(taskRepository).update(blocked);
+        if (token == null) verify(taskExecutor).executeTask(blocked);
+        else verify(taskExecutor).executeTask(blocked, token);
+        org.mockito.Mockito.verifyNoMoreInteractions(taskExecutor);
+    }
+
     @Test
     void translateBuildShiftsTaskCoordinates() throws Exception {
         UUID buildId = UUID.randomUUID();

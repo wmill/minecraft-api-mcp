@@ -1,5 +1,6 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import io.javalin.Javalin;
 import java.util.HashMap;
 import java.util.Map;
@@ -11,15 +12,19 @@ public class PrefabEndpoint extends APIEndpoint {
     private final PrefabEndpointCore core;
 
     public PrefabEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger) {
+        this(app, server, logger, new AreaLockService());
+    }
+
+    public PrefabEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger, AreaLockService locks) {
         super(app, server, logger);
-        this.core = new PrefabEndpointCore(server, logger);
+        this.core = new PrefabEndpointCore(server, logger, locks);
         init();
     }
 
     private void init() {
         app.post("/api/world/prefabs/door", ctx -> {
             DoorRequest req = ctx.bodyAsClass(DoorRequest.class);
-            respond(ctx, core.placeDoor(req), TIMEOUT_SECONDS, "door placement",
+            respond(ctx, core.placeDoor(req, ctx.header(AreaLockService.HEADER)), TIMEOUT_SECONDS, "door placement",
                 DoorResult::success, DoorResult::error,
                 result -> Map.of(
                     "success", true,
@@ -33,7 +38,7 @@ public class PrefabEndpoint extends APIEndpoint {
 
         app.post("/api/world/prefabs/stairs", ctx -> {
             StairRequest req = ctx.bodyAsClass(StairRequest.class);
-            respond(ctx, core.placeStairs(req), TIMEOUT_SECONDS, "stair placement",
+            respond(ctx, core.placeStairs(req, ctx.header(AreaLockService.HEADER)), TIMEOUT_SECONDS, "stair placement",
                 StairResult::success, StairResult::error,
                 result -> Map.of(
                     "success", true,
@@ -46,7 +51,7 @@ public class PrefabEndpoint extends APIEndpoint {
 
         app.post("/api/world/prefabs/window-pane", ctx -> {
             WindowPaneRequest req = ctx.bodyAsClass(WindowPaneRequest.class);
-            respond(ctx, core.placeWindowPane(req), TIMEOUT_SECONDS, "window pane placement",
+            respond(ctx, core.placeWindowPane(req, ctx.header(AreaLockService.HEADER)), TIMEOUT_SECONDS, "window pane placement",
                 WindowPaneResult::success, WindowPaneResult::error,
                 result -> Map.of(
                     "success", true,
@@ -59,7 +64,7 @@ public class PrefabEndpoint extends APIEndpoint {
 
         app.post("/api/world/prefabs/torch", ctx -> {
             TorchRequest req = ctx.bodyAsClass(TorchRequest.class);
-            respond(ctx, core.placeTorch(req), TIMEOUT_SECONDS, "torch placement",
+            respond(ctx, core.placeTorch(req, ctx.header(AreaLockService.HEADER)), TIMEOUT_SECONDS, "torch placement",
                 TorchResult::success, TorchResult::error,
                 result -> {
                     Map<String, Object> response = new HashMap<>(Map.of(
@@ -78,7 +83,7 @@ public class PrefabEndpoint extends APIEndpoint {
 
         app.post("/api/world/prefabs/sign", ctx -> {
             SignRequest req = ctx.bodyAsClass(SignRequest.class);
-            respond(ctx, core.placeSign(req), TIMEOUT_SECONDS, "sign placement",
+            respond(ctx, core.placeSign(req, ctx.header(AreaLockService.HEADER)), TIMEOUT_SECONDS, "sign placement",
                 SignResult::success, SignResult::error,
                 result -> {
                     Map<String, Object> response = new HashMap<>(Map.of(
@@ -100,7 +105,7 @@ public class PrefabEndpoint extends APIEndpoint {
 
         app.post("/api/world/prefabs/ladder", ctx -> {
             LadderRequest req = ctx.bodyAsClass(LadderRequest.class);
-            respond(ctx, core.placeLadder(req), TIMEOUT_SECONDS, "ladder placement",
+            respond(ctx, core.placeLadder(req, ctx.header(AreaLockService.HEADER)), TIMEOUT_SECONDS, "ladder placement",
                 LadderResult::success, LadderResult::error,
                 result -> Map.of(
                     "success", true,

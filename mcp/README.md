@@ -6,6 +6,15 @@ This is a Model Context Protocol (MCP) server that provides tools to interact wi
 
 The MCP server provides the following tools:
 
+### Concurrent building
+
+- `acquire_area_lock` - Reserve a fixed cuboid before planning a build.
+- `update_area_lock` - Renew a reservation or explicitly resize it.
+- `release_area_lock` - Release early; abandoned locks expire after 15 minutes by default.
+- `list_area_locks` - Inspect occupied areas and expiry times without disclosing tokens.
+
+Pass the returned `lock_id` on placement and execute/replay calls. Keep the original coordinates when the player moves. See the [reservation workflow and HTTP contract](../docs/area-locks.md).
+
 ### Player Management
 - `get_players` - Get list of all online players with positions and rotations
 

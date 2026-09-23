@@ -1,5 +1,6 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import ca.waltermiller.mcpapi.preview.BlockSink;
 import ca.waltermiller.mcpapi.preview.WorldBlockSink;
 import net.minecraft.block.Block;
@@ -42,10 +43,16 @@ public class PrefabEndpointCore {
     static final int MAX_SIGN_LINES = 4;
     static final int MAX_SIGN_ROTATION = 15;
 
+    private final AreaLockService locks;
     private final MinecraftServer server;
     private final org.slf4j.Logger logger;
 
     public PrefabEndpointCore(MinecraftServer server, org.slf4j.Logger logger) {
+        this(server, logger, new AreaLockService());
+    }
+
+    public PrefabEndpointCore(MinecraftServer server, org.slf4j.Logger logger, AreaLockService locks) {
+        this.locks = locks;
         this.server = server;
         this.logger = logger;
     }
@@ -71,6 +78,10 @@ public class PrefabEndpointCore {
      * Place door prefab
      */
     public CompletableFuture<DoorResult> placeDoor(DoorRequest request) {
+        return placeDoor(request, null);
+    }
+
+    public CompletableFuture<DoorResult> placeDoor(DoorRequest request, String lockId) {
         CompletableFuture<DoorResult> future = new CompletableFuture<>();
 
         RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
@@ -81,7 +92,8 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        server.execute(() -> future.complete(placeDoorInto(new WorldBlockSink(world), request, worldKey)));
+        GuardedPlacement.submit(server::execute, locks, worldKey.getValue().toString(), lockId,
+            () -> PlacementBounds.of(request), () -> placeDoorInto(new WorldBlockSink(world), request, worldKey), DoorResult::success, future);
         return future;
     }
 
@@ -164,6 +176,10 @@ public class PrefabEndpointCore {
      * Place stairs prefab
      */
     public CompletableFuture<StairResult> placeStairs(StairRequest request) {
+        return placeStairs(request, null);
+    }
+
+    public CompletableFuture<StairResult> placeStairs(StairRequest request, String lockId) {
         CompletableFuture<StairResult> future = new CompletableFuture<>();
 
         RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
@@ -174,7 +190,8 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        server.execute(() -> future.complete(placeStairsInto(new WorldBlockSink(world), request, worldKey)));
+        GuardedPlacement.submit(server::execute, locks, worldKey.getValue().toString(), lockId,
+            () -> PlacementBounds.of(request), () -> placeStairsInto(new WorldBlockSink(world), request, worldKey), StairResult::success, future);
         return future;
     }
 
@@ -215,6 +232,10 @@ public class PrefabEndpointCore {
      * Place window pane wall prefab
      */
     public CompletableFuture<WindowPaneResult> placeWindowPane(WindowPaneRequest request) {
+        return placeWindowPane(request, null);
+    }
+
+    public CompletableFuture<WindowPaneResult> placeWindowPane(WindowPaneRequest request, String lockId) {
         CompletableFuture<WindowPaneResult> future = new CompletableFuture<>();
 
         RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
@@ -225,7 +246,8 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        server.execute(() -> future.complete(placeWindowPaneInto(new WorldBlockSink(world), request, worldKey)));
+        GuardedPlacement.submit(server::execute, locks, worldKey.getValue().toString(), lockId,
+            () -> PlacementBounds.of(request), () -> placeWindowPaneInto(new WorldBlockSink(world), request, worldKey), WindowPaneResult::success, future);
         return future;
     }
 
@@ -267,6 +289,10 @@ public class PrefabEndpointCore {
      * Place torch prefab
      */
     public CompletableFuture<TorchResult> placeTorch(TorchRequest request) {
+        return placeTorch(request, null);
+    }
+
+    public CompletableFuture<TorchResult> placeTorch(TorchRequest request, String lockId) {
         CompletableFuture<TorchResult> future = new CompletableFuture<>();
 
         RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
@@ -277,7 +303,8 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        server.execute(() -> future.complete(placeTorchInto(new WorldBlockSink(world), request, worldKey)));
+        GuardedPlacement.submit(server::execute, locks, worldKey.getValue().toString(), lockId,
+            () -> PlacementBounds.of(request), () -> placeTorchInto(new WorldBlockSink(world), request, worldKey), TorchResult::success, future);
         return future;
     }
 
@@ -351,6 +378,10 @@ public class PrefabEndpointCore {
      * Place sign prefab
      */
     public CompletableFuture<SignResult> placeSign(SignRequest request) {
+        return placeSign(request, null);
+    }
+
+    public CompletableFuture<SignResult> placeSign(SignRequest request, String lockId) {
         CompletableFuture<SignResult> future = new CompletableFuture<>();
 
         RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
@@ -361,7 +392,8 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        server.execute(() -> future.complete(placeSignInto(new WorldBlockSink(world), request, worldKey)));
+        GuardedPlacement.submit(server::execute, locks, worldKey.getValue().toString(), lockId,
+            () -> PlacementBounds.of(request), () -> placeSignInto(new WorldBlockSink(world), request, worldKey), SignResult::success, future);
         return future;
     }
 
@@ -445,10 +477,9 @@ public class PrefabEndpointCore {
         }
     }
 
-    private void applySignText(BlockSink sink, BlockPos pos, SignRequest request) {
-        // Block entity only exists when the block was written through to the real world.
-        // Recording sinks skip this branch, which means sign text is omitted from previews —
-        // acceptable since the isometric renderer can't show text anyway.
+    void applySignText(BlockSink sink, BlockPos pos, SignRequest request) {
+        // A preview can target an existing sign; never mutate that block entity.
+        if (!(sink instanceof WorldBlockSink)) return;
         BlockEntity blockEntity = sink.world().getBlockEntity(pos);
         if (!(blockEntity instanceof SignBlockEntity signBlockEntity)) {
             return;
@@ -466,6 +497,10 @@ public class PrefabEndpointCore {
      * Place ladder prefab
      */
     public CompletableFuture<LadderResult> placeLadder(LadderRequest request) {
+        return placeLadder(request, null);
+    }
+
+    public CompletableFuture<LadderResult> placeLadder(LadderRequest request, String lockId) {
         CompletableFuture<LadderResult> future = new CompletableFuture<>();
 
         RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(request.world);
@@ -476,7 +511,8 @@ public class PrefabEndpointCore {
             return future;
         }
 
-        server.execute(() -> future.complete(placeLadderInto(new WorldBlockSink(world), request, worldKey)));
+        GuardedPlacement.submit(server::execute, locks, worldKey.getValue().toString(), lockId,
+            () -> PlacementBounds.of(request), () -> placeLadderInto(new WorldBlockSink(world), request, worldKey), LadderResult::success, future);
         return future;
     }
 
