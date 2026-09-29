@@ -163,6 +163,11 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         () -> template.place(world, pos, pos, placementData, Random.create(), 2), Boolean.TRUE::equals);
 
                     if (success) {
+                        try {
+                            StructurePlacementEffect.emit(world, bounds);
+                        } catch (Exception e) {
+                            LOGGER.warn("Failed to emit NBT placement effect", e);
+                        }
                         // Get structure size for response
                         Vec3i size = template.getSize();
 
