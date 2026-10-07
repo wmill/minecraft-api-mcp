@@ -28,6 +28,7 @@ Pass the returned `lock_id` on placement and execute/replay calls. Keep the orig
 - `get_blocks_chunk` - Get a chunk of blocks from the world
 - `fill_box` - Fill a cuboid/box with a specific block type between two coordinates
 - `get_heightmap` - Get raw topographical heightmap data for terrain analysis and building placement
+- `survey_site` - Compact ground, slope, water/vegetation, grading, and occupancy assessment of a chosen footprint; requires loaded chunks. See [site survey](../docs/site-survey.md).
 - `summarize_heightmap` - Get a concise terrain summary derived from a heightmap
 
 ### Messaging
@@ -50,7 +51,9 @@ Each unit equals one block (1 cubic meter in real-world terms).
 The `fill_box` tool allows you to quickly create large structures by filling rectangular areas with any block type. Simply specify two corner coordinates and the desired block type. The tool automatically handles coordinate ordering and includes safety limits to prevent excessive server load.
 
 ### Terrain Analysis
-The `get_heightmap` tool returns the raw heightmap payload including:
+The `get_heightmap` tool uses inclusive bounds and returns `heights[x_offset][z_offset]`
+relative to minimum X/Z. Heights are first-air Y above the surface selected by the
+heightmap type, not necessarily safe walking ground. It returns the raw payload including:
 - **World and bounds metadata** - World name, queried bounds, and grid size
 - **Height range** - Server-provided minimum and maximum elevations
 - **Full height grid** - The complete 2D `heights` array for downstream reasoning

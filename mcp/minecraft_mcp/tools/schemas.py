@@ -7,6 +7,7 @@ Each schema defines the tool's name, description, and input parameters.
 
 from mcp.types import Tool, ToolAnnotations
 from ..utils.starlark_models import Placement, StarlarkResult
+from ..utils.survey_models import SurveyResult
 from .area_locks import AREA_LOCK_TOOLS, LOCK_ID_SCHEMA, LOCK_WRITE_TOOLS
 
 
@@ -222,9 +223,33 @@ TOOL_FILL_BOX = Tool(
     }
 )
 
+TOOL_SURVEY_SITE = Tool(
+    name="survey_site",
+    description=(
+        "Survey a chosen footprint in one read-only call: ground below vegetation, elevation/slope, "
+        "water/lava/vegetation coverage, balanced-grading walking-plane Y and estimated cut/fill, "
+        "plus reservation and recorded-build overlaps. Inclusive corners; maximum 10000 columns. "
+        "Requires already-loaded chunks and a dimension without a ceiling. Scans at most 64 blocks "
+        "down from each surface. Logs/leaves may be construction and roofs may count as ground. "
+        "Does not reserve land or guarantee it is unused. Returns compact statistics, not a grid."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            **{key: {"type": "integer", "minimum": -2147483648, "maximum": 2147483647}
+               for key in ("x1", "z1", "x2", "z2")},
+            "world": {"type": "string", "default": "minecraft:overworld"},
+        },
+        "required": ["x1", "z1", "x2", "z2"],
+        "additionalProperties": False,
+    },
+    outputSchema=SurveyResult.model_json_schema(),
+)
+
 TOOL_GET_HEIGHTMAP = Tool(
     name="get_heightmap",
-    description="Get raw topographical heightmap data for a rectangular area, including bounds, size, height range, and the full 2D heights grid.",
+    description="Get raw heightmap data with inclusive bounds and heights[x_offset][z_offset], relative to the minimum X/Z. Each value is first-air Y above the surface selected by heightmap_type, not necessarily safe walking ground (e.g. treetops or water). Use survey_site for compact ground assessment.",
     inputSchema={
         "type": "object",
         "properties": {
@@ -1974,6 +1999,7 @@ TOOL_SCHEMAS = [
     TOOL_GET_BLOCKS_CHUNK,
     TOOL_FILL_BOX,
     TOOL_GET_HEIGHTMAP,
+    TOOL_SURVEY_SITE,
     TOOL_SUMMARIZE_HEIGHTMAP,
     TOOL_PREVIEW_HEIGHTMAP,
     # Message tools

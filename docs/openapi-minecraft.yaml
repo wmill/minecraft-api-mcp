@@ -343,6 +343,44 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
+  /api/world/blocks/survey:
+    post:
+      tags: [blocks]
+      summary: Survey ground and known occupancy in a chosen footprint
+      operationId: surveySite
+      description: >-
+        Read-only; inclusive corners (normalized if reversed), maximum 10000 columns.
+        Requires already-loaded full chunks and a dimension without a ceiling.
+        Scans at most 64 blocks downward beneath vegetation. The suggested walking
+        plane is the lower median of dry ground, suppressed for unresolved ground,
+        lava, or no dry ground. Cut/fill excludes clearing, drainage and cavities.
+        Overlaps cover full world height; observations do not reserve land or prove it is unused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteSurveyRequest"
+      responses:
+        "200":
+          description: Compact ground assessment and capped occupancy summaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteSurveyResponse"
+        "400":
+          description: Invalid footprint/world, ceiling dimension, or unloaded chunks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteSurveyError"
+        "504":
+          description: Timed out waiting for server-thread sampling
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteSurveyError"
+
   /api/world/blocks/heightmap:
     post:
       tags: [blocks]
@@ -1069,6 +1107,136 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    SiteSurveyRequest:
+      type: object
+      required: [x1, z1, x2, z2]
+      properties:
+        x1: {type: integer, format: int32}
+        z1: {type: integer, format: int32}
+        x2: {type: integer, format: int32}
+        z2: {type: integer, format: int32}
+        world: {type: string, default: "minecraft:overworld"}
+
+    SiteSurveyError:
+      type: object
+      required: [success, code, error]
+      properties:
+        success: {const: false}
+        code: {type: string, enum: [invalid_request, ceiling_dimension, unloaded_chunks, survey_timeout]}
+        error: {type: string}
+        missing_chunks:
+          type: array
+          items:
+            type: object
+            required: [x, z]
+            properties:
+              x: {type: integer}
+              z: {type: integer}
+
+    SurveyCoverage:
+      type: object
+      required: [columns, fraction]
+      properties:
+        columns: {type: integer, minimum: 0}
+        fraction: {type: number, minimum: 0, maximum: 1}
+
+    SurveyOverlaps:
+      type: object
+      required: [status, total, truncated, entries]
+      properties:
+        status: {type: string, enum: [available, unavailable]}
+        total: {type: [integer, "null"], description: "Null means lookup unavailable, not zero overlaps"}
+        truncated: {type: boolean}
+        entries:
+          type: array
+          maxItems: 5
+          items: {type: object}
+
+    SiteSurveyResponse:
+      type: object
+      required: [success, world, surveyed_at, bounds, size, ground, slope, water, lava, vegetation, grading, reservations, builds, limitations]
+      properties:
+        success: {const: true}
+        world: {type: string}
+        surveyed_at: {type: string, format: date-time}
+        bounds:
+          type: object
+          required: [min_x, min_z, max_x, max_z]
+          properties:
+            min_x: {type: integer}
+            min_z: {type: integer}
+            max_x: {type: integer}
+            max_z: {type: integer}
+        size:
+          type: object
+          required: [x, z, columns]
+          properties:
+            x: {type: integer}
+            z: {type: integer}
+            columns: {type: integer}
+        ground:
+          type: object
+          required: [resolved_columns, unresolved_columns, unresolved_reasons, min_y, max_y, median_y, range]
+          properties:
+            resolved_columns: {type: integer}
+            unresolved_columns: {type: integer}
+            unresolved_reasons:
+              type: object
+              additionalProperties: {type: integer}
+              description: Counts of unsupported_surface, void, and scan_limit
+            min_y: {type: [integer, "null"]}
+            max_y: {type: [integer, "null"]}
+            median_y: {type: [integer, "null"], description: Lower median of resolved walking-plane Y values}
+            range: {type: [integer, "null"]}
+        slope:
+          type: object
+          required: [adjacent_pairs, mean_step, max_step]
+          description: Absolute height differences per horizontal block across resolved orthogonal neighbors
+          properties:
+            adjacent_pairs: {type: integer}
+            mean_step: {type: number}
+            max_step: {type: integer}
+        water: {$ref: "#/components/schemas/SurveyCoverage"}
+        lava: {$ref: "#/components/schemas/SurveyCoverage"}
+        vegetation: {$ref: "#/components/schemas/SurveyCoverage"}
+        grading:
+          type: object
+          required: [suggested_walking_y, cut_blocks, fill_blocks, unavailable_reason]
+          properties:
+            suggested_walking_y: {type: [integer, "null"]}
+            cut_blocks: {type: [integer, "null"]}
+            fill_blocks: {type: [integer, "null"]}
+            unavailable_reason: {type: [string, "null"], enum: [unresolved_ground, lava_present, no_dry_ground, null]}
+        reservations:
+          allOf:
+            - $ref: "#/components/schemas/SurveyOverlaps"
+            - type: object
+              properties:
+                entries:
+                  type: array
+                  items:
+                    type: object
+                    required: [label, bounds, expires_at]
+                    properties:
+                      label: {type: string, maxLength: 80}
+                      bounds: {$ref: "#/components/schemas/AreaBounds"}
+                      expires_at: {type: string, format: date-time}
+        builds:
+          allOf:
+            - $ref: "#/components/schemas/SurveyOverlaps"
+            - type: object
+              properties:
+                entries:
+                  type: array
+                  items:
+                    type: object
+                    required: [build_id, name, status]
+                    properties:
+                      build_id: {type: string, format: uuid}
+                      name: {type: string, maxLength: 80}
+                      status: {type: string}
+        limitations: {type: string}
+
     AreaBounds:
       type: object
       description: Inclusive block bounds; each minimum must not exceed its maximum.
@@ -1547,7 +1715,10 @@ components:
               type: integer
         heights:
           type: array
-          description: 2-D array of height values
+          description: >-
+            heights[x_offset][z_offset] relative to minimum X/Z, with inclusive bounds.
+            Each value is first-air Y above the surface selected by heightmap_type,
+            not necessarily safe walking ground (e.g. treetops or water).
           items:
             type: array
             items:

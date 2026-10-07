@@ -290,6 +290,15 @@ class MinecraftAPIClient:
             response.raise_for_status()
             return response.json()
     
+    async def survey_site(self, x1: int, z1: int, x2: int, z2: int, world: str | None = None) -> dict:
+        payload = {"x1": x1, "z1": z1, "x2": x2, "z2": z2}
+        if world is not None:
+            payload["world"] = world
+        async with self._http_client(timeout=40.0) as client:
+            response = await client.post(f"{self.base_url}/api/world/blocks/survey", json=payload)
+            response.raise_for_status()
+            return response.json()
+
     async def get_heightmap(
         self,
         x1: int,

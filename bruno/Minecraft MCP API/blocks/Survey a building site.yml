@@ -1,0 +1,27 @@
+info:
+  name: Survey a building site
+  type: http
+  seq: 8
+  tags:
+    - blocks
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/blocks/survey"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "x1": 100,
+        "z1": 200,
+        "x2": 139,
+        "z2": 239
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

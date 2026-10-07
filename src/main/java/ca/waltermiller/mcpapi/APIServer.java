@@ -48,6 +48,7 @@ public class APIServer {
             }
         }
         AreaLockService locks = new AreaLockService();
+        var surveyOccupancy = new ca.waltermiller.mcpapi.survey.SurveyOccupancy();
         app = Javalin.create().start(port);
         logger.info("Web server started on port {}", port);
 
@@ -58,6 +59,7 @@ public class APIServer {
         // Initialize existing endpoints
         new EntitiesEndpoint(app, server, logger);
         new BlocksEndpoint(app, server, logger, locks);
+        new ca.waltermiller.mcpapi.endpoints.SiteSurveyEndpoint(app, server, locks, surveyOccupancy);
         new PlayersEndpoint(app, server, logger);
         new MessageEndpoint(app, server, logger);
         new PlayerTeleportEndpoint(app, server, logger);
@@ -67,7 +69,7 @@ public class APIServer {
 
         // Initialize build task management system
         try {
-            initializeBuildTaskSystem(app, server, logger, nbtEndpoint, locks);
+            initializeBuildTaskSystem(app, server, logger, nbtEndpoint, locks, surveyOccupancy);
         } catch (SQLException | RuntimeException e) {
             logger.error("Failed to initialize build task system", e);
             // Continue without build task system if database is not available
@@ -76,7 +78,8 @@ public class APIServer {
     }
     
     private static void initializeBuildTaskSystem(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
-                                                   NBTStructureEndpoint nbtEndpoint, AreaLockService locks) throws SQLException {
+                                                   NBTStructureEndpoint nbtEndpoint, AreaLockService locks,
+                                                   ca.waltermiller.mcpapi.survey.SurveyOccupancy surveyOccupancy) throws SQLException {
         logger.info("Initializing build task management system...");
         
         // Initialize database
@@ -99,6 +102,7 @@ public class APIServer {
         
         // Wire build service into NBT endpoint for spatial record-keeping
         nbtEndpoint.setBuildService(buildService);
+        surveyOccupancy.setBuildRepository(buildRepository);
 
         // Create and register build task endpoint
         new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, railPlanningService, taskExecutor);
