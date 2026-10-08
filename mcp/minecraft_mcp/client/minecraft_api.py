@@ -177,7 +177,15 @@ class MinecraftAPIClient:
             "start_x": start_x,
             "start_y": start_y,
             "start_z": start_z,
-            "blocks": blocks
+            # The public MCP schema uses camelCase; the REST DTO uses snake_case.
+            # Copy cells so concurrent callers never mutate each other's inputs.
+            "blocks": [[[
+                None if cell is None else {
+                    "block_name": cell.get("blockName", cell.get("block_name")),
+                    **({"block_states": cell.get("blockStates", cell.get("block_states"))}
+                       if "blockStates" in cell or "block_states" in cell else {}),
+                }
+                for cell in row] for row in plane] for plane in blocks]
         }
         if world:
             payload["world"] = world

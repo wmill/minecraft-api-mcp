@@ -102,6 +102,34 @@ async def test_management_tools_retain_token_arguments_and_wire_shapes(monkeypat
     assert all("X-Area-Lock-Id" not in r.headers for r in requests)
 
 
+async def test_set_blocks_translates_schema_and_preserves_wrong_lock_error(monkeypatch):
+    requests = []
+    conflict = {**CONFLICT, "code": "outside_area_lock"}
+
+    def respond(request):
+        requests.append(request)
+        payload = json.loads(request.content)
+        assert payload["blocks"] == [[[None, {
+            "block_name": "minecraft:oak_stairs",
+            "block_states": {"facing": "east", "half": "top"},
+        }]]]
+        return httpx.Response(409, json=conflict)
+
+    mock_http(monkeypatch, respond)
+    server = MinecraftMCPServer("http://minecraft")
+    arguments = dict(start_x=3094, start_y=71, start_z=950, lock_id="other-area",
+                     blocks=[[[None, {"blockName": "minecraft:oak_stairs",
+                                      "blockStates": {"facing": "east", "half": "top"}}]]])
+    with anyio.fail_after(10):
+        async with create_connected_server_and_client_session(server.server) as client:
+            result = await client.call_tool("set_blocks", arguments)
+    assert len(requests) == 1
+    assert requests[0].headers["X-Area-Lock-Id"] == "other-area"
+    assert result.isError
+    assert result.structuredContent == conflict
+    assert arguments["blocks"][0][0][1]["blockStates"]["facing"] == "east"
+
+
 async def test_multipart_and_queued_execution_forward_token(monkeypatch):
     requests = []
 

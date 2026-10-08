@@ -85,6 +85,36 @@ class BlocksEndpointTest {
     }
 
     @Test
+    void setBlocksReturnsOutsideLockBeforeExecutingWrite() throws Exception {
+        var locks = new ca.waltermiller.mcpapi.arealock.AreaLockService();
+        var bounds = new ca.waltermiller.mcpapi.arealock.AreaBounds(3109, 65, 950, 3110, 80, 951);
+        String token = (String) locks.acquire("minecraft:overworld", bounds, "test").get("lock_id");
+        var wrote = new java.util.concurrent.atomic.AtomicBoolean();
+        when(mockCore.setBlocks(any(), org.mockito.ArgumentMatchers.eq(token))).thenAnswer(invocation -> {
+            BlockSetRequest body = invocation.getArgument(0);
+            assertThat(body.blocks[0][0][0].block_name).isEqualTo("minecraft:purpur_block");
+            var future = new CompletableFuture<BlockSetResult>();
+            GuardedPlacement.submit(Runnable::run, locks, "minecraft:overworld", token,
+                () -> PlacementBounds.of(body), () -> {
+                    wrote.set(true);
+                    return new BlockSetResult(true, null, 1, 0, "minecraft:overworld");
+                }, BlockSetResult::success, future);
+            return future;
+        });
+        var request = HttpRequest.newBuilder(URI.create(baseUrl + "/api/world/blocks/set"))
+            .header("Content-Type", "application/json").header("X-Area-Lock-Id", token)
+            .POST(HttpRequest.BodyPublishers.ofString("""
+                {"start_x":3094,"start_y":71,"start_z":950,
+                 "blocks":[[[{"block_name":"minecraft:purpur_block","block_states":{}}]]]}
+                """))
+            .build();
+        var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(409);
+        assertThat(readJson(response).get("code").asText()).isEqualTo("outside_area_lock");
+        assertThat(wrote).isFalse();
+    }
+
+    @Test
     void previewHeightmapRejectsInvalidViewDirection() throws Exception {
         HttpResponse<String> response = sendJson("/api/world/blocks/heightmap/preview", Map.of(
             "x1", 0,
