@@ -25,7 +25,7 @@ TAG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 MAX_TAGS = 16
 PALETTE_TOP = 8
 
-_DEF = re.compile(r"^def\s+([A-Za-z_]\w*)\s*\(", re.MULTILINE)
+_DEF = re.compile(r"^def\s+([A-Za-z_]\w*)\s*\(([^)]*)\)", re.MULTILINE)
 _LOAD = re.compile(r'^load\(\s*"([^"]+)"((?:\s*,\s*(?:\w+\s*=\s*)?"[^"]*")*)\s*,?\s*\)', re.MULTILINE)
 _LOAD_SYMBOL = re.compile(r'"([^"]*)"')
 
@@ -81,7 +81,7 @@ def read_source(library_dir: Path, name: str, version: int | None = None) -> tup
 
 
 def analyze_source(source: str, entry: str) -> dict[str, Any]:
-    """Entry params, public top-level defs, and load() symbols, from syntax only.
+    """Entry params, exported components with their signatures, and load() symbols, from syntax only.
 
     Starlark is close enough to Python syntax for ``ast`` to parse nearly every
     script; when it can't, fall back to line regexes and skip params.
@@ -89,14 +89,14 @@ def analyze_source(source: str, entry: str) -> dict[str, Any]:
     try:
         module = ast.parse(source)
     except SyntaxError:
-        defs = _DEF.findall(source)
+        defs = {name: " ".join(args.split()) for name, args in _DEF.findall(source)}
         loads = [_format_load(path, _LOAD_SYMBOL.findall(symbols)) for path, symbols in _LOAD.findall(source)]
-        return {"params": [], "exports": _public(defs, entry), "loads": loads}
+        return {"params": [], **_exports(defs, entry), "loads": loads}
 
-    defs, loads, params = [], [], []
+    defs, loads, params = {}, [], []
     for node in module.body:
         if isinstance(node, ast.FunctionDef):
-            defs.append(node.name)
+            defs[node.name] = ast.unparse(node.args)
             if node.name == entry:
                 params = _params(node.args)
         elif (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
@@ -106,7 +106,7 @@ def analyze_source(source: str, entry: str) -> dict[str, Any]:
             symbols = [arg.value for arg in call.args[1:] if isinstance(arg, ast.Constant)]
             symbols += [kw.value.value for kw in call.keywords if isinstance(kw.value, ast.Constant)]
             loads.append(_format_load(call.args[0].value, symbols))
-    return {"params": params, "exports": _public(defs, entry), "loads": loads}
+    return {"params": params, **_exports(defs, entry), "loads": loads}
 
 
 def _params(args: ast.arguments) -> list[dict[str, Any]]:
@@ -125,9 +125,11 @@ def _params(args: ast.arguments) -> list[dict[str, Any]]:
     return params
 
 
-def _public(defs: list[str], entry: str) -> list[str]:
+def _exports(defs: dict[str, str], entry: str) -> dict[str, Any]:
     # Advertise UpperCamel component functions only, like lib/; lowercase helpers stay loadable but unlisted.
-    return [name for name in dict.fromkeys(defs) if name[0].isupper() and name != entry]
+    # Signatures matter because a component's size depends on its arguments, not the demo build().
+    names = [name for name in defs if name[0].isupper() and name != entry]
+    return {"exports": names, "signatures": {name: f"{name}({defs[name]})" for name in names}}
 
 
 def _format_load(path: str, symbols: list[str]) -> str:
@@ -230,6 +232,19 @@ def save_version(library_dir: Path, name: str, source: str, build: dict[str, Any
     return meta, record, True
 
 
+def used_by(entries: list[dict[str, Any]], name: str) -> list[dict[str, Any]]:
+    """Library versions whose source loads any version of `name` (a reverse dependency index)."""
+    prefix = f"library/{name}/v"
+    found = []
+    for meta in entries:
+        for record in meta["versions"]:
+            for load in record["loads"]:
+                if load.startswith(prefix):
+                    found.append({"name": meta["name"], "version": record["version"],
+                                  "loads_version": int(load[len(prefix):].split(".", 1)[0])})
+    return found
+
+
 def summary(meta: dict[str, Any]) -> dict[str, Any]:
     latest = meta["versions"][-1]
     return {
@@ -244,6 +259,7 @@ def summary(meta: dict[str, Any]) -> dict[str, Any]:
         "block_count": latest["block_count"],
         "params": latest["params"],
         "exports": latest["exports"],
+        "signatures": latest.get("signatures", {}),
         "loads": latest["loads"],
         "parent": latest["parent"],
         "load_path": load_path(meta["name"], meta["latest"]),

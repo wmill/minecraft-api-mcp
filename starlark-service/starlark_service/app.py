@@ -152,6 +152,7 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             "load_path": library.load_path(meta["name"], record["version"]),
             "artifact_id": record["artifact_id"],
             "exports": record["exports"],
+            "signatures": record.get("signatures", {}),
             "params": record["params"],
             "size": record["size"],
         }
@@ -168,7 +169,8 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
     async def get_library_entry(name: str) -> dict[str, Any]:
         with library_errors():
             meta = library.load_meta(cfg.library_dir, name)
-        return {**meta, "load_path": library.load_path(meta["name"], meta["latest"])}
+        return {**meta, "load_path": library.load_path(meta["name"], meta["latest"]),
+                "used_by": library.used_by(library.list_meta(cfg.library_dir), meta["name"])}
 
     @app.get("/library/{name}/source")
     async def get_library_source(name: str, version: int | None = None) -> PlainTextResponse:

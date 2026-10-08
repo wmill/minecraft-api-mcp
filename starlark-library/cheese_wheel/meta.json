@@ -44,6 +44,9 @@
       "props": {},
       "root_size": null,
       "sha256": "ed54547eb617a4a06282e0d0a864e84499887cd0c0cf625dbf9ea711dcb97916",
+      "signatures": {
+        "CheeseWheel": "CheeseWheel(radius=4, height=6)"
+      },
       "size": [
         9,
         7,
@@ -81,6 +84,9 @@
       "props": {},
       "root_size": null,
       "sha256": "554ae74693b867eaffd2222b96897be5e736b6126b90b2cc3fd416601cb17f68",
+      "signatures": {
+        "CheeseWheel": "CheeseWheel(radius=4, height=6)"
+      },
       "size": [
         9,
         7,

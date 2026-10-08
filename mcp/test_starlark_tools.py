@@ -265,16 +265,18 @@ def test_starlark_service_url_has_local_default():
 
 SAVED = {"ok": True, "created": True, "name": "pillar", "version": 2, "load_path": "../library/pillar/v2.star",
          "artifact_id": "slk_0123456789abcdef", "exports": ["Pillar"], "params": [{"name": "height", "default": 3}],
-         "size": [1, 3, 1]}
+         "signatures": {"Pillar": "Pillar(height=2)"}, "size": [1, 3, 1]}
 
 META = {
     "name": "pillar", "title": "Stone pillar", "description": "A column", "tags": ["structural"], "latest": 2,
     "versions": [
         {"version": v, "author": "agent-a", "notes": None, "parent": None, "entry": "build", "props": {},
          "params": [{"name": "height", "default": 3}], "exports": ["Pillar"], "size": [1, 3, 1],
+         "signatures": {"Pillar": "Pillar(height=2)"}, "loads": ["library/base/v3.star:Plinth", "lib/roofs.star:HipRoof"],
          "block_count": 3, "ground_level": 0}
         for v in (1, 2)
     ],
+    "used_by": [{"name": "pillar_pair", "version": 1, "loads_version": 1}],
 }
 
 
@@ -288,7 +290,17 @@ async def test_save_reports_load_line_and_omits_unset_fields(clients):
     text = result.content[0].text
     assert "Saved pillar@2." in text
     assert 'load("../library/pillar/v2.star", "Pillar")' in text
+    assert "Exports Pillar(height=2)" in text
+    assert "demo build() 1x3x1" in text
     assert "height=3" in text
+
+
+async def test_save_without_exports_nudges_toward_a_component(clients):
+    api, service = clients
+    service.save_library.return_value = {**deepcopy(SAVED), "exports": [], "signatures": {}}
+    text = (await starlark.handle_save_starlark_script(api, "pillar", source="src")).content[0].text
+    assert "No UpperCamel component exported" in text
+    assert "Size 1x3x1," in text
 
 
 async def test_save_build_failure_returns_diagnostics(clients):
@@ -307,14 +319,15 @@ async def test_search_formats_results_and_size_filter(clients):
     api, service = clients
     service.search_library.return_value = {"results": [{
         "name": "pillar", "latest": 2, "title": "Stone pillar", "description": "A column", "tags": ["structural"],
-        "size": [1, 3, 1], "exports": ["Pillar"], "load_path": "../library/pillar/v2.star",
+        "size": [1, 3, 1], "exports": ["Pillar"], "signatures": {"Pillar": "Pillar(height=2)"},
+        "load_path": "../library/pillar/v2.star",
     }]}
     result = await starlark.handle_search_starlark_library(api, query="pillar", max_size=[5, None, 5])
     service.search_library.assert_awaited_once_with(q="pillar", tag=None, author=None, max_x=5, max_y=None,
                                                     max_z=5, limit=10)
     text = result.content[0].text
-    assert "pillar@2 — Stone pillar (1x3x1; tags structural)" in text
-    assert "exports Pillar via ../library/pillar/v2.star" in text
+    assert "pillar@2 — Stone pillar (demo build() 1x3x1; tags structural)" in text
+    assert "exports Pillar(height=2) via ../library/pillar/v2.star" in text
 
 
 async def test_get_script_shows_pinned_version_and_source(clients):
@@ -325,6 +338,8 @@ async def test_get_script_shows_pinned_version_and_source(clients):
     assert "pillar@1 — Stone pillar (latest is v2)" in text
     assert 'load("../library/pillar/v1.star", "Pillar")' in text
     assert 'parent="pillar@1"' in text
+    assert "Uses library: base@3 (Plinth)" in text
+    assert "Used by: pillar_pair@1 (loads v1)" in text
     assert "def build():" in text
 
 

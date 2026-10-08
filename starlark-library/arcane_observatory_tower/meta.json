@@ -56,6 +56,9 @@
       "props": {},
       "root_size": null,
       "sha256": "1df93760f410870ed7fa2f5f5f844136ca44e4b188da311deae9656e3c6d907e",
+      "signatures": {
+        "GlassDome": "GlassDome(size=7, glass='minecraft:light_blue_stained_glass')"
+      },
       "size": [
         13,
         19,

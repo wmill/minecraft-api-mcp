@@ -208,6 +208,27 @@ def _load_line(load_path: str, exports: list[str]) -> str:
     return f'load("{load_path}", ' + ", ".join(f'"{name}"' for name in exports) + ")"
 
 
+def _size_text(entry: dict[str, Any]) -> str:
+    # With exported components the stored size is just the demo build(); component size follows its arguments.
+    size = "x".join(str(n) for n in entry["size"])
+    return f"demo build() {size}" if entry.get("exports") else size
+
+
+def _signatures_text(entry: dict[str, Any]) -> str:
+    signatures = entry.get("signatures") or {}
+    return ", ".join(signatures.get(name, name) for name in entry["exports"])
+
+
+def _library_uses(loads: list[str]) -> list[str]:
+    uses = []
+    for load in loads:
+        path, _, symbols = load.partition(":")
+        if path.startswith("library/"):
+            _, name, version = path.removesuffix(".star").split("/", 2)
+            uses.append(f"{name}@{version.lstrip('v')} ({symbols})")
+    return uses
+
+
 async def handle_save_starlark_script(
     api_client: MinecraftAPIClient, name: str, artifact_id: str | None = None, source: str | None = None,
     title: str | None = None, description: str | None = None, tags: list[str] | None = None,
@@ -227,13 +248,19 @@ async def handle_save_starlark_script(
         return _response(compact, "Not saved: the script must build first.\n" + diagnostic_text(compact))
     ref = f"{result['name']}@{result['version']}"
     lines = [f"Saved {ref}." if result["created"] else f"{ref} already holds this exact source; nothing new saved.",
-             f"Size {'x'.join(str(n) for n in result['size'])}, artifact {result['artifact_id']}."]
+             f"Size {_size_text(result)}, artifact {result['artifact_id']}."]
     if result["params"]:
         lines.append(f"Entry params: {_params_text(result['params'])}.")
     if result["exports"]:
-        lines.append("Other scripts can reuse it with: " + _load_line(result["load_path"], result["exports"]))
+        lines.append(f"Exports {_signatures_text(result)}; other scripts reuse them with: "
+                     + _load_line(result["load_path"], result["exports"]))
     else:
-        lines.append(f"No public component functions to load(); others can fork it with get_starlark_script(\"{result['name']}\").")
+        lines.append(
+            f"No UpperCamel component exported, so others can only fork it (get_starlark_script(\"{result['name']}\")), "
+            "not load() it. Consider saving a new version that moves the body into a parametrized component "
+            "build() calls, e.g. def MageTower(height=12): return component(name=\"MageTower\", min_size=[...], ...) "
+            "and def build(): return MageTower()."
+        )
     return format_success_response("\n".join(lines))
 
 
@@ -252,12 +279,11 @@ async def handle_search_starlark_library(
         return format_success_response("No saved scripts match. Write a new one and save it with save_starlark_script.")
     lines = [f"{len(entries)} saved script(s); get_starlark_script(name) returns source and details:"]
     for entry in entries:
-        size = "x".join(str(n) for n in entry["size"])
-        line = f"- {entry['name']}@{entry['latest']} — {entry['title']} ({size}"
+        line = f"- {entry['name']}@{entry['latest']} — {entry['title']} ({_size_text(entry)}"
         line += f"; tags {', '.join(entry['tags'])})" if entry["tags"] else ")"
         line += f": {entry['description']}"
         if entry["exports"]:
-            line += f"\n  exports {', '.join(entry['exports'])} via {entry['load_path']}"
+            line += f"\n  exports {_signatures_text(entry)} via {entry['load_path']}"
         lines.append(line)
     return format_success_response("\n".join(lines))
 
@@ -278,7 +304,7 @@ async def handle_get_starlark_script(api_client: MinecraftAPIClient, name: str, 
     ref = f"{name}@{resolved}"
     lines = [f"# {ref} — {meta['title']}" + (f" (latest is v{meta['latest']})" if resolved != meta["latest"] else ""),
              meta["description"],
-             f"Size {'x'.join(str(n) for n in record['size'])}, {record['block_count']} blocks, "
+             f"Size {_size_text(record)}, {record['block_count']} blocks, "
              f"ground_level={record['ground_level']}; entry {record['entry']}({_params_text(record['params'])})"
              + (f" built with props {record['props']}" if record["props"] else "") + "."]
     if meta["tags"]:
@@ -289,7 +315,16 @@ async def handle_get_starlark_script(api_client: MinecraftAPIClient, name: str, 
     if any(lineage):
         lines.append("; ".join(part for part in lineage if part))
     if record["exports"]:
-        lines.append("Reuse: " + _load_line(f"../library/{name}/v{resolved}.star", record["exports"]))
+        lines.append(f"Exports {_signatures_text(record)}; reuse: "
+                     + _load_line(f"../library/{name}/v{resolved}.star", record["exports"]))
+    uses = _library_uses(record["loads"])
+    if uses:
+        lines.append("Uses library: " + ", ".join(uses))
+    dependents = meta.get("used_by") or []
+    if dependents:
+        lines.append("Used by: " + ", ".join(f"{d['name']}@{d['version']} (loads v{d['loads_version']})"
+                                             for d in dependents)
+                     + ". Loads are pinned, so new versions never change these until they are re-saved.")
     lines.append(f"Fork: edit and build the source below, then save_starlark_script with parent=\"{ref}\" "
                  f"(same name for a new version, or a new name).")
     lines.append(f"\n```python\n{source.rstrip()}\n```")

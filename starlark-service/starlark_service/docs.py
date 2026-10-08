@@ -40,7 +40,12 @@ Rules:
   no-op; saving changed source under an existing name creates the next version.
 - Top-level UpperCamel functions are listed as exports (lowercase helpers stay loadable but
   unlisted). Write reusable parts as UpperCamel component functions that draw from [0,0,0],
-  face south (+Z), and declare min_size, like lib/ components.
+  face south (+Z), and declare min_size, like lib/ components. Even a one-off structure is
+  more reusable as `def Thing(...): ...` plus `def build(): return Thing()`.
+- The listed size is the demo build()'s output; an exported component's size follows its
+  arguments (results show each export's signature).
+- get_starlark_script shows which library versions a script uses and which saved scripts
+  use it. Loads are pinned, so saving a new version never changes existing dependents.
 """
 
 

@@ -34,6 +34,7 @@ def test_save_records_metadata_and_files(config):
     assert result["version"] == 1
     assert result["load_path"] == "../library/pillar/v1.star"
     assert result["exports"] == ["Pillar"]
+    assert result["signatures"] == {"Pillar": "Pillar(height=2)"}
     assert result["params"] == [{"name": "height", "default": 3}]
     assert result["size"] == [1, 3, 1]
 
@@ -114,6 +115,9 @@ def test_scripts_can_load_saved_versions(config):
     meta = client.get("/library/pillar_pair").json()
     assert meta["versions"][0]["loads"] == ["library/pillar/v1.star:Pillar"]
     assert meta["versions"][0]["parent"] == "pillar@1"
+    assert client.get("/library/pillar").json()["used_by"] == [
+        {"name": "pillar_pair", "version": 1, "loads_version": 1}]
+    assert meta["used_by"] == []
 
     missing = 'load("../library/pillar/v9.star", "Pillar")\n\ndef build():\n    return Pillar()\n'
     result = client.post("/build", json={"source": missing}).json()
@@ -143,4 +147,5 @@ def test_analyze_source_fallback_without_python_syntax():
     source = 'load("../lib/roofs.star", "HipRoof")\ndef Hut(w):\n    return w if w > 1 else fail("x")\nlambda_x = lambda: 1 if True else 2 else 3\n'
     info = library.analyze_source(source, "build")
     assert info["exports"] == ["Hut"]
+    assert info["signatures"] == {"Hut": "Hut(w)"}
     assert info["loads"] == ["lib/roofs.star:HipRoof"]
