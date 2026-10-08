@@ -777,27 +777,47 @@ async def handle_undo_build(
     force: bool = False,
     **arguments
 ) -> CallToolResult:
-    """Restore the pre-placement snapshot of an NBT placement build."""
+    """Restore the undo snapshot of an NBT placement build."""
+    return await _restore_build(api_client, build_id, force, redo=False)
+
+
+async def handle_redo_build(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    force: bool = False,
+    **arguments
+) -> CallToolResult:
+    """Restore the snapshot saved before undo, preserving another undo."""
+    return await _restore_build(api_client, build_id, force, redo=True)
+
+
+async def _restore_build(api_client: MinecraftAPIClient, build_id: str, force: bool, *, redo: bool) -> CallToolResult:
+    action = "Redo" if redo else "Undo"
     try:
-        result = await api_client.undo_build(build_id, force)
+        method = api_client.redo_build if redo else api_client.undo_build
+        result = await method(build_id, force)
     except httpx.HTTPStatusError as exc:
         try:
             payload = exc.response.json()
         except ValueError:
             payload = None
         if isinstance(payload, dict):
-            lines = [f"❌ Undo failed ({exc.response.status_code}): {payload.get('error', 'Unknown error')}"]
+            lines = [f"❌ {action} failed ({exc.response.status_code}): {payload.get('error', 'Unknown error')}"]
             for build in payload.get("builds", []):
                 lines.append(f"- overlapping later build {build.get('build_id')}: {build.get('name')} ({build.get('status')})")
             return CallToolResult(content=[TextContent(type="text", text="\n".join(lines))],
                                   structuredContent=payload, isError=True)
-        return format_error_response(exc, "undoing build")
+        return format_error_response(exc, f"{action.lower()}ing build")
     except Exception as exc:
-        return format_error_response(exc, "undoing build")
-    text = f"Build {result.get('build_id', build_id)} reverted: pre-placement blocks restored."
+        return format_error_response(exc, f"{action.lower()}ing build")
+    text = f"{action} completed for build {result.get('build_id', build_id)}: saved blocks restored."
     if result.get("overwrote_later_builds"):
         text += f" Forced over {result['overwrote_later_builds']} later overlapping build(s)."
-    text += " Entities spawned by the placement were not removed."
+    text += " Entities were not changed."
+    if result.get("undo_available"):
+        text += f' Undo with undo_build(build_id="{build_id}").'
+    if result.get("redo_available"):
+        text += f' Redo with redo_build(build_id="{build_id}").'
     return CallToolResult(content=[TextContent(type="text", text=text)], structuredContent=result)
 
 

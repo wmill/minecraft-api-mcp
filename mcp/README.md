@@ -39,7 +39,7 @@ Pass the returned `lock_id` on placement and execute/replay calls. Keep the orig
 
 ### Placement Safety
 - `dry_run` on `place_nbt_structure`, `place_schematic`, and Starlark placements - Report what would be overwritten (by category, carved-to-air count, overlapping reservations/builds) without changing the world
-- `undo_build` - Restore the blocks saved immediately before an NBT placement; one-shot, refuses to erase later overlapping builds unless `force=true`. See [undo and dry-run](../docs/undo-and-dry-run.md).
+- `undo_build` / `redo_build` - Restore saved blocks around an NBT placement, preserving the reverse operation for repeated undo/redo. Refuse to erase later overlapping builds unless `force=true`. See [undo, redo and dry-run](../docs/undo-and-dry-run.md).
 
 ### Messaging
 - `broadcast_message` - Send messages to all players on the server

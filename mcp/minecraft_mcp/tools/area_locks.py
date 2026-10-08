@@ -6,7 +6,7 @@ LOCK_WRITE_TOOLS = frozenset({
     "set_blocks", "fill_box", "place_nbt_structure", "place_door_line", "place_stairs",
     "place_window_pane_wall", "place_torch", "place_sign", "place_ladder", "rain_fire",
     "execute_build", "replay_build", "place_schematic", "build_starlark_structure",
-    "place_starlark_structure", "undo_build",
+    "place_starlark_structure", "undo_build", "redo_build",
 })
 
 LOCK_ID_SCHEMA = {

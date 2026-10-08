@@ -110,7 +110,7 @@ def test_examples_and_catalog_routes(config):
     assert client.get("/examples/../secrets").status_code in (400, 404)
     assert client.get("/examples/no_such_example").status_code == 404
 
-    catalog = client.get("/docs/catalog")
+    catalog = client.get("/docs/catalog", params={"topic": "full"})
     assert catalog.status_code == 200
     assert "place_block" in catalog.text
 
@@ -153,6 +153,25 @@ def test_focused_docs_and_exact_signatures(config):
         assert "Valid" in response.json()["detail"]
 
 
+def test_default_index_math_and_hip_roof_are_focused(config):
+    client = client_for(config)
+    default = client.get("/docs/catalog")
+    assert default.text == client.get("/docs/catalog", params={"topic": "quickstart"}).text
+    for params in ({"topic": "index"}, {"topic": "math"}, {"component": "HipRoof"}):
+        response = client.get("/docs/catalog", params=params)
+        assert response.status_code == 200
+        assert len(response.content) < 6000
+    assert client.get("/docs/catalog", params={"topic": "index"}).text == client.get(
+        "/docs/catalog", params={"topic": "components"}).text
+    math = client.get("/docs/catalog", params={"topic": "math"}).text
+    assert "sqrt" in math and "PI" in math and "no import" in math
+    roof = client.get("/docs/catalog", params={"topic": "unknown", "component": "HipRoof"}).text
+    assert 'load("../lib/roofs.star", "HipRoof")' in roof
+    assert "GableRoof(" not in roof
+    full = client.get("/docs/catalog", params={"topic": "full"})
+    assert len(full.content) > len(default.content)
+
+
 def test_every_example_is_fetchable(config):
     client = client_for(config)
     names = [item["name"] for item in client.get("/examples").json()["examples"]]
@@ -164,7 +183,7 @@ def test_every_example_is_fetchable(config):
 def test_component_catalog_covers_public_library_constructors(config):
     from starlark_service.docs import ROW, _signatures, catalog_view
 
-    reference = catalog_view(config.tool_dir)
+    reference = catalog_view(config.tool_dir, "full")
     documented = {match[1] for match in ROW.finditer(reference)}
     signatures = _signatures(config.lib_dir)
     public = {name for name in signatures if name[0].isupper()}

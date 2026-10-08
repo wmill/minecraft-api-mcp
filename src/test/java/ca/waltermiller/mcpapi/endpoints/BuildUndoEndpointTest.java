@@ -37,6 +37,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class BuildUndoEndpointTest {
@@ -51,6 +52,10 @@ class BuildUndoEndpointTest {
     private Javalin app;
 
     private SnapshotStore start(boolean snapshotsEnabled) {
+        lenient().doAnswer(invocation -> {
+            invocation.<Runnable>getArgument(0).run();
+            return null;
+        }).when(server).execute(any(Runnable.class));
         SnapshotStore store = snapshotsEnabled ? new SnapshotStore(dir, 1_000) : null;
         app = Javalin.create(config -> config.http.defaultContentType = "application/json");
         new BuildTaskEndpoint(app, server, LoggerFactory.getLogger(BuildUndoEndpointTest.class), buildService,
@@ -140,5 +145,38 @@ class BuildUndoEndpointTest {
     void rejectsNonBooleanForce() throws Exception {
         start(true);
         assertThat(undo(UUID.randomUUID(), "{\"force\":\"yes\"}").statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void redoRejectsMissingSnapshotAndWrongState() throws Exception {
+        start(true);
+        UUID id = UUID.randomUUID();
+        when(buildService.getNbtPlacement(id, true)).thenReturn(Optional.of(placement(id)));
+        assertThat(redo(id).statusCode()).isEqualTo(400);
+        when(buildService.getNbtPlacement(id, true)).thenThrow(new IllegalStateException("Only reverted builds can be redone"));
+        assertThat(redo(id).statusCode()).isEqualTo(409);
+    }
+
+    @Test
+    void redoConflictsAndUnresolvedRestoresAreRejected() throws Exception {
+        SnapshotStore store = start(true);
+        UUID id = UUID.randomUUID();
+        BuildService.NbtPlacement placement = placement(id);
+        store.save(id, true, new NbtCompound());
+        Build later = new Build("later", "");
+        when(buildService.getNbtPlacement(id, true)).thenReturn(Optional.of(placement));
+        when(buildService.findLaterOverlappingBuilds(eq(placement.build()), any())).thenReturn(List.of(later));
+        HttpResponse<String> conflict = redo(id);
+        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(json.readTree(conflict.body()).get("code").asText()).isEqualTo("redo_conflict");
+        store.beginRestore(id, true);
+        assertThat(redo(id).statusCode()).isEqualTo(409);
+        assertThat(undo(id, null).statusCode()).isEqualTo(409);
+        verify(buildService, never()).markRestored(any());
+    }
+
+    private HttpResponse<String> redo(UUID id) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/api/builds/" + id + "/redo"))
+            .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
     }
 }

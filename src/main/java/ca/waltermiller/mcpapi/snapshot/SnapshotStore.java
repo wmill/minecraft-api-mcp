@@ -10,6 +10,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,8 +46,12 @@ public final class SnapshotStore {
     }
 
     public void save(UUID buildId, NbtCompound snapshot) throws IOException {
+        save(buildId, false, snapshot);
+    }
+
+    public void save(UUID buildId, boolean redo, NbtCompound snapshot) throws IOException {
         Files.createDirectories(dir);
-        Path target = path(buildId);
+        Path target = path(buildId, redo);
         Path temp = Files.createTempFile(dir, buildId + ".", ".tmp");
         try {
             NbtIo.writeCompressed(snapshot, temp);
@@ -61,13 +66,21 @@ public final class SnapshotStore {
     }
 
     public Optional<NbtCompound> load(UUID buildId) throws IOException {
-        Path file = path(buildId);
+        return load(buildId, false);
+    }
+
+    public Optional<NbtCompound> load(UUID buildId, boolean redo) throws IOException {
+        Path file = path(buildId, redo);
         if (!Files.isRegularFile(file)) return Optional.empty();
         return Optional.of(NbtIo.readCompressed(file, NbtSizeTracker.ofUnlimitedBytes()));
     }
 
     public boolean exists(UUID buildId) {
-        return Files.isRegularFile(path(buildId));
+        return exists(buildId, false);
+    }
+
+    public boolean exists(UUID buildId, boolean redo) {
+        return Files.isRegularFile(path(buildId, redo));
     }
 
     public void delete(UUID buildId) throws IOException {
@@ -75,6 +88,24 @@ public final class SnapshotStore {
     }
 
     Path path(UUID buildId) {
-        return dir.resolve(buildId + ".nbt");
+        return path(buildId, false);
+    }
+
+    private Path path(UUID buildId, boolean redo) {
+        return dir.resolve(buildId + (redo ? ".redo.nbt" : ".nbt"));
+    }
+
+    public boolean pending(UUID buildId) {
+        return Files.exists(dir.resolve(buildId + ".pending"));
+    }
+
+    public void beginRestore(UUID buildId, boolean redo) throws IOException {
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve(buildId + ".pending"), redo ? "redo\n" : "undo\n",
+            StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+    }
+
+    public void finishRestore(UUID buildId) throws IOException {
+        Files.delete(dir.resolve(buildId + ".pending"));
     }
 }

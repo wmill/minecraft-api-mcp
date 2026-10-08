@@ -27,7 +27,7 @@ def _signatures(lib_dir: Path) -> dict[str, str]:
     return signatures
 
 
-def catalog_view(tool_dir: Path, topic: str = "full", component: str | None = None) -> str:
+def catalog_view(tool_dir: Path, topic: str = "quickstart", component: str | None = None) -> str:
     catalog = (tool_dir / "docs/component-catalog.md").read_text(encoding="utf-8")
     signatures = _signatures(tool_dir / "lib")
     catalog = ROW.sub(lambda m: f"| `{signatures[m[1]]}`" if m[1] in signatures else m[0], catalog)
@@ -50,6 +50,13 @@ def catalog_view(tool_dir: Path, topic: str = "full", component: str | None = No
     topics["components"] = "# Components\n\n" + "\n".join(
         f"- {name} ({module})" for name, module in components.items()
     ) + '\n\nUse get_starlark_docs(component="Name") for details.\n'
+    topics["index"] = topics["components"]
+    math_reference = sections["DSL reference"].split("Math builtins", 1)[1].strip()
+    topics["math"] = (
+        "# Math\n\nMath builtins " + math_reference + "\n\n"
+        "These functions and PI are globals: no import is needed. There is no math namespace or math.star.\n\n"
+        "```python\nradius = round(sqrt(25))\nheight = isqrt(50)\nx = round(cos(PI) * radius)\n```\n"
+    )
     if component is not None:
         if component not in components:
             raise UnknownDocs("Unknown component. Valid components: " + ", ".join(components))

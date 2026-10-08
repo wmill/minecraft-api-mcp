@@ -166,5 +166,42 @@ async def test_undo_handler_success():
     api.undo_build.return_value = {"success": True, "build_id": "b1", "status": "REVERTED", "overwrote_later_builds": 2}
     result = await builds.handle_undo_build(api, "b1", force=True)
     assert not result.isError
-    assert "reverted" in result.content[0].text and "2 later" in result.content[0].text
+    assert "Undo completed" in result.content[0].text and "2 later" in result.content[0].text
     api.undo_build.assert_awaited_once_with("b1", True)
+
+
+def test_redo_registered_with_lock_token():
+    tools = {tool.name: tool for tool in TOOL_SCHEMAS}
+    assert get_handler("redo_build") is builds.handle_redo_build
+    assert "redo_build" in LOCK_WRITE_TOOLS
+    assert tools["redo_build"].inputSchema["required"] == ["build_id"]
+    assert "lock_id" in tools["redo_build"].inputSchema["properties"]
+
+
+async def test_redo_client_forwards_force_and_lock(monkeypatch):
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        return httpx.Response(200, json={"success": True})
+
+    mock_http(monkeypatch, respond)
+    await MinecraftAPIClient("http://minecraft").with_area_lock("token").redo_build("b1", True)
+    assert seen[0].url.path == "/api/builds/b1/redo"
+    assert json.loads(seen[0].content) == {"force": True}
+    assert seen[0].headers["X-Area-Lock-Id"] == "token"
+
+
+async def test_redo_success_and_conflict():
+    api = AsyncMock()
+    api.redo_build.return_value = {"success": True, "build_id": "b1", "status": "COMPLETED", "undo_available": True}
+    result = await builds.handle_redo_build(api, "b1", force=True)
+    assert not result.isError
+    assert 'undo_build(build_id="b1")' in result.content[0].text
+    api.redo_build.assert_awaited_once_with("b1", True)
+    response = httpx.Response(409, json={"code": "redo_conflict", "error": "Later builds overlap"},
+                             request=httpx.Request("POST", "http://minecraft/api/builds/b1/redo"))
+    api.redo_build.side_effect = httpx.HTTPStatusError("err", request=response.request, response=response)
+    result = await builds.handle_redo_build(api, "b1")
+    assert result.isError
+    assert result.structuredContent["code"] == "redo_conflict"

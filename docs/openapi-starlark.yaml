@@ -125,15 +125,33 @@ paths:
   /docs/catalog:
     get:
       tags: [reference]
-      summary: Get the Starlark script API reference (component catalog)
+      summary: Get focused Starlark documentation or the explicit full catalog
       operationId: getCatalog
+      parameters:
+        - name: topic
+          in: query
+          description: quickstart, index (alias of components), math, dsl, composition, errors, a library module, or full
+          schema:
+            type: string
+            default: quickstart
+        - name: component
+          in: query
+          description: Exact component name, such as HipRoof. Takes precedence over topic.
+          schema:
+            type: string
       responses:
         "200":
-          description: The component catalog as markdown
+          description: Focused documentation as markdown; the complete catalog requires topic=full
           content:
             text/markdown:
               schema:
                 type: string
+        "400":
+          description: Unknown topic or component, with valid names in the error detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "503":
           description: Catalog unavailable
           content:

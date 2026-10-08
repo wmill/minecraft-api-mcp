@@ -1205,11 +1205,21 @@ class MinecraftAPIClient:
             return response.json()
     
     async def undo_build(self, build_id: str, force: bool = False) -> dict:
-        """Restore the pre-placement snapshot of an NBT placement build (one-shot)."""
+        """Restore an NBT placement's undo snapshot, saving its current state for redo."""
         # The server allows 30 seconds for the world restore.
         async with self._http_client(timeout=40.0) as client:
             response = await client.post(
                 f"{self.base_url}/api/builds/{quote(build_id, safe='')}/undo",
+                json={"force": force}
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def redo_build(self, build_id: str, force: bool = False) -> dict:
+        """Restore the region saved immediately before the last undo."""
+        async with self._http_client(timeout=40.0) as client:
+            response = await client.post(
+                f"{self.base_url}/api/builds/{quote(build_id, safe='')}/redo",
                 json={"force": force}
             )
             response.raise_for_status()

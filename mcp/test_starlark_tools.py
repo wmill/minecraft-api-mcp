@@ -179,6 +179,20 @@ async def test_docs_default_to_quickstart_and_support_component(clients):
     service.get_catalog.assert_awaited_with("quickstart", None)
     await starlark.handle_get_starlark_docs(api, component="Bench")
     service.get_catalog.assert_awaited_with("quickstart", "Bench")
+    for topic in ("index", "math"):
+        await starlark.handle_get_starlark_docs(api, topic=topic)
+        service.get_catalog.assert_awaited_with(topic, None)
+    await starlark.handle_get_starlark_docs(api, topic="unknown", component="HipRoof")
+    service.get_catalog.assert_awaited_with("unknown", "HipRoof")
+
+
+async def test_unknown_docs_return_short_error(clients):
+    api, service = clients
+    service.get_catalog.side_effect = status_error(400, "Unknown component. Valid components: HipRoof")
+    result = await starlark.handle_get_starlark_docs(api, component="missing")
+    assert result.isError
+    assert "Unknown component" in result.content[0].text
+    assert len(result.content[0].text) < 500
 
 
 async def test_client_requests_match_http_contract(monkeypatch):

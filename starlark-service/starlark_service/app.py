@@ -106,7 +106,7 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         return FileResponse(path, media_type="application/octet-stream", filename=path.name)
 
     @app.get("/docs/catalog")
-    async def get_catalog(topic: str = "full", component: str | None = None) -> PlainTextResponse:
+    async def get_catalog(topic: str = "quickstart", component: str | None = None) -> PlainTextResponse:
         try:
             content = catalog_view(cfg.tool_dir, topic, component)
         except UnknownDocs as exc:

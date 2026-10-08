@@ -31,6 +31,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class BuildServiceTest {
@@ -190,6 +191,41 @@ class BuildServiceTest {
         assertThat(result.success).isTrue();
         assertThat(task.getStatus()).isEqualTo(TaskStatus.COMPLETED);
         verify(taskRepository, atLeastOnce()).update(task);
+    }
+
+    @Test
+    void nbtReplayAndExecutionCannotChangeRevertedStatus() throws Exception {
+        UUID id = UUID.randomUUID();
+        Build build = new Build("placement", "");
+        build.setId(id);
+        build.setStatus(BuildStatus.REVERTED);
+        BuildTask task = new BuildTask(id, 0, TaskType.NBT_STRUCTURE, validFillData(), "nbt");
+        task.markCompleted();
+        when(buildRepository.findById(id)).thenReturn(Optional.of(build));
+        when(taskRepository.findByBuildIdOrdered(id)).thenReturn(List.of(task));
+        assertThrows(IllegalStateException.class, () -> buildService.validateTaskExecution(id, true));
+        assertThrows(IllegalStateException.class, () -> buildService.validateTaskExecution(id, false));
+        assertThrows(java.util.concurrent.ExecutionException.class, () -> buildService.replayBuild(id).get(5, TimeUnit.SECONDS));
+        assertThat(buildService.executeBuild(id).get(5, TimeUnit.SECONDS).success).isFalse();
+        assertThat(build.getStatus()).isEqualTo(BuildStatus.REVERTED);
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.COMPLETED);
+        verify(buildRepository, never()).update(any());
+        verify(taskRepository, never()).update(any());
+    }
+
+    @Test
+    void revertedPlacementHistoryCannotBeEditedBeforeRedo() throws Exception {
+        UUID id = UUID.randomUUID();
+        Build build = new Build("placement", "");
+        build.setStatus(BuildStatus.REVERTED);
+        when(buildRepository.findById(id)).thenReturn(Optional.of(build));
+        var request = new BuildService.AddTaskRequest(TaskType.BLOCK_FILL, validFillData(), "");
+        assertThrows(IllegalStateException.class, () -> buildService.addTask(id, request));
+        assertThrows(IllegalStateException.class, () -> buildService.insertTaskAt(id, request, 0));
+        assertThrows(IllegalStateException.class, () -> buildService.updateTaskQueue(id, List.of()));
+        assertThrows(IllegalStateException.class, () -> buildService.updateTask(id, UUID.randomUUID(), validFillData(), ""));
+        assertThrows(IllegalStateException.class, () -> buildService.deleteTask(id, UUID.randomUUID()));
+        assertThrows(IllegalStateException.class, () -> buildService.translateBuild(id, 1, 0, 0));
     }
 
     @org.junit.jupiter.params.ParameterizedTest

@@ -18,13 +18,12 @@ import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import ca.waltermiller.mcpapi.arealock.AreaLockException;
 import ca.waltermiller.mcpapi.snapshot.RegionSnapshot;
 import ca.waltermiller.mcpapi.snapshot.SnapshotStore;
+import ca.waltermiller.mcpapi.snapshot.SnapshotRestorer;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.structure.StructureTemplate;
 import net.minecraft.world.World;
 
 import java.sql.SQLException;
@@ -92,7 +91,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
         registerPatchTask();
         registerExecuteBuild();
         registerReplayBuild();
-        registerUndoBuild();
+        registerRestoreBuild(false);
+        registerRestoreBuild(true);
         registerCloneBuild();
         registerQueryLocation();
         registerAuditBuild();
@@ -433,6 +433,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
             // Execute build asynchronously; clients poll build status for progress
             String lockId = ctx.header(AreaLockService.HEADER);
             taskExecutor.validateLockToken(lockId);
+            buildService.validateTaskExecution(buildId, false);
             buildService.executeBuild(buildId, lockId)
                 .exceptionally(throwable -> {
                     LOGGER.error("Error during build execution", throwable);
@@ -461,6 +462,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
             // Replay build asynchronously (resets tasks and re-executes)
             String lockId = ctx.header(AreaLockService.HEADER);
             taskExecutor.validateLockToken(lockId);
+            buildService.validateTaskExecution(buildId, true);
             buildService.replayBuild(buildId, lockId)
                 .exceptionally(throwable -> {
                     LOGGER.error("Error during build replay", throwable);
@@ -478,15 +480,15 @@ public class BuildTaskEndpoint extends APIEndpoint {
         }));
     }
 
-    // POST /api/builds/{id}/undo - Restore the pre-placement snapshot of an NBT placement
-    private void registerUndoBuild() {
-        app.post("/api/builds/{id}/undo", ctx -> handle(ctx, "undoing build", () -> {
+    private record RestoreResponse(int status, Map<String, Object> body) {}
+
+    private void registerRestoreBuild(boolean redo) {
+        String action = redo ? "redo" : "undo";
+        app.post("/api/builds/{id}/" + action, ctx -> handle(ctx, action + " build", () -> {
             UUID buildId = pathUuid(ctx, "id", "build ID");
-            if (buildId == null) {
-                return;
-            }
+            if (buildId == null) return;
             if (snapshots == null) {
-                ctx.status(503).json(Map.of("error", "Undo snapshots are not configured on this server"));
+                ctx.status(503).json(Map.of("error", "Build snapshots are not configured on this server"));
                 return;
             }
             boolean force = false;
@@ -496,88 +498,85 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 if (body.has("force") && !body.get("force").isBoolean()) throw new IllegalArgumentException("force must be a boolean");
                 force = body.path("force").asBoolean(false);
             }
-
-            Optional<BuildService.NbtPlacement> found = buildService.getNbtPlacement(buildId);
-            if (found.isEmpty()) {
-                ctx.status(404).json(Map.of("error", "Build not found"));
-                return;
-            }
-            BuildService.NbtPlacement placement = found.get();
-            Build build = placement.build();
-            AreaBounds bounds = PlacementBounds.structure(placement.x(), placement.y(), placement.z(),
-                placement.sizeX(), placement.sizeY(), placement.sizeZ(), placement.rotation());
-            NbtCompound snapshot = snapshots.load(buildId).orElseThrow(() -> new IllegalArgumentException(
-                "No undo snapshot exists for this build (placed before snapshots, too large, or already undone)"));
-
-            List<Build> conflicts = buildService.findLaterOverlappingBuilds(build, new BoundingBox(
-                bounds.min_x(), bounds.min_y(), bounds.min_z(), bounds.max_x(), bounds.max_y(), bounds.max_z()));
-            if (!conflicts.isEmpty() && !force) {
-                ctx.status(409).json(Map.of(
-                    "success", false,
-                    "code", "undo_conflict",
-                    "error", "Later builds overlap this placement and would be erased by undo; pass force=true to restore anyway",
-                    "total", conflicts.size(),
-                    "builds", conflicts.stream().limit(5).map(b -> Map.of(
-                        "build_id", b.getId().toString(), "name", b.getName(), "status", b.getStatus().name())).toList()));
-                return;
-            }
-
-            RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(build.getWorld());
-            ServerWorld world = worldKey == null ? null : server.getWorld(worldKey);
-            if (world == null) {
-                throw new IllegalArgumentException("Unknown world: " + build.getWorld());
-            }
-            StructureTemplate template = server.getStructureTemplateManager().createTemplate(snapshot);
+            boolean forced = force;
             String lockId = ctx.header(AreaLockService.HEADER);
-            CompletableFuture<Boolean> future = new CompletableFuture<>();
+            CompletableFuture<RestoreResponse> future = new CompletableFuture<>();
+            // State checks, capture, restore and status commit are serialized on the server thread.
             server.execute(() -> {
                 try {
-                    boolean restored = locks.execute(worldKey.getValue().toString(), bounds, lockId,
-                        () -> RegionSnapshot.restore(world, template, bounds), Boolean.TRUE::equals);
-                    if (restored) {
-                        try {
-                            StructurePlacementEffect.emit(world, bounds);
-                        } catch (Exception e) {
-                            LOGGER.warn("Failed to emit undo effect", e);
-                        }
-                    }
-                    future.complete(restored);
+                    future.complete(restoreBuild(buildId, redo, forced, lockId));
+                } catch (java.util.concurrent.CompletionException e) {
+                    future.completeExceptionally(e.getCause());
                 } catch (Exception e) {
                     future.completeExceptionally(e);
                 }
             });
-            boolean restored;
             try {
-                restored = future.get(UNDO_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                RestoreResponse result = future.get(UNDO_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                ctx.status(result.status()).json(result.body());
             } catch (TimeoutException e) {
-                ctx.status(504).json(Map.of("error", "Timed out waiting for undo; inspect the world before retrying"));
-                return;
+                ctx.status(504).json(Map.of("error", "Timed out waiting for " + action + "; inspect build status and the world before retrying"));
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof Exception cause) throw cause;
                 throw e;
             }
-            if (!restored) {
-                ctx.status(500).json(Map.of("error", "Snapshot restore failed; the world may be unchanged"));
-                return;
-            }
-
-            buildService.markReverted(build);
-            try {
-                snapshots.delete(buildId);
-            } catch (java.io.IOException e) {
-                LOGGER.warn("Failed to delete undo snapshot for build {}: {}", buildId, e.getMessage());
-            }
-            ctx.json(Map.of(
-                "success", true,
-                "build_id", buildId.toString(),
-                "status", BuildStatus.REVERTED.name(),
-                "world", build.getWorld(),
-                "bounds", bounds,
-                "overwrote_later_builds", force ? conflicts.size() : 0,
-                "message", "Restored the pre-placement snapshot; entities spawned by the placement were not removed"
-            ));
-            LOGGER.info("Undid NBT placement build {} via API", buildId);
         }));
+    }
+
+    private RestoreResponse restoreBuild(UUID buildId, boolean redo, boolean force, String lockId) throws Exception {
+        String action = redo ? "redo" : "undo";
+        if (snapshots.pending(buildId)) {
+            throw new IllegalStateException("An earlier restore is unresolved; inspect the world and saved snapshots before recovery");
+        }
+        Optional<BuildService.NbtPlacement> found = redo
+            ? buildService.getNbtPlacement(buildId, true) : buildService.getNbtPlacement(buildId);
+        if (found.isEmpty()) return new RestoreResponse(404, Map.of("error", "Build not found"));
+        BuildService.NbtPlacement placement = found.get();
+        Build build = placement.build();
+        AreaBounds bounds = PlacementBounds.structure(placement.x(), placement.y(), placement.z(),
+            placement.sizeX(), placement.sizeY(), placement.sizeZ(), placement.rotation());
+        if (!snapshots.exists(buildId, redo)) {
+            throw new IllegalArgumentException("No " + action + " snapshot exists for this build");
+        }
+        List<Build> conflicts = buildService.findLaterOverlappingBuilds(build, new BoundingBox(
+            bounds.min_x(), bounds.min_y(), bounds.min_z(), bounds.max_x(), bounds.max_y(), bounds.max_z()));
+        if (!conflicts.isEmpty() && !force) {
+            return new RestoreResponse(409, Map.of(
+                "success", false, "code", action + "_conflict",
+                "error", "Later builds overlap this placement and would be erased by " + action + "; pass force=true to restore anyway",
+                "total", conflicts.size(),
+                "builds", conflicts.stream().limit(5).map(b -> Map.of(
+                    "build_id", b.getId().toString(), "name", b.getName(), "status", b.getStatus().name())).toList()));
+        }
+        RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(build.getWorld());
+        ServerWorld world = worldKey == null ? null : server.getWorld(worldKey);
+        if (world == null) throw new IllegalArgumentException("Unknown world: " + build.getWorld());
+        return locks.execute(worldKey.getValue().toString(), bounds, lockId, () -> {
+            try {
+                new SnapshotRestorer(snapshots).restore(buildId, redo,
+                    () -> RegionSnapshot.capture(world, bounds),
+                    snapshot -> RegionSnapshot.restore(world, server.getStructureTemplateManager().createTemplate(snapshot), bounds),
+                    () -> {
+                        if (redo) buildService.markRestored(build);
+                        else buildService.markReverted(build);
+                    });
+                try {
+                    StructurePlacementEffect.emit(world, bounds);
+                } catch (Exception e) {
+                    LOGGER.warn("Failed to emit {} effect", action, e);
+                }
+                LOGGER.info("{} build {} via API", action, buildId);
+                return new RestoreResponse(200, Map.of(
+                    "success", true, "build_id", buildId.toString(),
+                    "status", (redo ? BuildStatus.COMPLETED : BuildStatus.REVERTED).name(),
+                    "world", build.getWorld(), "bounds", bounds,
+                    "overwrote_later_builds", force ? conflicts.size() : 0,
+                    "undo_available", redo, "redo_available", !redo,
+                    "message", "Restored the " + action + " snapshot; entities were not changed"));
+            } catch (Exception e) {
+                throw new java.util.concurrent.CompletionException(e);
+            }
+        }, result -> result.status() == 200);
     }
 
     // POST /api/builds/{id}/clone - Clone a build with a new UUID; source is preserved unchanged

@@ -93,11 +93,18 @@ public class BuildService {
      * IllegalArgumentException when it is not an NBT placement, IllegalStateException when already reverted.
      */
     public Optional<NbtPlacement> getNbtPlacement(UUID buildId) throws SQLException {
+        return getNbtPlacement(buildId, false);
+    }
+
+    public Optional<NbtPlacement> getNbtPlacement(UUID buildId, boolean redo) throws SQLException {
         Optional<Build> found = getBuild(buildId);
         if (found.isEmpty()) return Optional.empty();
         Build build = found.get();
-        if (build.getStatus() == BuildStatus.REVERTED) {
+        if (!redo && build.getStatus() == BuildStatus.REVERTED) {
             throw new IllegalStateException("Build " + buildId + " has already been reverted");
+        }
+        if (redo && build.getStatus() != BuildStatus.REVERTED) {
+            throw new IllegalStateException("Only reverted builds can be redone");
         }
         List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
         if (tasks.size() != 1 || tasks.get(0).getTaskType() != TaskType.NBT_STRUCTURE) {
@@ -110,6 +117,12 @@ public class BuildService {
         return Optional.of(new NbtPlacement(build, data.get("x").intValue(), data.get("y").intValue(), data.get("z").intValue(),
             data.get("size_x").intValue(), data.get("size_y").intValue(), data.get("size_z").intValue(),
             data.path("rotation").asText("NONE")));
+    }
+
+    private void requireNotReverted(Build build) {
+        if (build.getStatus() == BuildStatus.REVERTED) {
+            throw new IllegalStateException("Cannot edit a reverted build's placement history; use redo_build or create a new build");
+        }
     }
 
     /** Unreverted builds created after {@code build} whose recorded tasks intersect {@code box}. */
@@ -125,6 +138,28 @@ public class BuildService {
     public Build markReverted(Build build) throws SQLException {
         build.setStatus(BuildStatus.REVERTED);
         return buildRepository.update(build);
+    }
+
+    public Build markRestored(Build build) throws SQLException {
+        build.setStatus(BuildStatus.COMPLETED);
+        return buildRepository.update(build);
+    }
+
+    /** Reject unsupported operations before an endpoint reports asynchronous acceptance. */
+    public void validateTaskExecution(UUID buildId, boolean replay) throws SQLException {
+        Build build = buildRepository.findById(buildId)
+            .orElseThrow(() -> new IllegalArgumentException("Build not found: " + buildId));
+        validateTaskExecution(build, taskRepository.findByBuildIdOrdered(buildId), replay);
+    }
+
+    private void validateTaskExecution(Build build, List<BuildTask> tasks, boolean replay) {
+        if (build.getStatus() == BuildStatus.REVERTED
+            || tasks.stream().anyMatch(task -> task.getTaskType() == TaskType.NBT_STRUCTURE)) {
+            throw new IllegalStateException("NBT placements cannot be executed or replayed; use redo_build after undo_build");
+        }
+        if (replay && build.getStatus() == BuildStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Cannot replay a build while it is executing");
+        }
     }
 
     /**
@@ -158,6 +193,7 @@ public class BuildService {
         }
 
         Build build = buildOpt.get();
+        requireNotReverted(build);
         if (build.getStatus() == BuildStatus.COMPLETED) {
             throw new IllegalStateException("Cannot add tasks to completed build: " + buildId);
         }
@@ -208,6 +244,7 @@ public class BuildService {
         }
 
         Build build = buildOpt.get();
+        requireNotReverted(build);
         if (build.getStatus() == BuildStatus.COMPLETED) {
             throw new IllegalStateException("Cannot modify tasks for completed build: " + buildId);
         }
@@ -255,12 +292,14 @@ public class BuildService {
                     return new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build already completed");
                 }
 
+                List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
+                validateTaskExecution(build, tasks, false);
+
                 // Update build status to in progress
                 build.setStatus(BuildStatus.IN_PROGRESS);
                 buildRepository.update(build);
 
                 // Get tasks in order
-                List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
                 if (tasks.isEmpty()) {
                     build.setStatus(BuildStatus.COMPLETED);
                     buildRepository.update(build);
@@ -350,16 +389,15 @@ public class BuildService {
 
                 Build build = buildOpt.get();
 
+                List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
+                validateTaskExecution(build, tasks, true);
+
                 // Reset build status to CREATED
                 build.setStatus(BuildStatus.CREATED);
                 buildRepository.update(build);
 
-                // Reset all task statuses to QUEUED, except NBT_STRUCTURE which cannot be replayed
-                List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
+                // NBT placements were rejected before any state changes.
                 for (BuildTask task : tasks) {
-                    if (task.getTaskType() == TaskType.NBT_STRUCTURE) {
-                        continue;
-                    }
                     task.resetForReplay();
                     taskRepository.update(task);
                 }
@@ -446,6 +484,7 @@ public class BuildService {
         if (buildOpt.isEmpty()) {
             throw new IllegalArgumentException("Build not found: " + buildId);
         }
+        requireNotReverted(buildOpt.get());
         if (buildOpt.get().getStatus() == BuildStatus.COMPLETED) {
             throw new IllegalStateException("Cannot delete tasks from completed build: " + buildId);
         }
@@ -497,6 +536,7 @@ public class BuildService {
         if (buildOpt.isEmpty()) {
             throw new IllegalArgumentException("Build not found: " + buildId);
         }
+        requireNotReverted(buildOpt.get());
         if (buildOpt.get().getStatus() == BuildStatus.COMPLETED) {
             throw new IllegalStateException("Cannot add tasks to completed build: " + buildId);
         }
@@ -544,6 +584,7 @@ public class BuildService {
         if (buildOpt.isEmpty()) {
             throw new IllegalArgumentException("Build not found: " + buildId);
         }
+        requireNotReverted(buildOpt.get());
         if (buildOpt.get().getStatus() == BuildStatus.COMPLETED) {
             throw new IllegalStateException("Cannot update tasks in completed build: " + buildId);
         }
@@ -603,6 +644,7 @@ public class BuildService {
             throw new IllegalArgumentException("Build not found: " + buildId);
         }
         Build build = buildOpt.get();
+        requireNotReverted(build);
         if (build.getStatus() == BuildStatus.COMPLETED) {
             throw new IllegalStateException("Cannot translate completed build: " + buildId);
         }

@@ -908,12 +908,13 @@ paths:
     post:
       tags: [builds]
       summary: Reset and re-execute all tasks for a build
+      description: NBT placements are rejected without changing status; use redo after undo instead.
       operationId: replayBuild
       parameters:
         - $ref: "#/components/parameters/BuildId"
       responses:
         "409":
-          $ref: "#/components/responses/AreaLockConflict"
+          description: NBT placement, executing build, reverted build, or area-lock conflict
         "202":
           description: Replay started
           content:
@@ -928,12 +929,12 @@ paths:
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [builds]
-      summary: Undo an NBT placement from its pre-placement snapshot
+      summary: Undo an NBT placement from its saved snapshot
       description: |
-        One-shot restore of blocks and block entities captured right before an NBT placement.
-        Entities spawned by the placement are not removed. On success the build becomes
-        REVERTED and the snapshot file is deleted. Later unreverted builds overlapping the
-        cuboid block the undo (409 `undo_conflict`) unless `force` is true.
+        Restore blocks, air and block entities, saving the current region for redo.
+        Entities are unchanged. On success the same build becomes REVERTED and redo is
+        available. Later unreverted builds overlapping the cuboid block the undo
+        (409 `undo_conflict`) unless `force` is true. Force never bypasses area locks.
       operationId: undoBuild
       parameters:
         - $ref: "#/components/parameters/BuildId"
@@ -959,11 +960,57 @@ paths:
         "404":
           description: Build not found
         "409":
-          description: Already reverted, `undo_conflict` with overlapping later builds, or an area-lock conflict
+          description: Already reverted, unresolved restore, `undo_conflict` with overlapping later builds, or an area-lock conflict
+        "500":
+          $ref: "#/components/responses/ServerError"
         "503":
           description: Snapshots are not configured
         "504":
           description: Timed out waiting for the server thread; inspect the world before retrying
+
+  /api/builds/{id}/redo:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
+    post:
+      tags: [builds]
+      summary: Restore the region saved immediately before undo
+      description: |
+        Requires a REVERTED NBT placement with a redo snapshot. Restores the exact
+        pre-undo region, including edits made before undo, and saves the current
+        region for another undo. The same build becomes COMPLETED. Entities are
+        unchanged. Force allows later build overlaps but never bypasses area locks.
+      operationId: redoBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Snapshot restored; undo is available again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildRedoResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Build not found
+        "409":
+          description: Not reverted, unresolved restore, `redo_conflict` with overlapping later builds, or an area-lock conflict
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          description: Snapshots are not configured
+        "504":
+          description: Timed out waiting for the server thread; inspect build status and the world before retrying
 
   /api/builds/{id}/preview:
     get:
@@ -2218,7 +2265,7 @@ components:
           type: boolean
           description: Whether a real placement would be small enough to snapshot for undo
 
-    BuildUndoResponse:
+    BuildRestoreResponse:
       type: object
       properties:
         success:
@@ -2228,15 +2275,35 @@ components:
           format: uuid
         status:
           type: string
-          enum: [REVERTED]
+          enum: [REVERTED, COMPLETED]
         world:
           type: string
         bounds:
           $ref: "#/components/schemas/AreaBounds"
         overwrote_later_builds:
           type: integer
+        undo_available:
+          type: boolean
+        redo_available:
+          type: boolean
         message:
           type: string
+
+    BuildUndoResponse:
+      allOf:
+        - $ref: "#/components/schemas/BuildRestoreResponse"
+        - type: object
+          properties:
+            status:
+              enum: [REVERTED]
+
+    BuildRedoResponse:
+      allOf:
+        - $ref: "#/components/schemas/BuildRestoreResponse"
+        - type: object
+          properties:
+            status:
+              enum: [COMPLETED]
 
     # ── Effects ───────────────────────────────────────────────────────────────
 

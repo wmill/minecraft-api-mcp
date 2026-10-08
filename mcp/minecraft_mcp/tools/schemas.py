@@ -1445,7 +1445,7 @@ TOOL_EXECUTE_BUILD = Tool(
 
 TOOL_REPLAY_BUILD = Tool(
     name="replay_build",
-    description="Replay a completed or failed build by resetting its tasks and re-executing them.",
+    description="Replay a completed or failed task build by resetting its tasks and re-executing them. NBT placements cannot be replayed; use redo_build after undo_build.",
     inputSchema={
         "type": "object",
         "properties": {
@@ -1462,7 +1462,7 @@ TOOL_UNDO_BUILD = Tool(
     name="undo_build",
     description=(
         "Undo an NBT placement (place_nbt_structure, place_schematic, place_starlark_structure) by restoring "
-        "the blocks saved immediately before it was placed. One-shot: the build becomes REVERTED. Entities the "
+        "its saved blocks. The build becomes REVERTED; redo_build restores the state just before undo. Entities the "
         "placement spawned are not removed. Fails with undo_conflict when later recorded builds overlap, since "
         "restoring would erase them; pass force=true only when that is intended."
     ),
@@ -1479,6 +1479,26 @@ TOOL_UNDO_BUILD = Tool(
         },
         "required": ["build_id"]
     }
+)
+
+TOOL_REDO_BUILD = Tool(
+    name="redo_build",
+    description=(
+        "Redo an undone NBT placement by restoring the region exactly as it was immediately before undo, "
+        "including edits made before undo. Saves the current region for another undo_build. "
+        "Requires a REVERTED build with a redo snapshot; entities are not changed. Later overlapping "
+        "builds cause redo_conflict unless force=true. Force does not bypass area locks."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {"type": "string", "description": "Build UUID returned by the original placement"},
+            "force": {"type": "boolean", "default": False,
+                      "description": "Restore even if later recorded builds overlap."},
+        },
+        "required": ["build_id"],
+    },
 )
 
 TOOL_CLONE_BUILD = Tool(
@@ -2002,8 +2022,8 @@ TOOL_PLACE_STARLARK_STRUCTURE = Tool(
 TOOL_GET_STARLARK_DOCS = Tool(
     name="get_starlark_docs",
     description=(
-        "Get a short runnable quickstart by default. Select topic for DSL, composition, errors, "
-        "components index, a library module, or full reference. Select an exact component name "
+        "Get a short runnable quickstart by default. Topics include index (component index), math, dsl, "
+        "composition, errors, a library module, or full (complete reference). Select an exact component name "
         "for its import, signature, size, and constraints; component takes precedence over topic."
     ),
     inputSchema={
@@ -2100,6 +2120,7 @@ TOOL_SCHEMAS = [
     TOOL_EXECUTE_BUILD,
     TOOL_REPLAY_BUILD,
     TOOL_UNDO_BUILD,
+    TOOL_REDO_BUILD,
     TOOL_CLONE_BUILD,
     TOOL_QUERY_BUILDS_BY_LOCATION,
     TOOL_GET_BUILD_STATUS,
