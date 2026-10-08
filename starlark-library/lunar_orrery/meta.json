@@ -1,0 +1,49 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:33Z",
+  "description": "Floating decoration (29x20x29): a tilted gold-block ring studded with sea lanterns, with four amethyst-and-cyan-glass diamond crystals hovering at the compass points. No ground; place in the air above a plaza or spire.",
+  "latest": 1,
+  "name": "lunar_orrery",
+  "tags": [
+    "floating",
+    "decoration",
+    "ring",
+    "gold",
+    "crystal",
+    "magic",
+    "arcanum"
+  ],
+  "title": "Lunar orrery",
+  "updated_at": "2026-10-08T21:16:33Z",
+  "versions": [
+    {
+      "artifact_id": "slk_a008ec83cb217f68",
+      "author": "claude",
+      "block_count": 184,
+      "created_at": "2026-10-08T21:16:33Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 0,
+      "loads": [],
+      "notes": null,
+      "palette_top": [
+        "minecraft:gold_block",
+        "minecraft:cyan_stained_glass",
+        "minecraft:amethyst_block",
+        "minecraft:sea_lantern"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "b1f7bf56be8b23a2a95461bd09d6d3a2ffdf63082d7c9609f4c7ab7e6af017af",
+      "size": [
+        29,
+        20,
+        29
+      ],
+      "version": 1,
+      "y_offset": 0
+    }
+  ]
+}

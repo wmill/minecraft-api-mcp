@@ -1,0 +1,54 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:19Z",
+  "description": "Tall round wizard tower (13x44x13) with a twisting amethyst helix up the outside, an enchanting hall inside, a ladder up to a crowned balcony, and a magenta beacon beam at the top. ground_level=1. Centerpiece of the Arcanum city at (3419,1046).",
+  "latest": 1,
+  "name": "arcanum_spire",
+  "tags": [
+    "tower",
+    "wizard",
+    "magic",
+    "arcanum",
+    "spire",
+    "amethyst",
+    "beacon",
+    "landmark"
+  ],
+  "title": "Arcanum Spire",
+  "updated_at": "2026-10-08T21:16:19Z",
+  "versions": [
+    {
+      "artifact_id": "slk_5eecc5f0d475aa8d",
+      "author": "claude",
+      "block_count": 1407,
+      "created_at": "2026-10-08T21:16:19Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [],
+      "notes": null,
+      "palette_top": [
+        "minecraft:purpur_block",
+        "minecraft:amethyst_block",
+        "minecraft:magenta_stained_glass",
+        "minecraft:end_stone_bricks",
+        "minecraft:smooth_quartz",
+        "minecraft:ladder",
+        "minecraft:calcite",
+        "minecraft:deepslate_tiles"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "cc98c10d476d1aa9b24062a36b21cd45dc0778575986b5f74d936291623e37e4",
+      "size": [
+        13,
+        44,
+        13
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

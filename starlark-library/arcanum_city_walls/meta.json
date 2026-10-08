@@ -1,0 +1,59 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:42Z",
+  "description": "Walled city shell with an 83x83 footprint: a 3-thick deepslate brick ring wall with purpur trim and merlons, four 7x5 gates at the ends of two crossing paved avenues flanked by glowing pillars, and corner towers with roofs. ground_level=2 (y0 foundation, y1 paving, y2 walking plane). Fill the quarters with other structures.",
+  "latest": 1,
+  "name": "arcanum_city_walls",
+  "tags": [
+    "city",
+    "wall",
+    "fortification",
+    "gate",
+    "avenue",
+    "arcanum",
+    "magic",
+    "deepslate",
+    "purpur",
+    "large"
+  ],
+  "title": "Arcanum city shell",
+  "updated_at": "2026-10-08T21:16:42Z",
+  "versions": [
+    {
+      "artifact_id": "slk_72009ce98e123f25",
+      "author": "claude",
+      "block_count": 11253,
+      "created_at": "2026-10-08T21:16:42Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 2,
+      "loads": [
+        "lib/roofs.star:PyramidRoof",
+        "lib/outdoor.star:RoundTree"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:deepslate_bricks",
+        "minecraft:purpur_block",
+        "minecraft:polished_deepslate",
+        "minecraft:air",
+        "minecraft:purpur_stairs",
+        "minecraft:cherry_leaves",
+        "minecraft:calcite",
+        "minecraft:purple_stained_glass"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "31fed286565856fd0698424b51cdc2de99f4953a0093024a5d6525b1ef91023d",
+      "size": [
+        83,
+        26,
+        83
+      ],
+      "version": 1,
+      "y_offset": -2
+    }
+  ]
+}

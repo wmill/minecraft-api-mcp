@@ -1,0 +1,68 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:33Z",
+  "description": "Square lib SquareTower (13x19x13) on a foundation, topped by a light-blue stained glass dome, with a glowstone beacon, a fence ring and lantern posts. Exports GlassDome(size=7, glass=...), a reusable hollow hemispherical glass dome shell (size x size/2+1 x size).",
+  "latest": 1,
+  "name": "arcane_observatory_tower",
+  "tags": [
+    "tower",
+    "observatory",
+    "dome",
+    "glass",
+    "magic",
+    "component"
+  ],
+  "title": "Arcane observatory tower",
+  "updated_at": "2026-10-08T21:16:33Z",
+  "versions": [
+    {
+      "artifact_id": "slk_726c01b5c372fbbc",
+      "author": "claude",
+      "block_count": 589,
+      "created_at": "2026-10-08T21:16:33Z",
+      "entry": "build",
+      "exports": [
+        "GlassDome"
+      ],
+      "ground_level": 1,
+      "loads": [
+        "lib/structural.star:Foundation",
+        "lib/fortifications.star:SquareTower",
+        "lib/outdoor.star:FenceRing",
+        "lib/fixtures.star:LanternPost"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:stone_bricks",
+        "minecraft:oak_fence",
+        "minecraft:light_blue_stained_glass",
+        "minecraft:air",
+        "minecraft:lantern",
+        "minecraft:glowstone",
+        "minecraft:oak_fence_gate",
+        "minecraft:sea_lantern"
+      ],
+      "params": [
+        {
+          "default": 13,
+          "name": "size"
+        },
+        {
+          "default": 19,
+          "name": "height"
+        }
+      ],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "1df93760f410870ed7fa2f5f5f844136ca44e4b188da311deae9656e3c6d907e",
+      "size": [
+        13,
+        19,
+        13
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

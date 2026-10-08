@@ -1,0 +1,56 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:17:35Z",
+  "description": "Small stone brick round tower (lib Cylinder radius 4, 12 high) with a steep dark oak cone roof, door, three glass-pane slit windows, and a small spruce hut with a hip roof beside it (13x21x13 total). A compact example of combining shapes.star with roofs.",
+  "latest": 1,
+  "name": "round_tower_and_hut",
+  "tags": [
+    "tower",
+    "round",
+    "hut",
+    "medieval",
+    "cone-roof",
+    "small",
+    "example"
+  ],
+  "title": "Round tower with hut",
+  "updated_at": "2026-10-08T21:17:35Z",
+  "versions": [
+    {
+      "artifact_id": "slk_5c4d3942ccd084e3",
+      "author": "claude",
+      "block_count": 622,
+      "created_at": "2026-10-08T21:17:35Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 0,
+      "loads": [
+        "lib/shapes.star:Cylinder",
+        "lib/roofs.star:ConeRoof,HipRoof",
+        "lib/openings.star:SingleDoor"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:stone_bricks",
+        "minecraft:dark_oak_stairs",
+        "minecraft:spruce_planks",
+        "minecraft:dark_oak_planks",
+        "minecraft:glass_pane",
+        "minecraft:air",
+        "minecraft:oak_door"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "c02e2fecc3c34ae304ba66e1924cf60990929e886fa581b781d08aa93869bf8f",
+      "size": [
+        13,
+        21,
+        13
+      ],
+      "version": 1,
+      "y_offset": 0
+    }
+  ]
+}

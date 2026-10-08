@@ -1,0 +1,63 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:26Z",
+  "description": "Floating sky island (15x24x15): a jagged inverted cone of stone, deepslate and amethyst under a grass top with a cherry tree, with glowing cave vines hanging below. The seed prop (1, 2, 3, ...) changes the jagged edge, so several seeds make a matching set. Place high in the air.",
+  "latest": 1,
+  "name": "crystal_island",
+  "tags": [
+    "floating",
+    "island",
+    "sky",
+    "magic",
+    "amethyst",
+    "cherry",
+    "decoration",
+    "arcanum"
+  ],
+  "title": "Floating crystal island",
+  "updated_at": "2026-10-08T21:16:26Z",
+  "versions": [
+    {
+      "artifact_id": "slk_dbb4a788308e84b5",
+      "author": "claude",
+      "block_count": 749,
+      "created_at": "2026-10-08T21:16:26Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 0,
+      "loads": [
+        "lib/outdoor.star:RoundTree"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:dirt",
+        "minecraft:grass_block",
+        "minecraft:stone",
+        "minecraft:cherry_leaves",
+        "minecraft:deepslate",
+        "minecraft:amethyst_block",
+        "minecraft:calcite",
+        "minecraft:cave_vines_plant"
+      ],
+      "params": [
+        {
+          "default": 1,
+          "name": "seed"
+        }
+      ],
+      "parent": null,
+      "props": {
+        "seed": 1
+      },
+      "root_size": null,
+      "sha256": "baec7496466bde7bcfaebf3c2ecb059263d0d6352a05a2377452230f38f435f3",
+      "size": [
+        15,
+        24,
+        15
+      ],
+      "version": 1,
+      "y_offset": 0
+    }
+  ]
+}

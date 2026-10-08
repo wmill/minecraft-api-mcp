@@ -1,0 +1,56 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:09:25Z",
+  "description": "Round yellow-concrete cheese-wheel bakery with orange rind, low dome, glass 'holes', furnished interior (counter, oven, tables, chairs, hanging lanterns), plus plaza: market stall, pergola with bench, well, trees, flower beds, glowing sign. 31x14x17, ground_level 1, entrance faces south.",
+  "latest": 1,
+  "name": "cheese_wheel_bakery",
+  "tags": [
+    "bakery",
+    "cheese",
+    "plaza",
+    "round",
+    "whimsical",
+    "village"
+  ],
+  "title": "Cheese Wheel Bakery Plaza",
+  "updated_at": "2026-10-08T21:09:25Z",
+  "versions": [
+    {
+      "artifact_id": "slk_5b2864863a48b697",
+      "author": "claude",
+      "block_count": 1298,
+      "created_at": "2026-10-08T21:09:25Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [
+        "lib/openings.star:SingleDoor",
+        "lib/fixtures.star:KitchenCounter,Furnace,Chest,Barrel,DiningTable,Chair,Carpet,LanternPost,Sign,Bench",
+        "lib/outdoor.star:MarketStall,FlowerBed,Pergola,RoundTree,Tree,Well"
+      ],
+      "notes": "Initial save of the first test build near cheesedanish",
+      "palette_top": [
+        "minecraft:grass_block",
+        "minecraft:yellow_concrete",
+        "minecraft:orange_terracotta",
+        "minecraft:spruce_planks",
+        "minecraft:oak_leaves",
+        "minecraft:dirt_path",
+        "minecraft:cobblestone",
+        "minecraft:oak_fence"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "fc9f3b8455e5eed8bb711418b1da9f945a5433fdb62b0a30ad0484b35473d698",
+      "size": [
+        31,
+        14,
+        17
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

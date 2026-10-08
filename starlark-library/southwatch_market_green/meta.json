@@ -1,0 +1,57 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:17:31Z",
+  "description": "Village market square (34x9x28): a cobblestone plaza with a central covered well at the crossing of four dirt paths, colored-canopy market stalls, a pergola, flower beds, round trees, benches and lantern posts. Glowing \"Southwatch Market Green - Trade & Rest\" sign.",
+  "latest": 1,
+  "name": "southwatch_market_green",
+  "tags": [
+    "market",
+    "plaza",
+    "square",
+    "well",
+    "village",
+    "medieval",
+    "outdoor",
+    "danishire"
+  ],
+  "title": "Southwatch Market Green",
+  "updated_at": "2026-10-08T21:17:31Z",
+  "versions": [
+    {
+      "artifact_id": "slk_a6ae6dc10c20054a",
+      "author": "claude",
+      "block_count": 569,
+      "created_at": "2026-10-08T21:17:31Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [
+        "lib/outdoor.star:Well,MarketStall,Pergola,FlowerBed,RoundTree",
+        "lib/fixtures.star:Bench,LanternPost"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:dirt_path",
+        "minecraft:cobblestone",
+        "minecraft:oak_leaves",
+        "minecraft:spruce_fence",
+        "minecraft:spruce_log",
+        "minecraft:white_wool",
+        "minecraft:spruce_slab",
+        "minecraft:stripped_spruce_log"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "917e06d6dc32046998ac31d5628d257917a8cbc439454864446c9d6ce659044a",
+      "size": [
+        34,
+        9,
+        28
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

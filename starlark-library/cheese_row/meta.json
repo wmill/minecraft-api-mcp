@@ -1,0 +1,53 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:10:44Z",
+  "description": "Row of three cheese-wheel buildings (radius 4/3/2) loaded from the cheese_wheel library component, with a dirt-path frontage, lantern posts and a glowing sign. 25x9x11, ground_level 1, doors face south.",
+  "latest": 1,
+  "name": "cheese_row",
+  "tags": [
+    "cheese",
+    "village",
+    "row",
+    "whimsical"
+  ],
+  "title": "Cheese Row",
+  "updated_at": "2026-10-08T21:10:44Z",
+  "versions": [
+    {
+      "artifact_id": "slk_0b9fb318a640c11a",
+      "author": "claude",
+      "block_count": 609,
+      "created_at": "2026-10-08T21:10:44Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [
+        "library/cheese_wheel/v1.star:CheeseWheel",
+        "lib/fixtures.star:LanternPost,Sign"
+      ],
+      "notes": "First version; demonstrates load() of a pinned library component",
+      "palette_top": [
+        "minecraft:yellow_concrete",
+        "minecraft:orange_terracotta",
+        "minecraft:spruce_planks",
+        "minecraft:dirt_path",
+        "minecraft:yellow_terracotta",
+        "minecraft:yellow_stained_glass",
+        "minecraft:oak_fence",
+        "minecraft:oak_door"
+      ],
+      "params": [],
+      "parent": "cheese_wheel@1",
+      "props": {},
+      "root_size": null,
+      "sha256": "b11c39652faebae33c7f6c04b8d00363e495096a08b71f4143256effe5be5687",
+      "size": [
+        25,
+        9,
+        11
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

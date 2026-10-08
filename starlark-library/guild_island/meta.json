@@ -1,0 +1,57 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:54Z",
+  "description": "Stepped stone island (63x59x67) with inset corners and a luminous promenade lit by deepslate-wall lamp posts with sea lanterns, carrying six colorful furnished guild houses with deep roofs, beds, chests and bookshelves.",
+  "latest": 1,
+  "name": "guild_island",
+  "tags": [
+    "island",
+    "town",
+    "guild",
+    "houses",
+    "promenade",
+    "furnished",
+    "colorful",
+    "large"
+  ],
+  "title": "Guild house island",
+  "updated_at": "2026-10-08T21:16:54Z",
+  "versions": [
+    {
+      "artifact_id": "slk_bc70da238d120cf5",
+      "author": "claude",
+      "block_count": 56893,
+      "created_at": "2026-10-08T21:16:54Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 10,
+      "loads": [
+        "lib/openings.star:SingleDoor",
+        "lib/fixtures.star:Bed,Chest,BookshelfWall,Sign"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:deepslate_bricks",
+        "minecraft:air",
+        "minecraft:purpur_block",
+        "minecraft:warped_planks",
+        "minecraft:polished_deepslate",
+        "minecraft:calcite",
+        "minecraft:smooth_quartz",
+        "minecraft:quartz_bricks"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "cfcd1dfc79274e3148a9ed67425c594aacf23146f8ea58e3d8dfa2ffd948cf42",
+      "size": [
+        63,
+        59,
+        67
+      ],
+      "version": 1,
+      "y_offset": -10
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:19Z",
+  "description": "Calcite-and-glass rotunda (19x19x19) with a stained glass dome, four arched entrances, and a floating orrery of crystals inside. ground_level=1. Built for the Arcanum city.",
+  "latest": 1,
+  "name": "astral_observatory",
+  "tags": [
+    "observatory",
+    "dome",
+    "rotunda",
+    "magic",
+    "arcanum",
+    "calcite",
+    "glass"
+  ],
+  "title": "Astral Observatory",
+  "updated_at": "2026-10-08T21:16:19Z",
+  "versions": [
+    {
+      "artifact_id": "slk_eca88b6059d73825",
+      "author": "claude",
+      "block_count": 1061,
+      "created_at": "2026-10-08T21:16:19Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [],
+      "notes": null,
+      "palette_top": [
+        "minecraft:purple_stained_glass",
+        "minecraft:purpur_block",
+        "minecraft:calcite",
+        "minecraft:polished_deepslate",
+        "minecraft:light_blue_stained_glass",
+        "minecraft:magenta_stained_glass",
+        "minecraft:purpur_pillar",
+        "minecraft:amethyst_cluster"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "c27e91f014f6fb671a3c12c316add3e3e06b8282d3bccaf86476b77bfb54a227",
+      "size": [
+        19,
+        19,
+        19
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

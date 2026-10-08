@@ -1,0 +1,54 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:57Z",
+  "description": "Giant voxel statue (45x68x49) of Ziggy, a seated brown toy poodle with curly shaded fur, facing +Z. A good reference for organic voxel sculpture with ellipsoids and noise shading. Pairs with ziggy_hill (pedestal hill).",
+  "latest": 1,
+  "name": "ziggy_poodle",
+  "tags": [
+    "statue",
+    "dog",
+    "poodle",
+    "animal",
+    "sculpture",
+    "organic",
+    "landmark",
+    "ziggy"
+  ],
+  "title": "Ziggy the toy poodle statue",
+  "updated_at": "2026-10-08T21:16:57Z",
+  "versions": [
+    {
+      "artifact_id": "slk_a9732ef6b45d8823",
+      "author": "claude",
+      "block_count": 26213,
+      "created_at": "2026-10-08T21:16:57Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 0,
+      "loads": [],
+      "notes": "Refined face version (eyes and nose adjusted).",
+      "palette_top": [
+        "minecraft:brown_wool",
+        "minecraft:brown_terracotta",
+        "minecraft:stripped_spruce_wood",
+        "minecraft:brown_concrete",
+        "minecraft:black_concrete",
+        "minecraft:gray_concrete",
+        "minecraft:white_concrete",
+        "minecraft:gray_terracotta"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "3a132a9c51e12f57e4a65b2523c64fb403f9e0374cbc91c6238768bc236b08b9",
+      "size": [
+        45,
+        68,
+        49
+      ],
+      "version": 1,
+      "y_offset": 0
+    }
+  ]
+}

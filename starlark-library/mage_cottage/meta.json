@@ -1,0 +1,72 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:26Z",
+  "description": "Small furnished mage's house (7x9x8) built on lib GuestHouse, with a glowing nameplate sign, froglight lamp posts topped with amethyst clusters, and a calcite doorstep. Props: style 0-3 (purpur/dark oak, warped/calcite, cherry/white, amethyst/deepslate roof), name and title (sign text, e.g. name=\"Morwen\", title=\"Enchantress\"). ground_level=1.",
+  "latest": 1,
+  "name": "mage_cottage",
+  "tags": [
+    "house",
+    "cottage",
+    "wizard",
+    "magic",
+    "parametric",
+    "arcanum",
+    "furnished",
+    "small"
+  ],
+  "title": "Mage cottage",
+  "updated_at": "2026-10-08T21:16:26Z",
+  "versions": [
+    {
+      "artifact_id": "slk_d0312df918b1fdbd",
+      "author": "claude",
+      "block_count": 208,
+      "created_at": "2026-10-08T21:16:26Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [
+        "lib/dwellings.star:GuestHouse",
+        "lib/fixtures.star:Sign"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:dark_oak_log",
+        "minecraft:oak_planks",
+        "minecraft:purpur_stairs",
+        "minecraft:purpur_block",
+        "minecraft:amethyst_block",
+        "minecraft:polished_blackstone_wall",
+        "minecraft:amethyst_cluster",
+        "minecraft:bookshelf"
+      ],
+      "params": [
+        {
+          "default": 0,
+          "name": "style"
+        },
+        {
+          "default": "Mage",
+          "name": "name"
+        },
+        {
+          "default": "Enchanter",
+          "name": "title"
+        }
+      ],
+      "parent": null,
+      "props": {
+        "style": 0
+      },
+      "root_size": null,
+      "sha256": "aa786cee16768c8b4cc903c547a5eb2ea99f7ededf5db105b6d8b1b3d2458ad8",
+      "size": [
+        7,
+        9,
+        8
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

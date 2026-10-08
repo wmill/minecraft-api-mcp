@@ -1,0 +1,58 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:17:25Z",
+  "description": "Medieval stone blacksmith (20x14x16): stone brick and cobblestone walls on a cobblestone foundation with a wide archway forge opening, polished andesite floor. Working smithy with anvil, smithing table, blast furnaces, furnace, grindstone and cauldron, plus barrels, chests and lantern posts. Glowing \"Ash & Anvil Smithy - Repairs & Tools\" sign.",
+  "latest": 1,
+  "name": "ash_and_anvil_smithy",
+  "tags": [
+    "smithy",
+    "blacksmith",
+    "forge",
+    "medieval",
+    "workshop",
+    "stone",
+    "village",
+    "danishire"
+  ],
+  "title": "Ash & Anvil Smithy",
+  "updated_at": "2026-10-08T21:17:25Z",
+  "versions": [
+    {
+      "artifact_id": "slk_048ce5cdef3f00a7",
+      "author": "claude",
+      "block_count": 1244,
+      "created_at": "2026-10-08T21:17:25Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [
+        "lib/structural.star:Foundation,Floor",
+        "lib/openings.star:Window,Archway",
+        "lib/fixtures.star:Barrel,Chest,LanternPost"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:cobblestone",
+        "minecraft:stone_bricks",
+        "minecraft:polished_andesite",
+        "minecraft:dark_oak_slab",
+        "minecraft:spruce_slab",
+        "minecraft:air",
+        "minecraft:stripped_spruce_log",
+        "minecraft:spruce_fence"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "f96cb5652edc7b29a1b919be4e37e3875e679fb5ae0eecb13b23bb1200410338",
+      "size": [
+        20,
+        14,
+        16
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

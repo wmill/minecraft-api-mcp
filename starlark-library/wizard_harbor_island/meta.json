@@ -1,0 +1,60 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:16:43Z",
+  "description": "Large magical town block (59x57x89): inlaid patterned pavement, a harbor balustrade with central entrances, six furnished wizard homes in pastel plaster with purple/blue roofs, a northern domed star pavilion, four potion and spell market stalls, a walkable moon gate on the south promenade, and a floating crystal above a spire.",
+  "latest": 1,
+  "name": "wizard_harbor_island",
+  "tags": [
+    "town",
+    "harbor",
+    "wizard",
+    "magic",
+    "market",
+    "houses",
+    "pavilion",
+    "moon-gate",
+    "large"
+  ],
+  "title": "Wizard harbor island",
+  "updated_at": "2026-10-08T21:16:43Z",
+  "versions": [
+    {
+      "artifact_id": "slk_56395fe323a64e90",
+      "author": "claude",
+      "block_count": 13824,
+      "created_at": "2026-10-08T21:16:43Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [
+        "lib/dwellings.star:GuestHouse",
+        "lib/outdoor.star:MarketStall,FlowerBed,RoundTree",
+        "lib/fixtures.star:LanternPost,Sign,Bench,Chest",
+        "lib/roofs.star:PyramidRoof"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:smooth_stone",
+        "minecraft:air",
+        "minecraft:smooth_quartz",
+        "minecraft:polished_deepslate",
+        "minecraft:amethyst_block",
+        "minecraft:calcite",
+        "minecraft:stripped_warped_stem",
+        "minecraft:oak_planks"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "5f8d41bcb2e86713a37e4d4787ef5c75278991424e4ba7b2578d95232ad7c9d2",
+      "size": [
+        59,
+        57,
+        89
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

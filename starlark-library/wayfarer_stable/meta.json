@@ -1,0 +1,59 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:17:31Z",
+  "description": "Medieval stable/barn (29x14x17): dark oak log and cobblestone walls, gable roof, archway entrances, with a fenced paddock, hay bale stacks, water cauldrons, barrels, chests, a loft ladder and lantern posts. Glowing \"Wayfarer Stable - Feed & Tack\" sign.",
+  "latest": 1,
+  "name": "wayfarer_stable",
+  "tags": [
+    "stable",
+    "barn",
+    "farm",
+    "paddock",
+    "medieval",
+    "village",
+    "danishire"
+  ],
+  "title": "Wayfarer Stable",
+  "updated_at": "2026-10-08T21:17:31Z",
+  "versions": [
+    {
+      "artifact_id": "slk_1d2d95083cf6ac8f",
+      "author": "claude",
+      "block_count": 1419,
+      "created_at": "2026-10-08T21:17:31Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [
+        "lib/structural.star:Foundation,Floor",
+        "lib/openings.star:Archway,Window",
+        "lib/roofs.star:GableRoof",
+        "lib/outdoor.star:FenceRing,HayBaleStack",
+        "lib/fixtures.star:Barrel,Chest,LanternPost,Ladder"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:cobblestone",
+        "minecraft:spruce_planks",
+        "minecraft:coarse_dirt",
+        "minecraft:spruce_stairs",
+        "minecraft:dark_oak_log",
+        "minecraft:spruce_fence",
+        "minecraft:hay_block",
+        "minecraft:air"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "9a8fc3d0c041d33f818cdcc8a30e6426b542b7bc9428c7b07a9906f9759a2918",
+      "size": [
+        29,
+        14,
+        17
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

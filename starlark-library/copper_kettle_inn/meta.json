@@ -1,0 +1,58 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:17:25Z",
+  "description": "Medieval timber-frame inn (23x20x15): cobblestone foundation, dark oak and white terracotta walls, gable roof, shuttered windows. Fully furnished with a dining hall (tables and chairs), kitchen counters, fireplace, brewing stand, upstairs beds, chests, barrels, bookshelves, ladder and carpets. Glowing \"The Copper Kettle Inn - Beds & Supper\" sign.",
+  "latest": 1,
+  "name": "copper_kettle_inn",
+  "tags": [
+    "inn",
+    "tavern",
+    "medieval",
+    "timber-frame",
+    "furnished",
+    "village",
+    "danishire"
+  ],
+  "title": "The Copper Kettle Inn",
+  "updated_at": "2026-10-08T21:17:25Z",
+  "versions": [
+    {
+      "artifact_id": "slk_7879e7cf9449c2b5",
+      "author": "claude",
+      "block_count": 2206,
+      "created_at": "2026-10-08T21:17:25Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [
+        "lib/structural.star:Foundation,Floor,TimberFrameWall",
+        "lib/openings.star:SingleDoor,ShutteredWindow",
+        "lib/roofs.star:GableRoof",
+        "lib/fixtures.star:DiningTable,Chair,KitchenCounter,Fireplace,Bed,Chest,Barrel,BookshelfWall,Carpet,Ladder"
+      ],
+      "notes": "Updated ShutteredWindow pane= to glazing= for the current lib API.",
+      "palette_top": [
+        "minecraft:cobblestone",
+        "minecraft:spruce_planks",
+        "minecraft:dark_oak_planks",
+        "minecraft:dark_oak_log",
+        "minecraft:dark_oak_stairs",
+        "minecraft:white_terracotta",
+        "minecraft:yellow_terracotta",
+        "minecraft:spruce_trapdoor"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "e662f68af510a07d4e21de6ae3709e6f61d3232598d26eb035dab306e22c2499",
+      "size": [
+        23,
+        20,
+        15
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-08T21:17:04Z",
+  "description": "Oval stone hill (45x35x49) with a deepslate tile cap that serves as the pedestal for the ziggy_poodle statue. The west approach climbs to the top in one-block steps.",
+  "latest": 1,
+  "name": "ziggy_hill",
+  "tags": [
+    "hill",
+    "pedestal",
+    "terrain",
+    "oval",
+    "stone",
+    "ziggy"
+  ],
+  "title": "Ziggy's pedestal hill",
+  "updated_at": "2026-10-08T21:17:04Z",
+  "versions": [
+    {
+      "artifact_id": "slk_95af8f0019081800",
+      "author": "claude",
+      "block_count": 57374,
+      "created_at": "2026-10-08T21:17:04Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 0,
+      "loads": [],
+      "notes": null,
+      "palette_top": [
+        "minecraft:stone",
+        "minecraft:air",
+        "minecraft:deepslate_tiles",
+        "minecraft:polished_blackstone",
+        "minecraft:smooth_sandstone",
+        "minecraft:gold_block",
+        "minecraft:polished_blackstone_brick_stairs"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "dadc977084ebafe138e7cffdfdbf969710c96c1163eeb6195f11d0ce497a974d",
+      "size": [
+        45,
+        35,
+        49
+      ],
+      "version": 1,
+      "y_offset": 0
+    }
+  ]
+}
