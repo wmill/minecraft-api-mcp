@@ -88,6 +88,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_schematic_tags": schematics.handle_get_schematic_tags,
     "search_schematics": schematics.handle_search_schematics,
     "get_schematic": schematics.handle_get_schematic,
+    "get_schematic_image": schematics.handle_get_schematic_image,
     "place_schematic": schematics.handle_place_schematic,
 
     # Starlark build service tools

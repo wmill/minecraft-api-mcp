@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .images import available_views
+
 
 PUBLIC_META_KEYS = {
     "size",
@@ -71,6 +73,7 @@ def normalize_catalog_row(row: dict[str, Any], nbt_dir: Path, images_dir: Path) 
         "placeable": nbt_path.exists(),
         "nbt_filename": nbt_path.name if nbt_path.exists() else None,
         "image_metadata": meta,
+        "views": available_views(images_dir, schematic_id),
     }
     doc["search_text"] = " ".join(
         str(value)
@@ -86,6 +89,21 @@ def normalize_catalog_row(row: dict[str, Any], nbt_dir: Path, images_dir: Path) 
         if value
     )
     return doc
+
+
+_ids_cache: dict[Path, tuple[int, frozenset[str]]] = {}
+
+
+def catalog_ids(catalog_path: Path) -> frozenset[str]:
+    """Schematic ids in the catalog, re-read only when the file changes."""
+    mtime = catalog_path.stat().st_mtime_ns
+    cached = _ids_cache.get(catalog_path)
+    if cached is None or cached[0] != mtime:
+        data = load_json(catalog_path)
+        ids = frozenset(str(row.get("schematic_id", "")).strip() for row in data if isinstance(row, dict)) \
+            if isinstance(data, list) else frozenset()
+        cached = _ids_cache[catalog_path] = (mtime, ids)
+    return cached[1]
 
 
 def load_catalog(catalog_path: Path, nbt_dir: Path, images_dir: Path) -> list[dict[str, Any]]:

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 from typing import Optional
 
 import httpx
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult, ImageContent, TextContent
 
 from ..client.minecraft_api import MinecraftAPIClient
 from ..client.schematic_service import SchematicServiceClient
@@ -20,6 +21,20 @@ def _schematic_client() -> SchematicServiceClient:
 def _ground_level(row: dict) -> int:
     placement = (row.get("image_metadata") or {}).get("placement") or {}
     return placement.get("ground_level") or 0
+
+
+THUMBNAIL_PX = 192
+MAX_THUMBNAILS = 5
+ORIENTATION_NOTE = (
+    "Views: top has north up/east right; north/south/east/west are elevations seen from that side; "
+    "iso is seen from the south-east (south face left, east face right). At rotation NONE the "
+    "south view faces +Z; CLOCKWISE_90 turns that side west, CLOCKWISE_180 north, "
+    "COUNTERCLOCKWISE_90 east."
+)
+
+
+def _image(data: bytes) -> ImageContent:
+    return ImageContent(type="image", mimeType="image/png", data=base64.b64encode(data).decode("ascii"))
 
 
 def _unavailable(error: Exception) -> CallToolResult:
@@ -80,10 +95,12 @@ async def handle_search_schematics(
     style: Optional[str] = None,
     size_category: Optional[str] = None,
     has_interior: Optional[bool] = None,
+    include_thumbnails: bool = False,
     **arguments,
 ) -> CallToolResult:
+    client = _schematic_client()
     try:
-        result = await _schematic_client().search_schematics(
+        result = await client.search_schematics(
             query=query,
             limit=limit,
             structure_type=structure_type,
@@ -116,7 +133,22 @@ async def handle_search_schematics(
         if ground_level:
             line += f" ground_level={ground_level}"
         lines.append(line)
-    return format_success_response("\n".join(lines))
+    if not include_thumbnails:
+        return format_success_response("\n".join(lines))
+
+    # Thumbnails are best-effort: a missing image never fails the search.
+    content: list[TextContent | ImageContent] = []
+    for row in rows[:MAX_THUMBNAILS]:
+        schematic_id = str(row.get("schematic_id"))
+        try:
+            data = await client.get_schematic_image(schematic_id, "iso", THUMBNAIL_PX)
+        except Exception:
+            continue
+        content.append(TextContent(type="text", text=f"{schematic_id}: {row.get('title', 'Untitled')}"))
+        content.append(_image(data))
+    if len(rows) > MAX_THUMBNAILS:
+        lines.append(f"(Thumbnails shown for the first {MAX_THUMBNAILS} results.)")
+    return CallToolResult(content=[TextContent(type="text", text="\n".join(lines)), *content])
 
 
 async def handle_get_schematic(
@@ -154,7 +186,40 @@ async def handle_get_schematic(
             f"Ground level: {ground_level} (this many bottom layers are terrain-fill; "
             "place_schematic embeds them below the requested y by default)"
         )
+    if row.get("views") != []:
+        lines.append(f"Preview: get_schematic_image(schematic_id=\"{row.get('schematic_id')}\", view=\"sheet\")")
     return format_success_response("\n".join(line for line in lines if line))
+
+
+async def handle_get_schematic_image(
+    api_client: MinecraftAPIClient,
+    schematic_id: str,
+    view: str = "sheet",
+    max_px: Optional[int] = None,
+    **arguments,
+) -> CallToolResult:
+    try:
+        data = await _schematic_client().get_schematic_image(str(schematic_id), view, max_px)
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status in (400, 404, 413):
+            try:
+                detail = exc.response.json().get("detail", str(exc))
+            except ValueError:
+                detail = str(exc)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"No preview for schematic {schematic_id} ({view}): {detail}")],
+                isError=True,
+            )
+        return _unavailable(exc)
+    except httpx.HTTPError as exc:
+        return _unavailable(exc)
+    except Exception as exc:
+        return format_error_response(exc, "getting schematic image")
+    return CallToolResult(content=[
+        _image(data),
+        TextContent(type="text", text=f"Schematic {schematic_id} {view}. {ORIENTATION_NOTE}"),
+    ])
 
 
 async def handle_place_schematic(

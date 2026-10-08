@@ -43,6 +43,7 @@ class SchematicSearchIndex:
                     "placeable": {"type": "boolean"},
                     "confidence": {"type": "float"},
                     "non_air_block_count": {"type": "integer"},
+                    "views": {"type": "keyword"},
                 }
             }
         }

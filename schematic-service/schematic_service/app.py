@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
-from .catalog import load_catalog
+from . import images
+from .catalog import catalog_ids, load_catalog
 from .config import ServiceConfig, load_config
 from .search import SchematicSearchIndex, SearchUnavailable, local_search, local_top_tags
 
@@ -105,6 +106,40 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         if not path.exists():
             raise HTTPException(status_code=404, detail="converted NBT file not found")
         return FileResponse(path, media_type="application/octet-stream", filename=path.name)
+
+    @app.get("/schematics/{schematic_id}/images/{view}")
+    async def get_schematic_image(schematic_id: str, view: str, max_px: int | None = None) -> Response:
+        try:
+            if view != images.SHEET:
+                path = images.safe_image_path(cfg.images_dir, schematic_id, view)
+            else:
+                images.safe_image_path(cfg.images_dir, schematic_id, "iso")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # The images directory also holds unscreened renders of schematics that never converted;
+        # only catalogued, placeable schematics are served.
+        try:
+            catalogued = schematic_id in catalog_ids(cfg.catalog_path)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=503, detail=f"catalog data unavailable: {exc}") from exc
+        if not catalogued or not safe_nbt_path(cfg.nbt_dir, schematic_id).exists():
+            raise HTTPException(status_code=404, detail="schematic not found")
+        try:
+            if view == images.SHEET:
+                views = images.available_views(cfg.images_dir, schematic_id)
+                if not views:
+                    raise HTTPException(status_code=404, detail="no images for this schematic")
+                paths = tuple((v, images.safe_image_path(cfg.images_dir, schematic_id, v)) for v in views)
+                mtime = max(p.stat().st_mtime_ns for _, p in paths)
+                data = images.render_sheet(paths, images.clamp_px(max_px, images.DEFAULT_TILE_PX), mtime)
+            else:
+                if not path.is_file():
+                    raise HTTPException(status_code=404, detail=f"no {view} image for this schematic")
+                data = images.render_view(path, images.clamp_px(max_px, images.DEFAULT_VIEW_PX),
+                                          path.stat().st_mtime_ns)
+        except images.ImageTooLarge as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        return Response(content=data, media_type="image/png")
 
     return app
 

@@ -31,6 +31,12 @@ Pass the returned `lock_id` on placement and execute/replay calls. Keep the orig
 - `survey_site` - Compact ground, slope, water/vegetation, grading, and occupancy assessment of a chosen footprint; requires loaded chunks. See [site survey](../docs/site-survey.md).
 - `summarize_heightmap` - Get a concise terrain summary derived from a heightmap
 
+### Schematic Library (optional schematic service)
+- `search_schematics` - Text search of converted, placeable schematics; `include_thumbnails` attaches small iso previews
+- `get_schematic` - Metadata for one schematic
+- `get_schematic_image` - Pre-rendered preview: a labelled sheet (iso, top, four elevations) or one view; use it to check looks and entrance side before choosing a rotation
+- `place_schematic` - Place a schematic with its ground offset applied
+
 ### Placement Safety
 - `dry_run` on `place_nbt_structure`, `place_schematic`, and Starlark placements - Report what would be overwritten (by category, carved-to-air count, overlapping reservations/builds) without changing the world
 - `undo_build` - Restore the blocks saved immediately before an NBT placement; one-shot, refuses to erase later overlapping builds unless `force=true`. See [undo and dry-run](../docs/undo-and-dry-run.md).

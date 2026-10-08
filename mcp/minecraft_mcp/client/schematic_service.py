@@ -59,3 +59,14 @@ class SchematicServiceClient:
             response = await client.get(f"{self.base_url}/schematics/{schematic_id}/nbt")
             response.raise_for_status()
             return response.content
+
+    async def get_schematic_image(
+        self, schematic_id: str, view: str = "sheet", max_px: Optional[int] = None
+    ) -> bytes:
+        params = {"max_px": max_px} if max_px is not None else None
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{self.base_url}/schematics/{schematic_id}/images/{view}", params=params
+            )
+            response.raise_for_status()
+            return response.content

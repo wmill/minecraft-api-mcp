@@ -246,9 +246,11 @@ This service is intentionally separate from the Minecraft mod. The Minecraft ser
 - `schematic_catalog_gemma3.json` - primary AI-generated searchable catalog
 - `Schematics-nbt/{schematic_id}.nbt` - converted vanilla NBT files that can be placed
 - `schematic-images/{schematic_id}/meta.json` - conversion/image metadata used for enrichment
+- `schematic-images/{schematic_id}/{iso,top,north,south,east,west}.png` - pre-rendered previews. This folder is raw render-tool output: about half of it (including renders up to 500+ MP) is for schematics that failed NBT conversion and are not in the catalog, so images are only ever served for catalogued, placeable ids. Orientation (verified against NBT): `top` has north up/east right; side views are elevations seen from that side (`south` = +Z face at rotation NONE); `iso` is viewed from the south-east.
 
 **Service modules:**
-- `app.py` - FastAPI routes for health, search, metadata, NBT download, and index rebuild
+- `app.py` - FastAPI routes for health, search, metadata, NBT download, preview images, and index rebuild
+- `images.py` - Catalog-gated preview images: downscaled single views and a labelled 3x2 contact sheet (Pillow, LRU-cached)
 - `catalog.py` - Catalog normalization and metadata enrichment; restricts which meta.json fields are exposed publicly via `PUBLIC_META_KEYS`
 - `search.py` - Elasticsearch indexing/search plus local fallback search
 - `config.py` - Environment-driven paths and Elasticsearch URL
@@ -270,10 +272,12 @@ SCHEMATIC_INDEX=minecraft_schematics
 - `GET /schematics/search?q=...&limit=...&structure_type=...&style=...&size_category=...&has_interior=...&placeable=true&fallback=true`
 - `GET /schematics/{schematic_id}`
 - `GET /schematics/{schematic_id}/nbt`
+- `GET /schematics/{schematic_id}/images/{view}?max_px=...` - `view` is `sheet` or one of `iso/top/north/south/east/west`; PNG downscaled to `max_px` (64-1024; default 768, or 256 per sheet tile); 404 for ids not in the catalog
 
 **MCP tools using this service:**
 - `search_schematics`
 - `get_schematic`
+- `get_schematic_image` - preview sheet or single view as MCP image content (`search_schematics` can also attach small iso thumbnails via `include_thumbnails`)
 - `place_schematic`
 
 `place_schematic` fetches NBT bytes from the schematic service, then calls the Minecraft NBT placement endpoint via multipart upload. Keep this orchestration in MCP unless there is a strong reason to couple the Minecraft mod directly to the schematic service.
@@ -361,6 +365,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 **Schematic Service (`schematic-service/pyproject.toml`):**
 - fastapi >= 0.115.0 - HTTP API
 - httpx >= 0.27.0 - Elasticsearch HTTP client
+- pillow >= 10.1 - Preview image downscaling and contact sheets
 - python-dotenv >= 1.0.0 - Environment configuration
 - uvicorn >= 0.30.0 - ASGI server
 
@@ -396,12 +401,14 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_debug_mode.py` - Debug mode tests
 - `test_final_verification.py` - Final verification tests
 - `test_schematic_tools.py` - Schematic MCP tool registration/config tests
+- `test_schematic_images.py` - `get_schematic_image` and search thumbnails
 - `test_starlark_tools.py` - Starlark MCP tool registration/config tests
 - `test_undo_dry_run.py` - `undo_build` and `dry_run` placement tools
 
 **Schematic Service Tests** (`schematic-service/`):
 - `test_catalog.py` - Catalog normalization and metadata sanitization
 - `test_search.py` - Local fallback search behavior
+- `test_images.py` - Preview downscaling, contact sheet, catalog gating, and path validation (run with `uv run --with pytest python -m pytest`)
 
 **Starlark Service Tests** (`starlark-service/`, run with `uv run pytest`):
 - `test_app.py` - Build success/failure/diagnostics, cache hits, artifact routes, examples/catalog

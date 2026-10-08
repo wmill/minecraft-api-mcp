@@ -1811,6 +1811,11 @@ TOOL_SEARCH_SCHEMATICS = Tool(
             "has_interior": {
                 "type": "boolean",
                 "description": "Optional filter for schematics that have an interior"
+            },
+            "include_thumbnails": {
+                "type": "boolean",
+                "description": "Attach a small iso thumbnail (~50 tokens each) for the first 5 results to choose visually",
+                "default": False
             }
         },
         "required": ["query"]
@@ -1826,6 +1831,36 @@ TOOL_GET_SCHEMATIC = Tool(
             "schematic_id": {
                 "type": "string",
                 "description": "Numeric schematic ID"
+            }
+        },
+        "required": ["schematic_id"]
+    }
+)
+
+TOOL_GET_SCHEMATIC_IMAGE = Tool(
+    name="get_schematic_image",
+    description=(
+        "Show pre-rendered previews of a library schematic. The default 'sheet' is one labelled image "
+        "(about 600 tokens) with the iso render, top-down plan, and the north/south/east/west elevations; "
+        "use it to judge the look and find which side the entrance is on before choosing a rotation. "
+        "A single view at max_px=768 costs about 800 tokens."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "schematic_id": {"type": "string", "description": "Numeric schematic ID"},
+            "view": {
+                "type": "string",
+                "enum": ["sheet", "iso", "top", "north", "south", "east", "west"],
+                "default": "sheet",
+                "description": "sheet = all views in one image; top has north up; side views are seen from that side"
+            },
+            "max_px": {
+                "type": "integer",
+                "minimum": 64,
+                "maximum": 1024,
+                "description": "Longest edge for a single view (default 768), or tile size for the sheet (default 256)"
             }
         },
         "required": ["schematic_id"]
@@ -2081,6 +2116,7 @@ TOOL_SCHEMAS = [
     TOOL_GET_SCHEMATIC_TAGS,
     TOOL_SEARCH_SCHEMATICS,
     TOOL_GET_SCHEMATIC,
+    TOOL_GET_SCHEMATIC_IMAGE,
     TOOL_PLACE_SCHEMATIC,
     # Starlark build service tools
     TOOL_BUILD_STARLARK_STRUCTURE,
