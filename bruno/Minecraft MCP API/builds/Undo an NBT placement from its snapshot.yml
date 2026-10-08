@@ -1,0 +1,28 @@
+info:
+  name: Undo an NBT placement from its snapshot
+  type: http
+  seq: 16
+  tags:
+    - builds
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/builds/:id/undo"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID returned by the NBT placement
+  body:
+    type: json
+    data: |-
+      {
+        "force": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

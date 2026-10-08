@@ -10,7 +10,7 @@ from mcp.types import CallToolResult, TextContent
 from ..client.minecraft_api import MinecraftAPIClient
 from ..client.schematic_service import SchematicServiceClient
 from ..config import SCHEMATIC_SERVICE_URL
-from ..utils.formatting import format_error_response, format_success_response
+from ..utils.formatting import format_dry_run, format_error_response, format_success_response, undo_hint
 
 
 def _schematic_client() -> SchematicServiceClient:
@@ -168,6 +168,7 @@ async def handle_place_schematic(
     include_entities: bool = True,
     replace_blocks: bool = True,
     apply_ground_offset: bool = True,
+    dry_run: bool = False,
     **arguments,
 ) -> CallToolResult:
     client = _schematic_client()
@@ -196,9 +197,16 @@ async def handle_place_schematic(
             rotation,
             include_entities,
             replace_blocks,
+            dry_run,
         )
     except Exception as exc:
         return format_error_response(exc, "placing schematic")
+
+    offset_note = (f"Structure origin y={place_y} (requested walking plane y={y}, ground_level offset {ground_level})."
+                   if apply_ground_offset and ground_level else "")
+    if result.get("success") and result.get("dry_run"):
+        text = format_dry_run(result) + (f"\n{offset_note}" if offset_note else "")
+        return CallToolResult(content=[TextContent(type="text", text=text)], structuredContent=result)
 
     if not result.get("success"):
         return CallToolResult(
@@ -207,8 +215,10 @@ async def handle_place_schematic(
 
     title = metadata.get("title", f"Schematic {schematic_id}")
     msg = f"Placed schematic {schematic_id} ({title}) at ({x}, {place_y}, {z}) with rotation {rotation}."
-    if apply_ground_offset and ground_level:
-        msg += f"\nApplied ground_level offset {ground_level} (requested y was {y})."
+    if offset_note:
+        msg += f"\n{offset_note}"
     if result.get("build_id"):
         msg += f"\nRecorded as build: {result['build_id']}"
+    if undo_hint(result):
+        msg += f"\n{undo_hint(result)}"
     return format_success_response(msg)

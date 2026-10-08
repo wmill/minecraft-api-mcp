@@ -430,7 +430,7 @@ TOOL_SEND_MESSAGE_TO_PLAYER = Tool(
 # Prefab Tools
 TOOL_PLACE_NBT_STRUCTURE = Tool(
     name="place_nbt_structure",
-    description="Place an NBT structure file at specified coordinates in the world",
+    description="Place an NBT structure file at specified coordinates in the world. Records a build whose pre-placement terrain can be restored with undo_build; use dry_run first to see what would be overwritten.",
     inputSchema={
         "type": "object",
         "properties": {
@@ -474,6 +474,11 @@ TOOL_PLACE_NBT_STRUCTURE = Tool(
                 "type": "boolean",
                 "description": "Whether to replace existing blocks (default: true)",
                 "default": True
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": "Only report what the placement would overwrite (by category, carved-to-air count, overlapping reservations/builds); the world is not changed",
+                "default": False
             }
         },
         "required": ["nbt_file_data", "filename", "x", "y", "z"]
@@ -1453,6 +1458,29 @@ TOOL_REPLAY_BUILD = Tool(
     }
 )
 
+TOOL_UNDO_BUILD = Tool(
+    name="undo_build",
+    description=(
+        "Undo an NBT placement (place_nbt_structure, place_schematic, place_starlark_structure) by restoring "
+        "the blocks saved immediately before it was placed. One-shot: the build becomes REVERTED. Entities the "
+        "placement spawned are not removed. Fails with undo_conflict when later recorded builds overlap, since "
+        "restoring would erase them; pass force=true only when that is intended."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {"type": "string", "description": "Build UUID returned by the placement"},
+            "force": {
+                "type": "boolean",
+                "description": "Restore even if later builds overlap (they will be partly erased)",
+                "default": False
+            }
+        },
+        "required": ["build_id"]
+    }
+)
+
 TOOL_CLONE_BUILD = Tool(
     name="clone_build",
     description="Create a copy of an existing build with a new UUID. All non-NBT tasks are copied as QUEUED. The original build is preserved unchanged as a placement record. Use this before translate_build when you want to place the same structure at a different location without losing the original. Rejected if the build is currently executing.",
@@ -1855,6 +1883,11 @@ TOOL_PLACE_SCHEMATIC = Tool(
                 "type": "boolean",
                 "description": "Apply the schematic's detected ground_level so its foundation lands below y",
                 "default": True
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": "Only report what the placement would overwrite (by category, carved-to-air count, overlapping reservations/builds); the world is not changed",
+                "default": False
             }
         },
         "required": ["schematic_id", "x", "y", "z"]
@@ -2031,6 +2064,7 @@ TOOL_SCHEMAS = [
     TOOL_ADD_BUILD_TASK_PREFAB_LADDER,
     TOOL_EXECUTE_BUILD,
     TOOL_REPLAY_BUILD,
+    TOOL_UNDO_BUILD,
     TOOL_CLONE_BUILD,
     TOOL_QUERY_BUILDS_BY_LOCATION,
     TOOL_GET_BUILD_STATUS,

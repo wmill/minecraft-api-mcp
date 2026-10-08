@@ -22,6 +22,7 @@ import ca.waltermiller.mcpapi.endpoints.RainFireEndpoint;
 import ca.waltermiller.mcpapi.endpoints.TaskExecutor;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import ca.waltermiller.mcpapi.endpoints.AreaLockEndpoint;
+import ca.waltermiller.mcpapi.snapshot.SnapshotStore;
 import io.javalin.Javalin;
 import net.minecraft.server.MinecraftServer;
 
@@ -63,13 +64,20 @@ public class APIServer {
         new PlayersEndpoint(app, server, logger);
         new MessageEndpoint(app, server, logger);
         new PlayerTeleportEndpoint(app, server, logger);
-        NBTStructureEndpoint nbtEndpoint = new NBTStructureEndpoint(app, server, logger, locks);
+        SnapshotStore snapshots = null;
+        try {
+            snapshots = SnapshotStore.fromEnvironment(
+                server.getRunDirectory() != null ? server.getRunDirectory() : java.nio.file.Path.of(""));
+        } catch (IllegalArgumentException e) {
+            logger.warn("Undo snapshots disabled: {}", e.getMessage());
+        }
+        NBTStructureEndpoint nbtEndpoint = new NBTStructureEndpoint(app, server, logger, locks, surveyOccupancy, snapshots);
         new PrefabEndpoint(app, server, logger, locks);
         new RainFireEndpoint(app, server, logger, locks);
 
         // Initialize build task management system
         try {
-            initializeBuildTaskSystem(app, server, logger, nbtEndpoint, locks, surveyOccupancy);
+            initializeBuildTaskSystem(app, server, logger, nbtEndpoint, locks, surveyOccupancy, snapshots);
         } catch (SQLException | RuntimeException e) {
             logger.error("Failed to initialize build task system", e);
             // Continue without build task system if database is not available
@@ -79,7 +87,8 @@ public class APIServer {
     
     private static void initializeBuildTaskSystem(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
                                                    NBTStructureEndpoint nbtEndpoint, AreaLockService locks,
-                                                   ca.waltermiller.mcpapi.survey.SurveyOccupancy surveyOccupancy) throws SQLException {
+                                                   ca.waltermiller.mcpapi.survey.SurveyOccupancy surveyOccupancy,
+                                                   SnapshotStore snapshots) throws SQLException {
         logger.info("Initializing build task management system...");
         
         // Initialize database
@@ -105,7 +114,8 @@ public class APIServer {
         surveyOccupancy.setBuildRepository(buildRepository);
 
         // Create and register build task endpoint
-        new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, railPlanningService, taskExecutor);
+        new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, railPlanningService, taskExecutor,
+            locks, snapshots);
 
         logger.info("Build task management system initialized successfully");
     }

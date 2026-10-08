@@ -6,6 +6,8 @@ Handles tools for creating builds, adding tasks to builds, executing builds, and
 
 import base64
 from typing import Any, Dict, List, Optional
+
+import httpx
 from mcp.types import CallToolResult, ImageContent, TextContent
 
 from ..client.minecraft_api import MinecraftAPIClient
@@ -767,6 +769,36 @@ async def handle_replay_build(
             )
     except Exception as e:
         return format_error_response(e, "replaying build")
+
+
+async def handle_undo_build(
+    api_client: MinecraftAPIClient,
+    build_id: str,
+    force: bool = False,
+    **arguments
+) -> CallToolResult:
+    """Restore the pre-placement snapshot of an NBT placement build."""
+    try:
+        result = await api_client.undo_build(build_id, force)
+    except httpx.HTTPStatusError as exc:
+        try:
+            payload = exc.response.json()
+        except ValueError:
+            payload = None
+        if isinstance(payload, dict):
+            lines = [f"❌ Undo failed ({exc.response.status_code}): {payload.get('error', 'Unknown error')}"]
+            for build in payload.get("builds", []):
+                lines.append(f"- overlapping later build {build.get('build_id')}: {build.get('name')} ({build.get('status')})")
+            return CallToolResult(content=[TextContent(type="text", text="\n".join(lines))],
+                                  structuredContent=payload, isError=True)
+        return format_error_response(exc, "undoing build")
+    except Exception as exc:
+        return format_error_response(exc, "undoing build")
+    text = f"Build {result.get('build_id', build_id)} reverted: pre-placement blocks restored."
+    if result.get("overwrote_later_builds"):
+        text += f" Forced over {result['overwrote_later_builds']} later overlapping build(s)."
+    text += " Entities spawned by the placement were not removed."
+    return CallToolResult(content=[TextContent(type="text", text=text)], structuredContent=result)
 
 
 async def handle_clone_build(

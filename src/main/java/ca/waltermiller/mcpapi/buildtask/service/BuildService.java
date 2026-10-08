@@ -85,6 +85,48 @@ public class BuildService {
         return savedBuild;
     }
 
+    /** Where a recorded NBT placement was written, as needed to rebuild its bounds. */
+    public record NbtPlacement(Build build, int x, int y, int z, int sizeX, int sizeY, int sizeZ, String rotation) {}
+
+    /**
+     * Loads the single NBT_STRUCTURE task of an auto-recorded placement. Empty when the build does not exist;
+     * IllegalArgumentException when it is not an NBT placement, IllegalStateException when already reverted.
+     */
+    public Optional<NbtPlacement> getNbtPlacement(UUID buildId) throws SQLException {
+        Optional<Build> found = getBuild(buildId);
+        if (found.isEmpty()) return Optional.empty();
+        Build build = found.get();
+        if (build.getStatus() == BuildStatus.REVERTED) {
+            throw new IllegalStateException("Build " + buildId + " has already been reverted");
+        }
+        List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
+        if (tasks.size() != 1 || tasks.get(0).getTaskType() != TaskType.NBT_STRUCTURE) {
+            throw new IllegalArgumentException("Only NBT structure placements can be undone");
+        }
+        JsonNode data = tasks.get(0).getTaskData();
+        for (String field : new String[] {"x", "y", "z", "size_x", "size_y", "size_z"}) {
+            if (!data.path(field).isInt()) throw new IllegalArgumentException("NBT placement record is missing " + field);
+        }
+        return Optional.of(new NbtPlacement(build, data.get("x").intValue(), data.get("y").intValue(), data.get("z").intValue(),
+            data.get("size_x").intValue(), data.get("size_y").intValue(), data.get("size_z").intValue(),
+            data.path("rotation").asText("NONE")));
+    }
+
+    /** Unreverted builds created after {@code build} whose recorded tasks intersect {@code box}. */
+    public List<Build> findLaterOverlappingBuilds(Build build, BoundingBox box) throws SQLException {
+        return buildRepository.findByLocationIntersection(build.getWorld(), box).stream()
+            .filter(other -> !other.getId().equals(build.getId()))
+            .filter(other -> other.getStatus() != BuildStatus.REVERTED)
+            .filter(other -> other.getCreatedAt() != null && build.getCreatedAt() != null
+                && other.getCreatedAt().isAfter(build.getCreatedAt()))
+            .toList();
+    }
+
+    public Build markReverted(Build build) throws SQLException {
+        build.setStatus(BuildStatus.REVERTED);
+        return buildRepository.update(build);
+    }
+
     /**
      * Retrieves build information by ID.
      * Requirements: 1.3

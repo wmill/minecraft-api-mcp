@@ -12,7 +12,9 @@ from ..utils.formatting import (
     format_success_response,
     format_error_response,
     format_success_with_position,
-    format_success_with_count
+    format_success_with_count,
+    format_dry_run,
+    undo_hint,
 )
 
 
@@ -27,6 +29,7 @@ async def handle_place_nbt_structure(
     rotation: str = "NONE",
     include_entities: bool = True,
     replace_blocks: bool = True,
+    dry_run: bool = False,
     **arguments
 ) -> CallToolResult:
     """
@@ -43,6 +46,7 @@ async def handle_place_nbt_structure(
         rotation: Structure rotation
         include_entities: Whether to include entities
         replace_blocks: Whether to replace existing blocks
+        dry_run: Report what would be overwritten without changing the world
         **arguments: Additional arguments (ignored)
         
     Returns:
@@ -51,14 +55,19 @@ async def handle_place_nbt_structure(
     try:
         result = await api_client.place_nbt_structure(
             nbt_file_data, filename, x, y, z, world,
-            rotation, include_entities, replace_blocks
+            rotation, include_entities, replace_blocks, dry_run
         )
         
+        if result.get("success") and result.get("dry_run"):
+            return CallToolResult(content=[TextContent(type="text", text=format_dry_run(result))],
+                                  structuredContent=result)
         if result.get("success"):
             position = {"x": x, "y": y, "z": z}
             extra_parts = [f"Filename: {filename}", f"Rotation: {rotation}"]
             if result.get("build_id"):
                 extra_parts.append(f"Recorded as build: {result['build_id']}")
+            if undo_hint(result):
+                extra_parts.append(undo_hint(result))
             return format_success_with_position("placed", "NBT structure", position, "\n".join(extra_parts))
         else:
             return CallToolResult(

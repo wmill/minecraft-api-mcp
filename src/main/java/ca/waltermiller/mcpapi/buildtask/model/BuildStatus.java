@@ -7,5 +7,6 @@ public enum BuildStatus {
     CREATED,      // Build has been created but no tasks executed
     IN_PROGRESS,  // Build execution has started
     COMPLETED,    // All tasks have been executed successfully
-    FAILED        // Build execution failed
+    FAILED,       // Build execution failed
+    REVERTED      // An NBT placement was undone from its pre-placement snapshot
 }

@@ -634,6 +634,12 @@ paths:
     post:
       tags: [structures]
       summary: Place an NBT structure (multipart upload)
+      description: |
+        Places the structure and records it as a build. The cuboid is snapshotted immediately
+        before placement (inside the lock check) so `POST /api/builds/{id}/undo` can restore it.
+        With `dry_run=true` nothing is written: the response is an `NbtStructureDryRunResponse`
+        describing what would be overwritten. A dry run never loads chunks (400 `unloaded_chunks`)
+        and never renews the area lock.
       operationId: placeNbtStructure
       requestBody:
         required: true
@@ -649,7 +655,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NbtStructurePlaceResponse"
+                oneOf:
+                  - $ref: "#/components/schemas/NbtStructurePlaceResponse"
+                  - $ref: "#/components/schemas/NbtStructureDryRunResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500":
@@ -914,6 +922,48 @@ paths:
                 $ref: "#/components/schemas/AsyncAcceptedResponse"
         "500":
           $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}/undo:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
+    post:
+      tags: [builds]
+      summary: Undo an NBT placement from its pre-placement snapshot
+      description: |
+        One-shot restore of blocks and block entities captured right before an NBT placement.
+        Entities spawned by the placement are not removed. On success the build becomes
+        REVERTED and the snapshot file is deleted. Later unreverted builds overlapping the
+        cuboid block the undo (409 `undo_conflict`) unless `force` is true.
+      operationId: undoBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Snapshot restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildUndoResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Build not found
+        "409":
+          description: Already reverted, `undo_conflict` with overlapping later builds, or an area-lock conflict
+        "503":
+          description: Snapshots are not configured
+        "504":
+          description: Timed out waiting for the server thread; inspect the world before retrying
 
   /api/builds/{id}/preview:
     get:
@@ -1345,7 +1395,7 @@ components:
 
     BuildStatus:
       type: string
-      enum: [CREATED, IN_PROGRESS, COMPLETED, FAILED]
+      enum: [CREATED, IN_PROGRESS, COMPLETED, FAILED, REVERTED]
 
     TaskStatus:
       type: string
@@ -2072,6 +2122,11 @@ components:
           type: string
           enum: ["true", "false"]
           default: "true"
+        dry_run:
+          type: string
+          enum: ["true", "false"]
+          default: "false"
+          description: Report what would be overwritten without changing the world
       required: [nbt_file]
 
     NbtStructurePlaceResponse:
@@ -2095,6 +2150,93 @@ components:
           type: boolean
         replace_blocks:
           type: boolean
+        build_id:
+          type: string
+          format: uuid
+          description: Recorded build; absent when the build database is unavailable
+        undo_available:
+          type: boolean
+          description: True once the pre-placement snapshot has been written
+        undo_unavailable_reason:
+          type: string
+          enum: [snapshots_disabled, snapshot_too_large, snapshot_unavailable, build_not_recorded, snapshot_write_failed]
+
+    NbtStructureDryRunResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        dry_run:
+          type: boolean
+          enum: [true]
+        world:
+          type: string
+        position:
+          $ref: "#/components/schemas/Position3D"
+        rotation:
+          type: string
+        structure_size:
+          $ref: "#/components/schemas/Position3D"
+        bounds:
+          $ref: "#/components/schemas/AreaBounds"
+        overwrite:
+          type: object
+          description: Template blocks compared by block id (states ignored) with the world
+          properties:
+            template_blocks: {type: integer}
+            replaced: {type: integer, description: Existing non-air blocks that would change}
+            unchanged: {type: integer}
+            air_carved: {type: integer, description: Replaced blocks whose template cell is air}
+            placed_into_air: {type: integer}
+            replaced_by_category:
+              type: object
+              properties:
+                terrain: {type: integer}
+                logs_leaves: {type: integer}
+                vegetation: {type: integer}
+                fluids: {type: integer}
+                block_entities: {type: integer}
+                other: {type: integer}
+            top_replaced:
+              type: array
+              maxItems: 10
+              items:
+                type: object
+                properties:
+                  block: {type: string}
+                  count: {type: integer}
+        lock_check:
+          type: object
+          description: "`{ok: true}` or the area-lock error a real placement would get, with `ok: false`"
+        reservations:
+          type: object
+          description: Overlapping reservations (same shape as the site survey)
+        builds:
+          type: object
+          description: Overlapping unreverted recorded builds (same shape as the site survey)
+        undo_snapshot:
+          type: boolean
+          description: Whether a real placement would be small enough to snapshot for undo
+
+    BuildUndoResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        build_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [REVERTED]
+        world:
+          type: string
+        bounds:
+          $ref: "#/components/schemas/AreaBounds"
+        overwrote_later_builds:
+          type: integer
+        message:
+          type: string
 
     # ── Effects ───────────────────────────────────────────────────────────────
 

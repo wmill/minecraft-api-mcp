@@ -4,6 +4,8 @@ Adds a REST API to Minecraft and implements an MCP server so that you can play a
 
 Multiple MCP clients can use [area reservations](docs/area-locks.md) to keep their builds from overlapping. Reserve a cuboid, pass its `lock_id` on writes, and renew during long planning. Abandoned reservations expire after 15 minutes by default.
 
+NBT placements (raw NBT, schematics, Starlark artifacts) can be [dry-run and undone](docs/undo-and-dry-run.md): `dry_run` reports what a placement would overwrite, and `undo_build` restores the blocks saved just before it was placed.
+
 # Basics and setup
 
 There are MCP clients like Claude Desktop or Goose which connect to the LLM and run MCP commands with the server.

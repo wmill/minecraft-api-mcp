@@ -550,7 +550,8 @@ class MinecraftAPIClient:
         world: Optional[str] = None,
         rotation: str = "NONE",
         include_entities: bool = True,
-        replace_blocks: bool = True
+        replace_blocks: bool = True,
+        dry_run: bool = False
     ) -> dict:
         """
         Place an NBT structure file at specified coordinates.
@@ -574,7 +575,7 @@ class MinecraftAPIClient:
         """
         nbt_bytes = base64.b64decode(nbt_file_data)
         return await self.place_nbt_structure_bytes(
-            nbt_bytes, filename, x, y, z, world, rotation, include_entities, replace_blocks
+            nbt_bytes, filename, x, y, z, world, rotation, include_entities, replace_blocks, dry_run
         )
 
     async def place_nbt_structure_bytes(
@@ -587,7 +588,8 @@ class MinecraftAPIClient:
         world: Optional[str] = None,
         rotation: str = "NONE",
         include_entities: bool = True,
-        replace_blocks: bool = True
+        replace_blocks: bool = True,
+        dry_run: bool = False
     ) -> dict:
         data = {
             "x": x,
@@ -599,6 +601,8 @@ class MinecraftAPIClient:
         }
         if world:
             data["world"] = world
+        if dry_run:
+            data["dry_run"] = "true"
 
         files = {
             "nbt_file": (filename, nbt_file_data, "application/octet-stream")
@@ -1200,6 +1204,17 @@ class MinecraftAPIClient:
             response.raise_for_status()
             return response.json()
     
+    async def undo_build(self, build_id: str, force: bool = False) -> dict:
+        """Restore the pre-placement snapshot of an NBT placement build (one-shot)."""
+        # The server allows 30 seconds for the world restore.
+        async with self._http_client(timeout=40.0) as client:
+            response = await client.post(
+                f"{self.base_url}/api/builds/{quote(build_id, safe='')}/undo",
+                json={"force": force}
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def query_builds_by_location(
         self,
         min_x: int,

@@ -39,6 +39,48 @@ def area_lock_error(error: Exception) -> dict | None:
     return None
 
 
+def undo_hint(result: dict) -> str:
+    """One line describing whether a recorded placement can be undone."""
+    if result.get("undo_available") and result.get("build_id"):
+        return f"Undo with undo_build(build_id=\"{result['build_id']}\")."
+    if result.get("undo_available") is False:
+        return f"Undo unavailable: {result.get('undo_unavailable_reason', 'unknown')}."
+    return ""
+
+
+def format_dry_run(result: dict) -> str:
+    """Compact summary of a placement dry run (no world change)."""
+    o = result.get("overwrite") or {}
+    b = result.get("bounds") or {}
+    lines = [
+        "Dry run only; the world was not changed.",
+        f"Bounds: ({b.get('min_x')}, {b.get('min_y')}, {b.get('min_z')}) to "
+        f"({b.get('max_x')}, {b.get('max_y')}, {b.get('max_z')}), rotation {result.get('rotation')}.",
+        f"Template blocks: {o.get('template_blocks', 0)}; would replace {o.get('replaced', 0)} existing blocks "
+        f"({o.get('air_carved', 0)} carved to air), fill {o.get('placed_into_air', 0)} air cells, "
+        f"leave {o.get('unchanged', 0)} unchanged.",
+    ]
+    categories = {k: v for k, v in (o.get("replaced_by_category") or {}).items() if v}
+    if categories:
+        lines.append("Replaced by category: " + ", ".join(f"{k} {v}" for k, v in categories.items()) + ".")
+    top = o.get("top_replaced") or []
+    if top:
+        lines.append("Most replaced: " + ", ".join(f"{t['block']} x{t['count']}" for t in top[:5]) + ".")
+    lock = result.get("lock_check") or {}
+    if lock and not lock.get("ok"):
+        lines.append(f"Placement would be rejected: {lock.get('code')}: {lock.get('error')}")
+    for key, label in (("reservations", "Overlapping reservations"), ("builds", "Overlapping recorded builds")):
+        group = result.get(key) or {}
+        if group.get("status") == "unavailable":
+            lines.append(f"{label}: unavailable.")
+        elif group.get("total"):
+            names = ", ".join(e.get("label") or e.get("name") or e.get("build_id", "?") for e in group.get("entries", []))
+            lines.append(f"{label}: {group['total']} ({names}).")
+    if result.get("undo_snapshot") is False:
+        lines.append("Note: this placement is too large for an undo snapshot.")
+    return "\n".join(lines)
+
+
 def format_error_response(error: Exception, context: str = "") -> CallToolResult:
     """
     Format an error response with consistent error messaging.

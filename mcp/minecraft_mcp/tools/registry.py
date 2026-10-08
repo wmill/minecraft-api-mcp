@@ -69,6 +69,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "add_build_task_prefab_ladder": builds.handle_add_build_task_prefab_ladder,
     "execute_build": builds.handle_execute_build,
     "replay_build": builds.handle_replay_build,
+    "undo_build": builds.handle_undo_build,
     "clone_build": builds.handle_clone_build,
     "query_builds_by_location": builds.handle_query_builds_by_location,
     "get_build_status": builds.handle_get_build_status,

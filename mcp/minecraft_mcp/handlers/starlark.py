@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from ..client.minecraft_api import MinecraftAPIClient
 from ..client.starlark_service import StarlarkServiceClient
 from ..config import STARLARK_SERVICE_URL
-from ..utils.formatting import area_lock_error, format_success_response
+from ..utils.formatting import area_lock_error, format_dry_run, format_success_response, undo_hint
 from ..utils.starlark_diagnostics import compact_diagnostics, diagnostic_text
 from ..utils.starlark_models import Placement, StarlarkResult
 
@@ -82,7 +82,7 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
     try:
         result = await api_client.place_nbt_structure_bytes(
             nbt, f"{artifact_id}.nbt", position["x"], position["y"], position["z"],
-            placement.world, placement.rotation, placement.include_entities, True)
+            placement.world, placement.rotation, placement.include_entities, True, placement.dry_run)
     except Exception as exc:
         # A timeout/disconnect or server error may occur after the world write.
         conflict = area_lock_error(exc)
@@ -102,11 +102,20 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
         return _failure("placement_failed", f"Placement failed: {result}",
                         "Inspect the world before retrying place_starlark_structure; partial placement may have occurred.",
                         artifact_id=artifact_id, placement=outcome)
-    outcome.update(status="placed", build_id=result.get("build_id"))
+    if placement.dry_run:
+        outcome.update(status="dry_run", **{key: result.get(key) for key in
+                                            ("overwrite", "lock_check", "reservations", "builds")})
+        return _response({"ok": True, "artifact_id": artifact_id, "placement": outcome},
+                         f"Dry run of {artifact_id} at ({position['x']}, {position['y']}, {position['z']}).\n"
+                         + format_dry_run(result))
+    outcome.update(status="placed", build_id=result.get("build_id"),
+                   undo_available=result.get("undo_available"),
+                   undo_unavailable_reason=result.get("undo_unavailable_reason"))
     return _response({"ok": True, "artifact_id": artifact_id, "placement": outcome},
                      f"Placed {artifact_id} at ({position['x']}, {position['y']}, {position['z']}) "
                      f"in {placement.world}, rotation {placement.rotation}."
-                     + (f" Build ID: {result['build_id']}" if result.get("build_id") else ""))
+                     + (f" Build ID: {result['build_id']}" if result.get("build_id") else "")
+                     + (f" {undo_hint(result)}" if undo_hint(result) else ""))
 
 
 async def handle_build_starlark_structure(
@@ -139,11 +148,11 @@ async def handle_build_starlark_structure(
 async def handle_place_starlark_structure(
     api_client: MinecraftAPIClient, artifact_id: str, x: int, y: int, z: int,
     world: str | None = None, rotation: str = "NONE", include_entities: bool = True,
-    apply_y_offset: bool = True, **arguments,
+    apply_y_offset: bool = True, dry_run: bool = False, **arguments,
 ) -> CallToolResult:
     try:
         target = Placement(x=x, y=y, z=z, world=world or "minecraft:overworld", rotation=rotation,
-                           include_entities=include_entities, apply_y_offset=apply_y_offset)
+                           include_entities=include_entities, apply_y_offset=apply_y_offset, dry_run=dry_run)
     except ValidationError as exc:
         return _failure("invalid_request", str(exc), artifact_id=artifact_id)
     client = _starlark_client()

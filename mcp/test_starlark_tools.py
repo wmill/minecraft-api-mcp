@@ -74,7 +74,7 @@ async def test_combined_placement_reuses_metadata_and_applies_offset_once(client
     service.build.assert_awaited_once_with("source", entry="build", props=None, root_size=None)
     api.place_nbt_structure_bytes.assert_awaited_once_with(
         b"nbt", BUILT["artifact_id"] + ".nbt", 10, 63 if offset else 64, 20,
-        "minecraft:overworld", "NONE", True, True)
+        "minecraft:overworld", "NONE", True, True, False)
 
 
 async def test_standalone_placement_reuses_artifact(clients):
@@ -85,7 +85,7 @@ async def test_standalone_placement_reuses_artifact(clients):
     assert data["placement"]["position"]["y"] == 64
     assert data["placement"]["world"] == "minecraft:the_nether"
     service.build.assert_not_called()
-    assert api.place_nbt_structure_bytes.call_args.args[-2] is False
+    assert api.place_nbt_structure_bytes.call_args.args[7] is False  # include_entities
 
 
 async def test_build_failure_groups_diagnostics_and_never_places(clients):

@@ -1,0 +1,42 @@
+info:
+  name: Dry-run an NBT structure placement
+  type: http
+  seq: 2
+  tags:
+    - structures
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/structure/place"
+  body:
+    type: multipart-form
+    data:
+      - name: nbt_file
+        type: file
+        value: []
+        description: NBT structure file
+      - name: world
+        type: text
+        value: minecraft:overworld
+      - name: x
+        type: text
+        value: "0"
+      - name: y
+        type: text
+        value: "64"
+      - name: z
+        type: text
+        value: "0"
+      - name: rotation
+        type: text
+        value: NONE
+      - name: dry_run
+        type: text
+        value: "true"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

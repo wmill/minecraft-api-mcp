@@ -13,13 +13,18 @@ import ca.waltermiller.mcpapi.preview.IsoRenderer;
 import ca.waltermiller.mcpapi.preview.PreviewViewDirection;
 import ca.waltermiller.mcpapi.preview.RecordingBlockSink;
 import com.fasterxml.jackson.databind.JsonNode;
+import ca.waltermiller.mcpapi.arealock.AreaBounds;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import ca.waltermiller.mcpapi.arealock.AreaLockException;
+import ca.waltermiller.mcpapi.snapshot.RegionSnapshot;
+import ca.waltermiller.mcpapi.snapshot.SnapshotStore;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.structure.StructureTemplate;
 import net.minecraft.world.World;
 
 import java.sql.SQLException;
@@ -32,6 +37,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 /**
@@ -41,17 +49,31 @@ import java.util.stream.Collectors;
  */
 public class BuildTaskEndpoint extends APIEndpoint {
     private static final int MAX_TERRAIN_MARGIN = 8;
+    private static final int UNDO_TIMEOUT_SECONDS = 30;
 
     private final BuildService buildService;
     private final LocationQueryService locationQueryService;
     private final RailPlanningService railPlanningService;
     private final TaskExecutor taskExecutor;
     private final RailRenderInspectionService railRenderInspectionService;
+    private final AreaLockService locks;
+    private final SnapshotStore snapshots;
 
     public BuildTaskEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
                            BuildService buildService, LocationQueryService locationQueryService,
                            RailPlanningService railPlanningService, TaskExecutor taskExecutor) {
+        this(app, server, logger, buildService, locationQueryService, railPlanningService, taskExecutor,
+            new AreaLockService(), null);
+    }
+
+    /** {@code snapshots} null disables the undo route (503). */
+    public BuildTaskEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
+                           BuildService buildService, LocationQueryService locationQueryService,
+                           RailPlanningService railPlanningService, TaskExecutor taskExecutor,
+                           AreaLockService locks, SnapshotStore snapshots) {
         super(app, server, logger);
+        this.locks = locks;
+        this.snapshots = snapshots;
         this.buildService = buildService;
         this.locationQueryService = locationQueryService;
         this.railPlanningService = railPlanningService;
@@ -70,6 +92,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
         registerPatchTask();
         registerExecuteBuild();
         registerReplayBuild();
+        registerUndoBuild();
         registerCloneBuild();
         registerQueryLocation();
         registerAuditBuild();
@@ -452,6 +475,108 @@ public class BuildTaskEndpoint extends APIEndpoint {
             ));
 
             LOGGER.info("Started replay of build {} via API", buildId);
+        }));
+    }
+
+    // POST /api/builds/{id}/undo - Restore the pre-placement snapshot of an NBT placement
+    private void registerUndoBuild() {
+        app.post("/api/builds/{id}/undo", ctx -> handle(ctx, "undoing build", () -> {
+            UUID buildId = pathUuid(ctx, "id", "build ID");
+            if (buildId == null) {
+                return;
+            }
+            if (snapshots == null) {
+                ctx.status(503).json(Map.of("error", "Undo snapshots are not configured on this server"));
+                return;
+            }
+            boolean force = false;
+            if (!ctx.body().isBlank()) {
+                JsonNode body = ca.waltermiller.mcpapi.buildtask.Json.MAPPER.readTree(ctx.body());
+                if (!body.isObject()) throw new IllegalArgumentException("Expected a JSON object");
+                if (body.has("force") && !body.get("force").isBoolean()) throw new IllegalArgumentException("force must be a boolean");
+                force = body.path("force").asBoolean(false);
+            }
+
+            Optional<BuildService.NbtPlacement> found = buildService.getNbtPlacement(buildId);
+            if (found.isEmpty()) {
+                ctx.status(404).json(Map.of("error", "Build not found"));
+                return;
+            }
+            BuildService.NbtPlacement placement = found.get();
+            Build build = placement.build();
+            AreaBounds bounds = PlacementBounds.structure(placement.x(), placement.y(), placement.z(),
+                placement.sizeX(), placement.sizeY(), placement.sizeZ(), placement.rotation());
+            NbtCompound snapshot = snapshots.load(buildId).orElseThrow(() -> new IllegalArgumentException(
+                "No undo snapshot exists for this build (placed before snapshots, too large, or already undone)"));
+
+            List<Build> conflicts = buildService.findLaterOverlappingBuilds(build, new BoundingBox(
+                bounds.min_x(), bounds.min_y(), bounds.min_z(), bounds.max_x(), bounds.max_y(), bounds.max_z()));
+            if (!conflicts.isEmpty() && !force) {
+                ctx.status(409).json(Map.of(
+                    "success", false,
+                    "code", "undo_conflict",
+                    "error", "Later builds overlap this placement and would be erased by undo; pass force=true to restore anyway",
+                    "total", conflicts.size(),
+                    "builds", conflicts.stream().limit(5).map(b -> Map.of(
+                        "build_id", b.getId().toString(), "name", b.getName(), "status", b.getStatus().name())).toList()));
+                return;
+            }
+
+            RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(build.getWorld());
+            ServerWorld world = worldKey == null ? null : server.getWorld(worldKey);
+            if (world == null) {
+                throw new IllegalArgumentException("Unknown world: " + build.getWorld());
+            }
+            StructureTemplate template = server.getStructureTemplateManager().createTemplate(snapshot);
+            String lockId = ctx.header(AreaLockService.HEADER);
+            CompletableFuture<Boolean> future = new CompletableFuture<>();
+            server.execute(() -> {
+                try {
+                    boolean restored = locks.execute(worldKey.getValue().toString(), bounds, lockId,
+                        () -> RegionSnapshot.restore(world, template, bounds), Boolean.TRUE::equals);
+                    if (restored) {
+                        try {
+                            StructurePlacementEffect.emit(world, bounds);
+                        } catch (Exception e) {
+                            LOGGER.warn("Failed to emit undo effect", e);
+                        }
+                    }
+                    future.complete(restored);
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
+                }
+            });
+            boolean restored;
+            try {
+                restored = future.get(UNDO_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                ctx.status(504).json(Map.of("error", "Timed out waiting for undo; inspect the world before retrying"));
+                return;
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof Exception cause) throw cause;
+                throw e;
+            }
+            if (!restored) {
+                ctx.status(500).json(Map.of("error", "Snapshot restore failed; the world may be unchanged"));
+                return;
+            }
+
+            buildService.markReverted(build);
+            try {
+                snapshots.delete(buildId);
+            } catch (java.io.IOException e) {
+                LOGGER.warn("Failed to delete undo snapshot for build {}: {}", buildId, e.getMessage());
+            }
+            ctx.json(Map.of(
+                "success", true,
+                "build_id", buildId.toString(),
+                "status", BuildStatus.REVERTED.name(),
+                "world", build.getWorld(),
+                "bounds", bounds,
+                "overwrote_later_builds", force ? conflicts.size() : 0,
+                "message", "Restored the pre-placement snapshot; entities spawned by the placement were not removed"
+            ));
+            LOGGER.info("Undid NBT placement build {} via API", buildId);
         }));
     }
 

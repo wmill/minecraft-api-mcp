@@ -136,9 +136,9 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 - `MessageEndpoint` - Send messages to players (broadcast or targeted)
 - `PlayerTeleportEndpoint` - Teleport players to coordinates
 - `PrefabEndpoint` - Place prefab structures: doors, stairs, windows, torches, signs, ladders (core logic in `PrefabEndpointCore`)
-- `NBTStructureEndpoint` - Place NBT data structures
+- `NBTStructureEndpoint` - Place NBT data structures; snapshots the target cuboid before writing (undo) and supports `dry_run` overwrite reports
 - `RainFireEndpoint` - Rain fire effect over a radius
-- `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, clone, translate, preview, rail planning, and location query routes
+- `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, undo, clone, translate, preview, rail planning, and location query routes
 - `TaskExecutor` - Executes queued build tasks on the Minecraft server thread; generic `executeAsync`/`dispatch` helpers parse task data and route it to the endpoint cores
 - `RailRenderInspectionService` - Dry-run rail placement inspection used by the audit route
 
@@ -146,6 +146,15 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 **Location**: `src/main/java/ca/waltermiller/mcpapi/preview/`
 
 Isometric PNG preview of builds and terrain: `BlockSink` abstraction (`WorldBlockSink` writes to the world, `RecordingBlockSink` records for dry runs), `BlockGrid` sparse voxel container, `IsoRenderer` (scale bounds `MIN_SCALE`/`MAX_SCALE`), `Palette`, `TerrainHeightmapGridAdapter`.
+
+#### Placement Snapshots (Undo / Dry Run)
+**Location**: `src/main/java/ca/waltermiller/mcpapi/snapshot/`
+
+- `SnapshotStore` - gzipped structure NBT per build id in `BUILD_SNAPSHOT_DIR` (default `<run dir>/build-snapshots`), capped by `BUILD_SNAPSHOT_MAX_VOLUME` voxels (default 2,000,000)
+- `RegionSnapshot` - server-thread capture/restore and the dry-run template-vs-world scan
+- `OverwriteTally` - pure counting/categorization for dry-run reports
+
+`POST /api/builds/{id}/undo` restores the snapshot once (build becomes `REVERTED`); later overlapping builds return 409 `undo_conflict` unless `force`. See `docs/undo-and-dry-run.md`.
 
 #### Build Task System
 **Location**: `src/main/java/ca/waltermiller/mcpapi/buildtask/`
@@ -155,7 +164,7 @@ A comprehensive system for queuing, persisting, and executing complex build oper
 **Architecture Pattern**: Repository-Service-Executor
 - **Repositories** (`repository/`): PostgreSQL data access with implementations for Build, Task, and RailPlanningJob entities
 - **Services** (`service/`): Business logic for task validation, location queries, build orchestration, and rail planning
-- **Models** (`model/`): Data classes (Build, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus, RailPlanningJob, RailPlanningStatus)
+- **Models** (`model/`): Data classes (Build, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus incl. `REVERTED`, RailPlanningJob, RailPlanningStatus)
 
 **Task Types:**
 - `BLOCK_SET` - Place a 3D array of blocks
@@ -215,7 +224,7 @@ DB_PASSWORD=your_password
   - `blocks.py` - Block manipulation tools
   - `messages.py` - Messaging tools
   - `prefabs.py` - Prefab placement tools
-  - `builds.py` - Build task management tools (create builds, add tasks, execute, audit, query by location, get status, rail planning)
+  - `builds.py` - Build task management tools (create builds, add tasks, execute, audit, undo, query by location, get status, rail planning)
   - `system.py` - System tools
   - `schematics.py` - Optional schematic search, metadata lookup, and NBT placement orchestration
 
@@ -379,6 +388,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - Endpoint tests: `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `RailRenderInspectionServiceTest`, `EndpointRefactoringTest`
 - Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `TaskDataValidatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`
 - Preview tests: `BlockGridTest`, `IsoRendererTest`, `PaletteTest`, `TerrainHeightmapGridAdapterTest`
+- Snapshot tests: `SnapshotStoreTest`, `OverwriteTallyTest`, `BuildUndoEndpointTest`
 
 **Python Tests** (`mcp/`):
 - `test_backward_compatibility.py` - Backward compatibility tests
@@ -387,6 +397,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_final_verification.py` - Final verification tests
 - `test_schematic_tools.py` - Schematic MCP tool registration/config tests
 - `test_starlark_tools.py` - Starlark MCP tool registration/config tests
+- `test_undo_dry_run.py` - `undo_build` and `dry_run` placement tools
 
 **Schematic Service Tests** (`schematic-service/`):
 - `test_catalog.py` - Catalog normalization and metadata sanitization

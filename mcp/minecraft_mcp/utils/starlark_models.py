@@ -15,6 +15,7 @@ class Placement(BaseModel):
     rotation: Literal["NONE", "CLOCKWISE_90", "CLOCKWISE_180", "COUNTERCLOCKWISE_90"] = "NONE"
     include_entities: bool = True
     apply_y_offset: bool = True
+    dry_run: bool = Field(default=False, description="Report what placement would overwrite without changing the world.")
 
 
 class DiagnosticGroup(BaseModel):
@@ -31,12 +32,18 @@ class DiagnosticGroup(BaseModel):
 
 
 class PlacementResult(BaseModel):
-    status: Literal["placed", "failed", "unknown"]
+    status: Literal["placed", "failed", "unknown", "dry_run"]
     requested_position: dict[str, int]
     position: dict[str, int]
     world: str
     rotation: str
     build_id: str | None = None
+    undo_available: bool | None = None
+    undo_unavailable_reason: str | None = None
+    overwrite: dict[str, Any] | None = None
+    lock_check: dict[str, Any] | None = None
+    reservations: dict[str, Any] | None = None
+    builds: dict[str, Any] | None = None
 
 
 class StarlarkResult(BaseModel):

@@ -363,4 +363,60 @@ class BuildServiceTest {
         node.put("block_type", "minecraft:stone");
         return node;
     }
+
+    private BuildTask nbtTask(UUID buildId) {
+        ObjectNode data = objectMapper.createObjectNode().put("x", 1).put("y", 64).put("z", 2)
+            .put("size_x", 3).put("size_y", 4).put("size_z", 5).put("rotation", "CLOCKWISE_180");
+        return new BuildTask(buildId, 0, TaskType.NBT_STRUCTURE, data, "NBT structure placement");
+    }
+
+    @Test
+    void getNbtPlacementReadsRecordedPlacement() throws Exception {
+        Build build = new Build("NBT: hut.nbt", "", "minecraft:overworld");
+        when(buildRepository.findById(build.getId())).thenReturn(Optional.of(build));
+        when(taskRepository.findByBuildIdOrdered(build.getId())).thenReturn(List.of(nbtTask(build.getId())));
+
+        var placement = buildService.getNbtPlacement(build.getId()).orElseThrow();
+
+        assertThat(placement.build()).isSameAs(build);
+        assertThat(List.of(placement.x(), placement.y(), placement.z(), placement.sizeX(), placement.sizeY(), placement.sizeZ()))
+            .containsExactly(1, 64, 2, 3, 4, 5);
+        assertThat(placement.rotation()).isEqualTo("CLOCKWISE_180");
+    }
+
+    @Test
+    void getNbtPlacementRejectsTaskBuildsAndRevertedBuilds() throws Exception {
+        Build taskBuild = new Build("house", "", "minecraft:overworld");
+        when(buildRepository.findById(taskBuild.getId())).thenReturn(Optional.of(taskBuild));
+        when(taskRepository.findByBuildIdOrdered(taskBuild.getId())).thenReturn(List.of(
+            new BuildTask(taskBuild.getId(), 0, TaskType.BLOCK_FILL, objectMapper.createObjectNode(), "fill")));
+        assertThrows(IllegalArgumentException.class, () -> buildService.getNbtPlacement(taskBuild.getId()));
+
+        Build reverted = new Build("NBT: hut.nbt", "", "minecraft:overworld");
+        reverted.setStatus(BuildStatus.REVERTED);
+        when(buildRepository.findById(reverted.getId())).thenReturn(Optional.of(reverted));
+        assertThrows(IllegalStateException.class, () -> buildService.getNbtPlacement(reverted.getId()));
+
+        UUID missing = UUID.randomUUID();
+        when(buildRepository.findById(missing)).thenReturn(Optional.empty());
+        assertThat(buildService.getNbtPlacement(missing)).isEmpty();
+    }
+
+    @Test
+    void laterOverlappingBuildsExcludeSelfEarlierAndReverted() throws Exception {
+        Build target = new Build("NBT: a", "", "minecraft:overworld");
+        target.setCreatedAt(java.time.Instant.parse("2026-10-01T00:00:00Z"));
+        Build earlier = new Build("earlier", "", "minecraft:overworld");
+        earlier.setCreatedAt(java.time.Instant.parse("2026-09-01T00:00:00Z"));
+        Build later = new Build("later", "", "minecraft:overworld");
+        later.setCreatedAt(java.time.Instant.parse("2026-10-02T00:00:00Z"));
+        Build laterReverted = new Build("later reverted", "", "minecraft:overworld");
+        laterReverted.setCreatedAt(java.time.Instant.parse("2026-10-03T00:00:00Z"));
+        laterReverted.setStatus(BuildStatus.REVERTED);
+        var box = new ca.waltermiller.mcpapi.buildtask.model.BoundingBox(0, 0, 0, 1, 1, 1);
+        when(buildRepository.findByLocationIntersection("minecraft:overworld", box))
+            .thenReturn(List.of(earlier, target, later, laterReverted));
+
+        assertThat(buildService.findLaterOverlappingBuilds(target, box)).containsExactly(later);
+    }
 }
