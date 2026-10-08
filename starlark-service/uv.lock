@@ -154,7 +154,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "starlark-to-nbt", directory = "starlark-to-nbt" },
+    { name = "starlark-to-nbt", editable = "starlark-to-nbt" },
     { name = "uvicorn", specifier = ">=0.30.0" },
 ]
 
@@ -383,7 +383,7 @@ wheels = [
 [[package]]
 name = "starlark-to-nbt"
 version = "0.1.0"
-source = { directory = "starlark-to-nbt" }
+source = { editable = "starlark-to-nbt" }
 dependencies = [
     { name = "nbtlib" },
     { name = "starlark-pyo3" },

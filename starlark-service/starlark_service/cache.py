@@ -2,7 +2,7 @@
 
 Builds are deterministic (byte-for-byte identical output for identical
 source/entry/props against the same component library), so artifacts are keyed
-by a hash of the request plus a fingerprint of the vendored lib/ directory.
+by a hash of the request plus a fingerprint of the vendored lib/ directory and compiler source.
 """
 
 from __future__ import annotations
@@ -17,13 +17,17 @@ ARTIFACT_ID_PATTERN = re.compile(r"^slk_[0-9a-f]{16}$")
 
 
 def lib_fingerprint(tool_dir: Path) -> str:
-    """Hash of the component library contents; busts the cache when lib/ changes."""
+    """Hash of the component library and compiler source; busts the cache when either changes.
+
+    The compiler is included because builtins and lowering live there (e.g. math functions),
+    so a submodule bump can change output for an unchanged script and lib/.
+    """
     digest = hashlib.sha256()
-    lib_dir = tool_dir / "lib"
-    if lib_dir.is_dir():
-        for path in sorted(lib_dir.glob("*.star")):
-            digest.update(path.name.encode("utf-8"))
-            digest.update(path.read_bytes())
+    for root, pattern in ((tool_dir / "lib", "*.star"), (tool_dir / "src" / "starlark_to_nbt", "**/*.py")):
+        if root.is_dir():
+            for path in sorted(root.glob(pattern)):
+                digest.update(path.relative_to(tool_dir).as_posix().encode("utf-8"))
+                digest.update(path.read_bytes())
     return digest.hexdigest()[:16]
 
 

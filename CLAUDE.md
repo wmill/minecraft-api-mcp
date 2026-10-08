@@ -285,7 +285,7 @@ SCHEMATIC_INDEX=minecraft_schematics
 Compiles Starlark build scripts submitted by MCP users into placeable structure NBT using [starlark-to-nbt](https://github.com/wmill/starlark-to-nbt), which is vendored as a **git submodule** at `starlark-service/starlark-to-nbt` (run `git submodule update --init` after cloning). Like the schematic service, it is intentionally separate from the Minecraft mod and must fail gracefully when unavailable.
 
 **Design:**
-- **Stateless with a content-addressed cache**: every `POST /build` carries the full script source; successful builds are cached on disk keyed by `artifact_id = "slk_" + sha256(source, entry, props, root_size, lib_fingerprint)[:16]`. Output is deterministic, so identical sources always yield the same artifact id — an evicted artifact is recovered by rebuilding the same source.
+- **Stateless with a content-addressed cache**: every `POST /build` carries the full script source; successful builds are cached on disk keyed by `artifact_id = "slk_" + sha256(source, entry, props, root_size, lib_fingerprint)[:16]`, where `lib_fingerprint` hashes the submodule's `lib/*.star` and compiler source (`src/starlark_to_nbt/**/*.py`), so a submodule bump invalidates cached artifacts. Output is deterministic, so identical sources always yield the same artifact id — an evicted artifact is recovered by rebuilding the same source.
 - **Sandboxed builds**: the tool has no evaluation budget of its own, so each build runs in a killable subprocess (`starlark_service/runner.py`) under a wall-clock timeout (SIGKILL), an `RLIMIT_DATA` memory cap, and root-volume/NBT-byte caps. Do not lower `STARLARK_BUILD_MEMORY_MB` below ~1024: the Rust starlark runtime reserves ~1GB of data mappings up front and SIGABRTs under smaller caps.
 - **Confined `load()`**: submitted scripts can only load from the vendored `lib/` component library (upstream `loader_root` confinement; uniform "module not found" errors prevent filesystem probing). Scripts use `load("../lib/structural.star", ...)`, the same convention as the upstream `examples/`.
 - **Build failures are HTTP 200** with `{ok: false, error_kind, diagnostics, hint}` — a build that ran and produced diagnostics is a successful request, keeping the MCP edit→build-error→edit loop exception-free. `error_kind` is one of `starlark_error`, `build_error`, `timeout`, `resource_limit`, `crash`.
@@ -368,7 +368,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - fastapi >= 0.115.0 - HTTP API
 - python-dotenv >= 1.0.0 - Environment configuration
 - uvicorn >= 0.30.0 - ASGI server
-- starlark-to-nbt - path dependency on the vendored submodule (pulls nbtlib and starlark-pyo3)
+- starlark-to-nbt - editable path dependency on the vendored submodule (pulls nbtlib and starlark-pyo3), so submodule bumps apply without reinstalling
 
 ### Resource Structure
 

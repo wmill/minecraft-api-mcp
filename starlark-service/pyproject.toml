@@ -17,7 +17,8 @@ dev = [
 ]
 
 [tool.uv.sources]
-starlark-to-nbt = { path = "starlark-to-nbt" }
+# Editable so submodule bumps (compiler and builtins, not just lib/) take effect without a reinstall.
+starlark-to-nbt = { path = "starlark-to-nbt", editable = true }
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

@@ -57,3 +57,15 @@ def test_lib_fingerprint_tracks_lib_contents(tmp_path):
     assert first == cache.lib_fingerprint(tmp_path)
     (tmp_path / "lib" / "a.star").write_text("A = 2\n", encoding="utf-8")
     assert first != cache.lib_fingerprint(tmp_path)
+
+
+def test_lib_fingerprint_tracks_compiler_source(tmp_path):
+    package = tmp_path / "src" / "starlark_to_nbt"
+    package.mkdir(parents=True)
+    (package / "starlark_runtime.py").write_text("X = 1\n", encoding="utf-8")
+    first = cache.lib_fingerprint(tmp_path)
+    (package / "__pycache__").mkdir()
+    (package / "__pycache__" / "starlark_runtime.cpython-313.pyc").write_bytes(b"\0")
+    assert first == cache.lib_fingerprint(tmp_path)
+    (package / "starlark_runtime.py").write_text("X = 2\n", encoding="utf-8")
+    assert first != cache.lib_fingerprint(tmp_path)
