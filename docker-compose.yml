@@ -172,6 +172,8 @@ services:
     volumes:
       # rw, unlike the schematic data dir: this is the artifact cache
       - ./starlark-service-data:/data
+      # rw, git-tracked: saved scripts library (append-only versions)
+      - ./starlark-library:/library
     restart: unless-stopped
     deploy:
       resources:

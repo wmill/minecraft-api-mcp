@@ -11,6 +11,39 @@ MODULE = re.compile(r"^### `lib/(\w+)\.star`.*$", re.MULTILINE)
 ROW = re.compile(r"^\| `([A-Za-z_]\w*)\([^`]*`", re.MULTILINE)
 
 
+LIBRARY_GUIDE = """# Script library
+
+Saved scripts are shared by every agent using this server. Before writing a structure from
+scratch, search_starlark_library for something to reuse; after a build you are happy with,
+save_starlark_script it (by artifact_id) with a clear title, description, and tags.
+
+Two ways to reuse an entry:
+
+1. Fork: get_starlark_script(name) returns the full source. Edit it, build it, and save it
+   under a new name with parent="name@version" (or as a new version of the same name).
+2. Load: library scripts can be load()ed like lib/ components. Use the pinned path that
+   get_starlark_script / search results give you:
+
+```python
+load("../library/gothic_window/v2.star", "GothicWindow")
+
+def build():
+    return GothicWindow()
+```
+
+Rules:
+- Paths are always pinned to a version (v1, v2, ...). Saved versions never change, so a
+  script that loads one keeps building the same structure forever.
+- Every script, including saved library modules, uses the same load paths:
+  ../lib/<module>.star and ../library/<name>/v<N>.star.
+- Only scripts that build successfully can be saved. Saving identical source again is a
+  no-op; saving changed source under an existing name creates the next version.
+- Top-level UpperCamel functions are listed as exports (lowercase helpers stay loadable but
+  unlisted). Write reusable parts as UpperCamel component functions that draw from [0,0,0],
+  face south (+Z), and declare min_size, like lib/ components.
+"""
+
+
 class UnknownDocs(ValueError):
     pass
 
@@ -44,6 +77,7 @@ def catalog_view(tool_dir: Path, topic: str = "quickstart", component: str | Non
                            ("How a script runs", "Coordinates and geometry", "Build phases and overlap rules", "DSL reference")),
         "composition": sections["Composition patterns"],
         "errors": sections["Errors"],
+        "library": LIBRARY_GUIDE,
         **modules,
     }
     components = {m[1]: module for module, body in modules.items() for m in ROW.finditer(body)}

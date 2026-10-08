@@ -246,6 +246,9 @@ STARLARK_TOOLS = [
     "get_starlark_docs",
     "list_starlark_examples",
     "get_starlark_example",
+    "save_starlark_script",
+    "search_starlark_library",
+    "get_starlark_script",
 ]
 
 
@@ -258,3 +261,79 @@ def test_starlark_tools_are_registered():
 
 def test_starlark_service_url_has_local_default():
     assert STARLARK_SERVICE_URL == "http://localhost:7090"
+
+
+SAVED = {"ok": True, "created": True, "name": "pillar", "version": 2, "load_path": "../library/pillar/v2.star",
+         "artifact_id": "slk_0123456789abcdef", "exports": ["Pillar"], "params": [{"name": "height", "default": 3}],
+         "size": [1, 3, 1]}
+
+META = {
+    "name": "pillar", "title": "Stone pillar", "description": "A column", "tags": ["structural"], "latest": 2,
+    "versions": [
+        {"version": v, "author": "agent-a", "notes": None, "parent": None, "entry": "build", "props": {},
+         "params": [{"name": "height", "default": 3}], "exports": ["Pillar"], "size": [1, 3, 1],
+         "block_count": 3, "ground_level": 0}
+        for v in (1, 2)
+    ],
+}
+
+
+async def test_save_reports_load_line_and_omits_unset_fields(clients):
+    api, service = clients
+    service.save_library.return_value = deepcopy(SAVED)
+    result = await starlark.handle_save_starlark_script(api, "pillar", artifact_id="slk_0123456789abcdef",
+                                                        tags=["structural"])
+    service.save_library.assert_awaited_once_with(
+        {"name": "pillar", "artifact_id": "slk_0123456789abcdef", "tags": ["structural"]})
+    text = result.content[0].text
+    assert "Saved pillar@2." in text
+    assert 'load("../library/pillar/v2.star", "Pillar")' in text
+    assert "height=3" in text
+
+
+async def test_save_build_failure_returns_diagnostics(clients):
+    api, service = clients
+    service.save_library.return_value = {
+        "ok": False, "error_kind": "starlark_error", "hint": "fix it",
+        "diagnostics": [{"code": "starlark_error", "message": "boom", "component_path": "<root>"}],
+    }
+    result = await starlark.handle_save_starlark_script(api, "pillar", source="bad")
+    data = checked(result)
+    assert data["ok"] is False
+    assert result.content[0].text.startswith("Not saved")
+
+
+async def test_search_formats_results_and_size_filter(clients):
+    api, service = clients
+    service.search_library.return_value = {"results": [{
+        "name": "pillar", "latest": 2, "title": "Stone pillar", "description": "A column", "tags": ["structural"],
+        "size": [1, 3, 1], "exports": ["Pillar"], "load_path": "../library/pillar/v2.star",
+    }]}
+    result = await starlark.handle_search_starlark_library(api, query="pillar", max_size=[5, None, 5])
+    service.search_library.assert_awaited_once_with(q="pillar", tag=None, author=None, max_x=5, max_y=None,
+                                                    max_z=5, limit=10)
+    text = result.content[0].text
+    assert "pillar@2 — Stone pillar (1x3x1; tags structural)" in text
+    assert "exports Pillar via ../library/pillar/v2.star" in text
+
+
+async def test_get_script_shows_pinned_version_and_source(clients):
+    api, service = clients
+    service.get_library_entry.return_value = deepcopy(META)
+    service.get_library_source.return_value = (1, "def build():\n    return None\n")
+    text = (await starlark.handle_get_starlark_script(api, "pillar", version=1)).content[0].text
+    assert "pillar@1 — Stone pillar (latest is v2)" in text
+    assert 'load("../library/pillar/v1.star", "Pillar")' in text
+    assert 'parent="pillar@1"' in text
+    assert "def build():" in text
+
+
+async def test_get_script_not_found(clients):
+    api, service = clients
+    request = httpx.Request("GET", "http://service/library/missing")
+    service.get_library_entry.side_effect = httpx.HTTPStatusError(
+        "missing", request=request, response=httpx.Response(404, json={"detail": "library entry 'missing' not found"},
+                                                            request=request))
+    result = await starlark.handle_get_starlark_script(api, "missing")
+    assert result.isError
+    assert "not found" in result.content[0].text

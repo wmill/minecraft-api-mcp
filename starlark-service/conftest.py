@@ -26,6 +26,7 @@ def make_config(cache_dir: Path, **overrides) -> ServiceConfig:
         max_nbt_bytes=16 * 1024 * 1024,
         max_concurrent_builds=2,
         cache_max_bytes=1024 * 1024 * 1024,
+        library_dir=cache_dir.parent / "library",
     )
     values.update(overrides)
     return ServiceConfig(**values)

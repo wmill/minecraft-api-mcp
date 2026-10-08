@@ -142,7 +142,8 @@ async def handle_build_starlark_structure(
         placed = await _place(api_client, client, result, target)
         payload.update(placed.structuredContent)
         return _response(payload, summary + "\n" + placed.content[0].text)
-    return _response(payload, summary + "\nNext: place_starlark_structure with this artifact ID and world coordinates; ground offset is automatic.")
+    return _response(payload, summary + "\nNext: place_starlark_structure with this artifact ID and world coordinates; ground offset is automatic."
+                     " If the result is worth reusing, save_starlark_script it to the shared library.")
 
 
 async def handle_place_starlark_structure(
@@ -197,3 +198,99 @@ async def handle_get_starlark_example(api_client: MinecraftAPIClient, name: str,
         return _service_error(exc)
     except Exception as exc:
         return _service_error(exc)
+
+
+def _params_text(params: list[dict[str, Any]]) -> str:
+    return ", ".join(p["name"] + (f"={p['default']!r}" if "default" in p else "") for p in params)
+
+
+def _load_line(load_path: str, exports: list[str]) -> str:
+    return f'load("{load_path}", ' + ", ".join(f'"{name}"' for name in exports) + ")"
+
+
+async def handle_save_starlark_script(
+    api_client: MinecraftAPIClient, name: str, artifact_id: str | None = None, source: str | None = None,
+    title: str | None = None, description: str | None = None, tags: list[str] | None = None,
+    author: str | None = None, notes: str | None = None, parent: str | None = None,
+    entry: str | None = None, props: dict[str, Any] | None = None, root_size: list[int] | None = None,
+    **arguments,
+) -> CallToolResult:
+    body = {"name": name, "artifact_id": artifact_id, "source": source, "title": title,
+            "description": description, "tags": tags, "author": author, "notes": notes,
+            "parent": parent, "entry": entry, "props": props, "root_size": root_size}
+    try:
+        result = await _starlark_client().save_library({k: v for k, v in body.items() if v is not None})
+    except Exception as exc:
+        return _service_error(exc)
+    if not result.get("ok"):
+        compact = compact_diagnostics(result)
+        return _response(compact, "Not saved: the script must build first.\n" + diagnostic_text(compact))
+    ref = f"{result['name']}@{result['version']}"
+    lines = [f"Saved {ref}." if result["created"] else f"{ref} already holds this exact source; nothing new saved.",
+             f"Size {'x'.join(str(n) for n in result['size'])}, artifact {result['artifact_id']}."]
+    if result["params"]:
+        lines.append(f"Entry params: {_params_text(result['params'])}.")
+    if result["exports"]:
+        lines.append("Other scripts can reuse it with: " + _load_line(result["load_path"], result["exports"]))
+    else:
+        lines.append(f"No public component functions to load(); others can fork it with get_starlark_script(\"{result['name']}\").")
+    return format_success_response("\n".join(lines))
+
+
+async def handle_search_starlark_library(
+    api_client: MinecraftAPIClient, query: str = "", tag: str | None = None, author: str | None = None,
+    max_size: list[int | None] | None = None, limit: int = 10, **arguments,
+) -> CallToolResult:
+    max_x, max_y, max_z = (list(max_size or []) + [None, None, None])[:3]
+    try:
+        result = await _starlark_client().search_library(q=query, tag=tag, author=author, max_x=max_x,
+                                                         max_y=max_y, max_z=max_z, limit=limit)
+    except Exception as exc:
+        return _service_error(exc)
+    entries = result.get("results") or []
+    if not entries:
+        return format_success_response("No saved scripts match. Write a new one and save it with save_starlark_script.")
+    lines = [f"{len(entries)} saved script(s); get_starlark_script(name) returns source and details:"]
+    for entry in entries:
+        size = "x".join(str(n) for n in entry["size"])
+        line = f"- {entry['name']}@{entry['latest']} — {entry['title']} ({size}"
+        line += f"; tags {', '.join(entry['tags'])})" if entry["tags"] else ")"
+        line += f": {entry['description']}"
+        if entry["exports"]:
+            line += f"\n  exports {', '.join(entry['exports'])} via {entry['load_path']}"
+        lines.append(line)
+    return format_success_response("\n".join(lines))
+
+
+async def handle_get_starlark_script(api_client: MinecraftAPIClient, name: str, version: int | None = None,
+                                     **arguments) -> CallToolResult:
+    client = _starlark_client()
+    try:
+        meta = await client.get_library_entry(name)
+        resolved, source = await client.get_library_source(name, version)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (400, 404):
+            return _failure("not_found", _detail(exc), "Use search_starlark_library to find saved scripts.")
+        return _service_error(exc)
+    except Exception as exc:
+        return _service_error(exc)
+    record = next(v for v in meta["versions"] if v["version"] == resolved)
+    ref = f"{name}@{resolved}"
+    lines = [f"# {ref} — {meta['title']}" + (f" (latest is v{meta['latest']})" if resolved != meta["latest"] else ""),
+             meta["description"],
+             f"Size {'x'.join(str(n) for n in record['size'])}, {record['block_count']} blocks, "
+             f"ground_level={record['ground_level']}; entry {record['entry']}({_params_text(record['params'])})"
+             + (f" built with props {record['props']}" if record["props"] else "") + "."]
+    if meta["tags"]:
+        lines.append("Tags: " + ", ".join(meta["tags"]))
+    lineage = [f"author {record['author']}" if record.get("author") else "",
+               f"forked from {record['parent']}" if record.get("parent") else "",
+               f"notes: {record['notes']}" if record.get("notes") else ""]
+    if any(lineage):
+        lines.append("; ".join(part for part in lineage if part))
+    if record["exports"]:
+        lines.append("Reuse: " + _load_line(f"../library/{name}/v{resolved}.star", record["exports"]))
+    lines.append(f"Fork: edit and build the source below, then save_starlark_script with parent=\"{ref}\" "
+                 f"(same name for a new version, or a new name).")
+    lines.append(f"\n```python\n{source.rstrip()}\n```")
+    return format_success_response("\n".join(lines))

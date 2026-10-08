@@ -70,6 +70,7 @@ class Sandbox:
             "props": props,
             "root_size": root_size,
             "tool_dir": str(cfg.tool_dir),
+            "library_dir": str(cfg.library_dir),
             "output_path": str(output_path),
             "limits": {
                 "memory_mb": cfg.build_memory_mb,

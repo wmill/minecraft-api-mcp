@@ -90,6 +90,8 @@ def run(request: dict[str, Any]) -> dict[str, Any]:
             root_size=Point(*root_size) if root_size else None,
             base_dir=tool_dir / "scripts",
             loader_root=tool_dir,
+            # Saved library scripts are loadable as ../library/<name>/v<N>.star.
+            mounts={"library": request["library_dir"]} if request.get("library_dir") else None,
         )
     except BuildError as exc:
         kind = "starlark_error" if any(d.code == "starlark_error" for d in exc.diagnostics) else "build_error"

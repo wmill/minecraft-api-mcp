@@ -291,7 +291,8 @@ Compiles Starlark build scripts submitted by MCP users into placeable structure 
 **Design:**
 - **Stateless with a content-addressed cache**: every `POST /build` carries the full script source; successful builds are cached on disk keyed by `artifact_id = "slk_" + sha256(source, entry, props, root_size, lib_fingerprint)[:16]`, where `lib_fingerprint` hashes the submodule's `lib/*.star` and compiler source (`src/starlark_to_nbt/**/*.py`), so a submodule bump invalidates cached artifacts. Output is deterministic, so identical sources always yield the same artifact id — an evicted artifact is recovered by rebuilding the same source.
 - **Sandboxed builds**: the tool has no evaluation budget of its own, so each build runs in a killable subprocess (`starlark_service/runner.py`) under a wall-clock timeout (SIGKILL), an `RLIMIT_DATA` memory cap, and root-volume/NBT-byte caps. Do not lower `STARLARK_BUILD_MEMORY_MB` below ~1024: the Rust starlark runtime reserves ~1GB of data mappings up front and SIGABRTs under smaller caps.
-- **Confined `load()`**: submitted scripts can only load from the vendored `lib/` component library (upstream `loader_root` confinement; uniform "module not found" errors prevent filesystem probing). Scripts use `load("../lib/structural.star", ...)`, the same convention as the upstream `examples/`.
+- **Confined `load()`**: submitted scripts can only load from the vendored `lib/` component library and saved `library/` versions (upstream `loader_root` confinement; uniform "module not found" errors prevent filesystem probing). Scripts use `load("../lib/structural.star", ...)`, the same convention as the upstream `examples/`.
+- **Script library** (`starlark-library/`, repo root, git-tracked): agents save working scripts via `POST /library` so later builds can fork them or `load()` their components. Layout is `<name>/meta.json` + append-only `v<N>.star`; versions are **immutable** (never edit/delete a published `v<N>.star` — scripts load them by pinned path and the artifact cache keys on source text only, so the lib fingerprint doesn't need to cover the library). Saves are rebuilt first and rejected (200 `{ok:false, diagnostics}`) if they fail; identical re-saves are no-ops. Scripts load saved versions as `load("../library/<name>/v<N>.star", ...)` through the submodule loader's `mounts` option (`runner.py` mounts `library` → `STARLARK_LIBRARY_DIR`); library modules use the same load paths as top-level scripts. `meta.json` records title/description/tags/author, and per version: lineage (`parent` as `name@N`, notes), entry params and UpperCamel component exports (parsed with Python `ast`, regex fallback), loads, and build stats (size, block_count, palette_top, artifact_id).
 - **Build failures are HTTP 200** with `{ok: false, error_kind, diagnostics, hint}` — a build that ran and produced diagnostics is a successful request, keeping the MCP edit→build-error→edit loop exception-free. `error_kind` is one of `starlark_error`, `build_error`, `timeout`, `resource_limit`, `crash`.
 
 **Service modules:**
@@ -300,6 +301,8 @@ Compiles Starlark build scripts submitted by MCP users into placeable structure 
 - `sandbox.py` - subprocess orchestration, concurrency cap (429 when full), timeout kill
 - `runner.py` - in-subprocess build worker (`build_source` → NBT + result JSON on stdout)
 - `cache.py` - artifact hashing, sharded disk layout, LRU eviction, lib fingerprint
+- `library.py` - saved-script library: versioned storage, source analysis (params/exports/loads), local search
+- `docs.py` - focused views of the component catalog plus the `library` usage topic
 
 **Configuration via environment variables (or `.env` in `starlark-service/`):**
 ```bash
@@ -312,6 +315,7 @@ STARLARK_MAX_ROOT_VOLUME=2000000         # voxels
 STARLARK_MAX_NBT_BYTES=16777216
 STARLARK_MAX_CONCURRENT_BUILDS=2
 STARLARK_CACHE_MAX_BYTES=1073741824
+STARLARK_LIBRARY_DIR=../starlark-library # saved-script library (git-tracked; /library in Docker)
 ```
 
 **HTTP API:**
@@ -320,12 +324,16 @@ STARLARK_CACHE_MAX_BYTES=1073741824
 - `GET /artifacts/{artifact_id}` and `GET /artifacts/{artifact_id}/nbt`
 - `GET /docs/catalog` — the script API reference (component catalog markdown)
 - `GET /examples` and `GET /examples/{name}`
+- `POST /library` — `{name, artifact_id | source, title, description, tags?, author?, notes?, parent?, entry?, props?, root_size?}`; title/description required for a new name
+- `GET /library/search?q=&tag=&author=&max_x=&max_y=&max_z=&limit=`
+- `GET /library/{name}` and `GET /library/{name}/source?version=` (version in `X-Library-Version` header)
 
 **MCP tools using this service:**
 - `build_starlark_structure` — compile source; failure text lists numbered diagnostics for the edit loop
 - `place_starlark_structure` — fetch artifact NBT, apply its `y_offset`, place via the mod's NBT placement endpoint
 - `get_starlark_docs`
 - `list_starlark_examples` / `get_starlark_example`
+- `save_starlark_script` / `search_starlark_library` / `get_starlark_script` — shared script library
 
 As with schematics, placement orchestration stays in MCP: `place_starlark_structure` fetches NBT bytes from the starlark service and posts them to the Minecraft `/api/world/structure/place` endpoint.
 
@@ -414,6 +422,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_app.py` - Build success/failure/diagnostics, cache hits, artifact routes, examples/catalog
 - `test_cache.py` - Artifact id hashing, LRU eviction, lib fingerprint
 - `test_sandbox.py` - Timeout kill, resource-limit rejections, queue-full 429
+- `test_library.py` - Save/version immutability, failed-build rejection, save by artifact id, loading saved versions, search filters
 
 **Testing Best Practices** (see TESTING.md):
 - Extract pure logic from endpoints into testable helper methods
@@ -435,7 +444,7 @@ Minecraft uses a right-handed 3D coordinate system:
 - Mod ID is "mcpapi" (defined in `McpApiMod.MOD_ID`)
 - Web API server runs on port 7070, starts automatically with Minecraft server
 - Optional schematic service runs on port 7080 when started
-- Optional Starlark build service runs on port 7090 when started; its artifact cache in `starlark-service-data/` is git-ignored and safe to delete (artifacts regenerate deterministically)
+- Optional Starlark build service runs on port 7090 when started; its artifact cache in `starlark-service-data/` is git-ignored and safe to delete (artifacts regenerate deterministically); its script library in `starlark-library/` is durable and meant to be committed
 - Database schema auto-creates on first server start
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
 - Build tasks are executed asynchronously and can be queried by location for spatial awareness

@@ -2023,7 +2023,7 @@ TOOL_GET_STARLARK_DOCS = Tool(
     name="get_starlark_docs",
     description=(
         "Get a short runnable quickstart by default. Topics include index (component index), math, dsl, "
-        "composition, errors, a library module, or full (complete reference). Select an exact component name "
+        "composition, errors, library (saving/reusing scripts), a lib module, or full (complete reference). Select an exact component name "
         "for its import, signature, size, and constraints; component takes precedence over topic."
     ),
     inputSchema={
@@ -2056,6 +2056,82 @@ TOOL_GET_STARLARK_EXAMPLE = Tool(
                 "type": "string",
                 "description": "Example name from list_starlark_examples, such as cottage"
             }
+        },
+        "required": ["name"]
+    }
+)
+
+TOOL_SAVE_STARLARK_SCRIPT = Tool(
+    name="save_starlark_script",
+    description=(
+        "Save a working Starlark script to the shared library so later builds and other agents can "
+        "fork it or load() its components. Pass the artifact_id from build_starlark_structure (reuses "
+        "its source, entry, and props) or the source itself; the script is rebuilt and only saved if it "
+        "builds. Saving under an existing name adds a new immutable version. Write reusable parts as "
+        "public UpperCamel component functions so others can load them. See get_starlark_docs(topic=\"library\")."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Library name, lowercase snake_case, e.g. arcanum_spire"},
+            "artifact_id": {"type": "string", "description": "Artifact ID from build_starlark_structure (preferred)"},
+            "source": {"type": "string", "description": "Full script source, if not saving by artifact_id"},
+            "title": {"type": "string", "description": "Short human title; required for a new name"},
+            "description": {
+                "type": "string",
+                "description": "What it is, style, notable features, and how to use it; required for a new name",
+            },
+            "tags": {"type": "array", "items": {"type": "string"},
+                     "description": "Search tags, e.g. tower, medieval, magic, tree (replaces existing tags)"},
+            "author": {"type": "string", "description": "Who saved it (agent or player name)"},
+            "notes": {"type": "string", "description": "What changed in this version"},
+            "parent": {"type": "string", "description": "Library entry this was forked from, as name@version"},
+            "entry": {"type": "string", "description": "Entry function (defaults to the artifact's, or build)"},
+            "props": {"type": "object", "description": "Entry props (defaults to the artifact's)"},
+            "root_size": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3,
+                          "description": "Root bounds, only if the build needed them"},
+        },
+        "required": ["name"]
+    }
+)
+
+TOOL_SEARCH_STARLARK_LIBRARY = Tool(
+    name="search_starlark_library",
+    description=(
+        "Search saved Starlark scripts (structures and reusable components built by earlier agents) by "
+        "keywords over names, titles, descriptions, tags, exported components, loaded lib components, "
+        "and blocks used. Check here before writing a structure from scratch. Empty query lists the newest."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Keywords, e.g. 'gothic window' or 'cherry tree'"},
+            "tag": {"type": "string", "description": "Only entries with this tag"},
+            "author": {"type": "string", "description": "Only entries with a version by this author"},
+            "max_size": {
+                "type": "array", "items": {"type": ["integer", "null"]}, "minItems": 3, "maxItems": 3,
+                "description": "Maximum [x, y, z] size of the latest version; null for no limit on an axis",
+            },
+            "limit": {"type": "integer", "default": 10, "minimum": 1, "maximum": 50},
+        },
+        "required": []
+    }
+)
+
+TOOL_GET_STARLARK_SCRIPT = Tool(
+    name="get_starlark_script",
+    description=(
+        "Get a saved library script's source and details: size, entry params, exported components with "
+        "the exact load() line to reuse them, tags, and lineage. Fork it by editing the source, or load its components."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Library name from search_starlark_library"},
+            "version": {"type": "integer", "description": "Version number; defaults to the latest"},
         },
         "required": ["name"]
     }
@@ -2145,6 +2221,9 @@ TOOL_SCHEMAS = [
     TOOL_GET_STARLARK_DOCS,
     TOOL_LIST_STARLARK_EXAMPLES,
     TOOL_GET_STARLARK_EXAMPLE,
+    TOOL_SAVE_STARLARK_SCRIPT,
+    TOOL_SEARCH_STARLARK_LIBRARY,
+    TOOL_GET_STARLARK_SCRIPT,
 ]
 
 # Apply the same optional token contract to every world-write tool.

@@ -98,6 +98,9 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_starlark_docs": starlark.handle_get_starlark_docs,
     "list_starlark_examples": starlark.handle_list_starlark_examples,
     "get_starlark_example": starlark.handle_get_starlark_example,
+    "save_starlark_script": starlark.handle_save_starlark_script,
+    "search_starlark_library": starlark.handle_search_starlark_library,
+    "get_starlark_script": starlark.handle_get_starlark_script,
 }
 
 

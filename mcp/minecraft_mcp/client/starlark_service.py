@@ -58,3 +58,30 @@ class StarlarkServiceClient:
             response = await client.get(f"{self.base_url}/examples/{name}")
             response.raise_for_status()
             return response.text
+
+    async def save_library(self, body: dict[str, Any]) -> dict[str, Any]:
+        # Saving compiles the script first, so allow the same headroom as build().
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(f"{self.base_url}/library", json=body)
+            response.raise_for_status()
+            return response.json()
+
+    async def search_library(self, **params: Any) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            query = {key: value for key, value in params.items() if value is not None}
+            response = await client.get(f"{self.base_url}/library/search", params=query)
+            response.raise_for_status()
+            return response.json()
+
+    async def get_library_entry(self, name: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{self.base_url}/library/{name}")
+            response.raise_for_status()
+            return response.json()
+
+    async def get_library_source(self, name: str, version: int | None = None) -> tuple[int, str]:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            params = {"version": version} if version is not None else {}
+            response = await client.get(f"{self.base_url}/library/{name}/source", params=params)
+            response.raise_for_status()
+            return int(response.headers["x-library-version"]), response.text

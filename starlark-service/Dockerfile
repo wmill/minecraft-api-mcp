@@ -11,7 +11,8 @@ COPY starlark_service ./starlark_service
 RUN pip install --no-cache-dir ./starlark-to-nbt && pip install --no-cache-dir .
 
 ENV STARLARK_TOOL_DIR=/app/starlark-to-nbt \
-    STARLARK_CACHE_DIR=/data
+    STARLARK_CACHE_DIR=/data \
+    STARLARK_LIBRARY_DIR=/library
 
 EXPOSE 7090
 

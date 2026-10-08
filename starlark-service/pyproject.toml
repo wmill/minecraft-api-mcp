@@ -31,4 +31,4 @@ packages = ["starlark_service"]
 starlark-service = "starlark_service.main:main"
 
 [tool.pytest.ini_options]
-testpaths = ["test_app.py", "test_cache.py", "test_sandbox.py"]
+testpaths = ["test_app.py", "test_cache.py", "test_library.py", "test_sandbox.py"]

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +15,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
-from . import cache
+from . import cache, library
 from .config import ServiceConfig, load_config
 from .docs import UnknownDocs, catalog_view
 from .sandbox import BuildQueueFull, Sandbox
@@ -27,11 +30,27 @@ class BuildRequest(BaseModel):
     root_size: list[int] | None = None
 
 
+class LibrarySaveRequest(BaseModel):
+    name: str
+    source: str | None = None
+    artifact_id: str | None = None
+    entry: str | None = None
+    props: dict[str, Any] | None = None
+    root_size: list[int] | None = None
+    title: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
+    author: str | None = None
+    notes: str | None = None
+    parent: str | None = None
+
+
 def create_app(config: ServiceConfig | None = None) -> FastAPI:
     cfg = config or load_config()
     app = FastAPI(title="Minecraft Starlark Build Service")
     sandbox = Sandbox(cfg)
     fingerprint = cache.lib_fingerprint(cfg.tool_dir)
+    library_lock = asyncio.Lock()
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -42,10 +61,10 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             "lib_dir_exists": lib_dir_exists,
             "lib_fingerprint": fingerprint,
             "cache": cache.stats(cfg.cache_dir),
+            "library_entries": len(library.list_meta(cfg.library_dir)),
         }
 
-    @app.post("/build")
-    async def build(request: BuildRequest) -> dict[str, Any]:
+    async def run_build(request: BuildRequest) -> dict[str, Any]:
         if len(request.source.encode("utf-8")) > cfg.max_source_bytes:
             raise HTTPException(status_code=400,
                                 detail=f"source exceeds {cfg.max_source_bytes} bytes")
@@ -89,6 +108,74 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         cache.store_metadata(cfg.cache_dir, identifier, metadata)
         cache.evict(cfg.cache_dir, cfg.cache_max_bytes)
         return {**metadata, "cached": False}
+
+    @app.post("/build")
+    async def build(request: BuildRequest) -> dict[str, Any]:
+        return await run_build(request)
+
+    @app.post("/library")
+    async def save_library(request: LibrarySaveRequest) -> dict[str, Any]:
+        with library_errors():
+            library.validate_name(request.name)
+        if (request.source is None) == (request.artifact_id is None):
+            raise HTTPException(status_code=400, detail="provide exactly one of source or artifact_id")
+        source, entry, props = request.source, request.entry, request.props
+        if request.artifact_id is not None:
+            # Saving by artifact id reuses the source, entry, and props it was built with.
+            identifier = valid_artifact_id(request.artifact_id)
+            path = cache.source_path(cfg.cache_dir, identifier)
+            built = cache.load_metadata(cfg.cache_dir, identifier)
+            if not path.exists() or built is None:
+                raise HTTPException(status_code=404, detail="artifact not found (evicted or never built); save by source instead")
+            source = path.read_text(encoding="utf-8")
+            entry = entry or built["entry"]
+            props = built["props"] if props is None else props
+
+        # Only scripts that build are saved, so every library version is placeable and loadable.
+        result = await run_build(BuildRequest(source=source, entry=entry or "build",
+                                              props=props or {}, root_size=request.root_size))
+        if not result["ok"]:
+            return result
+        async with library_lock:
+            with library_errors():
+                meta, record, created = library.save_version(
+                    cfg.library_dir, request.name, source, result,
+                    title=request.title, description=request.description, tags=request.tags,
+                    author=request.author, notes=request.notes, parent=request.parent,
+                    root_size=request.root_size,
+                )
+        return {
+            "ok": True,
+            "created": created,
+            "name": meta["name"],
+            "version": record["version"],
+            "load_path": library.load_path(meta["name"], record["version"]),
+            "artifact_id": record["artifact_id"],
+            "exports": record["exports"],
+            "params": record["params"],
+            "size": record["size"],
+        }
+
+    @app.get("/library/search")
+    async def search_library(q: str = "", tag: str | None = None, author: str | None = None,
+                             max_x: int | None = None, max_y: int | None = None, max_z: int | None = None,
+                             limit: int = 10) -> dict[str, Any]:
+        results = library.search(library.list_meta(cfg.library_dir), q, tag=tag, author=author,
+                                 max_size=(max_x, max_y, max_z), limit=limit)
+        return {"results": results, "count": len(results)}
+
+    @app.get("/library/{name}")
+    async def get_library_entry(name: str) -> dict[str, Any]:
+        with library_errors():
+            meta = library.load_meta(cfg.library_dir, name)
+        return {**meta, "load_path": library.load_path(meta["name"], meta["latest"])}
+
+    @app.get("/library/{name}/source")
+    async def get_library_source(name: str, version: int | None = None) -> PlainTextResponse:
+        with library_errors():
+            resolved, source = library.read_source(cfg.library_dir, name, version)
+        return PlainTextResponse(source, media_type="text/plain",
+                                 headers={"X-Library-Version": str(resolved)})
 
     @app.get("/artifacts/{artifact_id}")
     async def get_artifact(artifact_id: str) -> dict[str, Any]:
@@ -135,6 +222,16 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/plain")
 
     return app
+
+
+@contextmanager
+def library_errors() -> Iterator[None]:
+    try:
+        yield
+    except library.LibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except library.LibraryNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 def valid_artifact_id(artifact_id: str) -> str:
