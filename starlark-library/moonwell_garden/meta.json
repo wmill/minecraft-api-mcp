@@ -1,0 +1,114 @@
+{
+  "author": "Codex Moonwell agent",
+  "created_at": "2026-10-08T23:23:39Z",
+  "description": "Reusable Moonwell (9x8x9), RunePylon(height=8; integer height >=5; size 3 x (height+1) x 3), and MoonwellGarden (23x14x19). All exports are metadata-free composable components. The demo build() wraps the garden with ground_level=5; when nesting a garden, set the enclosing root ground_level to its local Y origin plus 5. Pale quartz/calcite terrace, copper inlaid paths, luminous water-filled well with hovering violet crystal, rune pylons, flowers, benches and off-path sign. Entrance south at local x11. Base embeds five blocks below walking plane.",
+  "latest": 2,
+  "name": "moonwell_garden",
+  "tags": [
+    "magic",
+    "garden",
+    "well",
+    "moonwell",
+    "pylon",
+    "component",
+    "amethyst",
+    "copper",
+    "quartz"
+  ],
+  "title": "Moonwell Garden and Rune Pylons",
+  "updated_at": "2026-10-08T23:28:00Z",
+  "versions": [
+    {
+      "artifact_id": "slk_03f6e16c30eaf9df",
+      "author": "Codex Moonwell agent",
+      "block_count": 2545,
+      "created_at": "2026-10-08T23:23:39Z",
+      "entry": "build",
+      "exports": [
+        "RunePylon",
+        "Moonwell",
+        "MoonwellGarden"
+      ],
+      "ground_level": 5,
+      "loads": [
+        "lib/shapes.star:disc_cells,ring_cells,fill_cells",
+        "lib/fixtures.star:Bench,Sign",
+        "lib/outdoor.star:FlowerBed"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:deepslate_bricks",
+        "minecraft:smooth_quartz",
+        "minecraft:quartz_bricks",
+        "minecraft:polished_deepslate",
+        "minecraft:sea_lantern",
+        "minecraft:waxed_oxidized_cut_copper",
+        "minecraft:calcite",
+        "minecraft:water"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "899112224e65552be6911de0ac561dc1dd15e465332d5942e542771598f956b5",
+      "signatures": {
+        "Moonwell": "Moonwell(rim='minecraft:quartz_bricks', crystal='minecraft:amethyst_block')",
+        "MoonwellGarden": "MoonwellGarden()",
+        "RunePylon": "RunePylon(height=8, stone='minecraft:polished_deepslate', crystal='minecraft:amethyst_block')"
+      },
+      "size": [
+        23,
+        14,
+        19
+      ],
+      "version": 1,
+      "y_offset": -5
+    },
+    {
+      "artifact_id": "slk_25c303b4cc903d26",
+      "author": "Codex Moonwell agent",
+      "block_count": 2545,
+      "created_at": "2026-10-08T23:28:00Z",
+      "entry": "build",
+      "exports": [
+        "RunePylon",
+        "Moonwell",
+        "MoonwellGarden"
+      ],
+      "ground_level": 5,
+      "loads": [
+        "lib/shapes.star:disc_cells,ring_cells,fill_cells",
+        "lib/fixtures.star:Bench,Sign",
+        "lib/outdoor.star:FlowerBed"
+      ],
+      "notes": "Move ground metadata to root build wrapper so MoonwellGarden can nest/rotate; validate RunePylon integer height >=5. Geometry unchanged.",
+      "palette_top": [
+        "minecraft:deepslate_bricks",
+        "minecraft:smooth_quartz",
+        "minecraft:quartz_bricks",
+        "minecraft:polished_deepslate",
+        "minecraft:sea_lantern",
+        "minecraft:waxed_oxidized_cut_copper",
+        "minecraft:calcite",
+        "minecraft:water"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "c67ae5b1b28139e07496837823fe868449042a7860967fb7d896a97b6ba25e04",
+      "signatures": {
+        "Moonwell": "Moonwell(rim='minecraft:quartz_bricks', crystal='minecraft:amethyst_block')",
+        "MoonwellGarden": "MoonwellGarden()",
+        "RunePylon": "RunePylon(height=8, stone='minecraft:polished_deepslate', crystal='minecraft:amethyst_block')"
+      },
+      "size": [
+        23,
+        14,
+        19
+      ],
+      "version": 2,
+      "y_offset": -5
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "author": "codex",
+  "created_at": "2026-10-08T23:26:47Z",
+  "description": "Reusable gently stepped copper-inlaid pale-stone path with amethyst-topped lanterns and optional east junction. LanternWalk(levels,east_exit) uses a list of local walking Ys (>=3, adjacent difference <=1), size 7 x (max(levels)+9) x len(levels); stairs face each rise and piers support terrain gaps. ObservatoryApproach(length) is a 5-wide level branch, size length x19x5, local walkingY10. Explicit clearance above the walkway. Demo north-south terrain profile ground_level8; build(branch=True) demonstrates level branch at ground_level10.",
+  "latest": 2,
+  "name": "astral_lantern_walk",
+  "tags": [
+    "magic",
+    "path",
+    "stairs",
+    "lantern",
+    "component",
+    "terrain",
+    "copper"
+  ],
+  "title": "Astral Lantern Walk",
+  "updated_at": "2026-10-08T23:27:16Z",
+  "versions": [
+    {
+      "artifact_id": "slk_3fb41e462198efdf",
+      "author": "codex",
+      "block_count": 2882,
+      "created_at": "2026-10-08T23:26:47Z",
+      "entry": "build",
+      "exports": [
+        "LanternWalk",
+        "ObservatoryApproach"
+      ],
+      "ground_level": 8,
+      "loads": [],
+      "notes": null,
+      "palette_top": [
+        "minecraft:air",
+        "minecraft:stone_bricks",
+        "minecraft:polished_diorite",
+        "minecraft:polished_deepslate",
+        "minecraft:oxidized_cut_copper",
+        "minecraft:polished_deepslate_wall",
+        "minecraft:quartz_stairs",
+        "minecraft:amethyst_block"
+      ],
+      "params": [
+        {
+          "default": false,
+          "name": "branch"
+        }
+      ],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "eb893b48816a608c3e9e3764bcd23341e0e93eb36bf0ceb098480259291cc724",
+      "signatures": {
+        "LanternWalk": "LanternWalk(levels=[8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9], east_exit=True)",
+        "ObservatoryApproach": "ObservatoryApproach(length=14)"
+      },
+      "size": [
+        7,
+        19,
+        33
+      ],
+      "version": 1,
+      "y_offset": -8
+    },
+    {
+      "artifact_id": "slk_7e778c82fd98c8d8",
+      "author": "codex",
+      "block_count": 2882,
+      "created_at": "2026-10-08T23:27:16Z",
+      "entry": "build",
+      "exports": [
+        "LanternWalk",
+        "ObservatoryApproach"
+      ],
+      "ground_level": 8,
+      "loads": [],
+      "notes": "Fix zero-height support fill at valid minimum walking level3; parameter/rotation regression checked.",
+      "palette_top": [
+        "minecraft:air",
+        "minecraft:stone_bricks",
+        "minecraft:polished_diorite",
+        "minecraft:polished_deepslate",
+        "minecraft:oxidized_cut_copper",
+        "minecraft:polished_deepslate_wall",
+        "minecraft:quartz_stairs",
+        "minecraft:amethyst_block"
+      ],
+      "params": [
+        {
+          "default": false,
+          "name": "branch"
+        }
+      ],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "7825f132674a5bd15e337cbca2530937fb7dcf7168edc5bf9111ea3e91a16cda",
+      "signatures": {
+        "LanternWalk": "LanternWalk(levels=[8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9], east_exit=True)",
+        "ObservatoryApproach": "ObservatoryApproach(length=14)"
+      },
+      "size": [
+        7,
+        19,
+        33
+      ],
+      "version": 2,
+      "y_offset": -8
+    }
+  ]
+}

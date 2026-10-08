@@ -1,0 +1,67 @@
+{
+  "author": "codex",
+  "created_at": "2026-10-08T23:25:04Z",
+  "description": "Magical trading terrace with inward-facing copper-roofed potion kiosks, rune arch and hovering crystal monument. Exports StarKiosk(canopy, crystal) 7x11x7 south-facing open stall, RuneArch(stone) 7x8x3 with clear 3-wide passage, CrystalObelisk(crystal) 5x8x5, and StarbloomArcade() 25x31x25 including terrain clearance/supports. Demo ground_level=7; exported scene walking plane local Y7. Components use fixture phase and can sit in cleared terrain; compact parts have no placement metadata.",
+  "latest": 1,
+  "name": "starbloom_arcade",
+  "tags": [
+    "magic",
+    "market",
+    "kiosk",
+    "arch",
+    "crystal",
+    "component",
+    "copper",
+    "amethyst"
+  ],
+  "title": "Starbloom Arcade",
+  "updated_at": "2026-10-08T23:25:04Z",
+  "versions": [
+    {
+      "artifact_id": "slk_8a33ee68697a145f",
+      "author": "codex",
+      "block_count": 14903,
+      "created_at": "2026-10-08T23:25:04Z",
+      "entry": "build",
+      "exports": [
+        "StarKiosk",
+        "RuneArch",
+        "CrystalObelisk",
+        "StarbloomArcade"
+      ],
+      "ground_level": 7,
+      "loads": [
+        "lib/fixtures.star:Bench"
+      ],
+      "notes": "Initial reusable components; north-facing scene entry uses rotation180; signs are on rear counters away from circulation.",
+      "palette_top": [
+        "minecraft:air",
+        "minecraft:polished_diorite",
+        "minecraft:polished_deepslate",
+        "minecraft:stone_bricks",
+        "minecraft:oxidized_cut_copper",
+        "minecraft:waxed_weathered_cut_copper",
+        "minecraft:purpur_block",
+        "minecraft:polished_deepslate_wall"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "09aaabcbc32969ac6d6e5b5379e633e04f23957879a695bb2965ca04617f2e47",
+      "signatures": {
+        "CrystalObelisk": "CrystalObelisk(crystal='minecraft:amethyst_block')",
+        "RuneArch": "RuneArch(stone='minecraft:polished_deepslate')",
+        "StarKiosk": "StarKiosk(canopy='minecraft:oxidized_cut_copper', crystal='minecraft:amethyst_block')",
+        "StarbloomArcade": "StarbloomArcade()"
+      },
+      "size": [
+        25,
+        31,
+        25
+      ],
+      "version": 1,
+      "y_offset": -7
+    }
+  ]
+}

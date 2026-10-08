@@ -1,0 +1,65 @@
+{
+  "author": "codex-observatory-agent",
+  "created_at": "2026-10-08T23:24:30Z",
+  "description": "Reusable magical observatory and independent nine-block armillary sphere. AstralObservatory() is 23x39x23, south-facing, local walking floor8 with deep beveled supports, furnished octagonal calcite study, west-ready rotatable doorway, ladder-access balcony, reused cyan GlassDome and copper/amethyst celestial sphere. Export AstralArmillary(ring,crystal) is 9x9x9. Demo build() faces west and sets ground_level8. Door at local (11,8,16), south access reaches (11,8,22); compose component then set root ground_level8.",
+  "latest": 1,
+  "name": "astral_armillary_observatory",
+  "tags": [
+    "magic",
+    "observatory",
+    "tower",
+    "armillary",
+    "reusable",
+    "copper",
+    "amethyst",
+    "dome"
+  ],
+  "title": "Astral Armillary Observatory",
+  "updated_at": "2026-10-08T23:24:30Z",
+  "versions": [
+    {
+      "artifact_id": "slk_5031605352b9b5a1",
+      "author": "codex-observatory-agent",
+      "block_count": 12744,
+      "created_at": "2026-10-08T23:24:30Z",
+      "entry": "build",
+      "exports": [
+        "AstralArmillary",
+        "AstralObservatory"
+      ],
+      "ground_level": 8,
+      "loads": [
+        "library/arcane_observatory_tower/v1.star:GlassDome",
+        "lib/openings.star:SingleDoor",
+        "lib/fixtures.star:Ladder"
+      ],
+      "notes": "First reusable variant; reviewed compile/dry-run and placed under independent agent area lock.",
+      "palette_top": [
+        "minecraft:air",
+        "minecraft:polished_deepslate",
+        "minecraft:smooth_stone",
+        "minecraft:calcite",
+        "minecraft:waxed_cut_copper",
+        "minecraft:cyan_stained_glass",
+        "minecraft:polished_deepslate_wall",
+        "minecraft:chiseled_quartz_block"
+      ],
+      "params": [],
+      "parent": "arcane_observatory_tower@1",
+      "props": {},
+      "root_size": null,
+      "sha256": "f8b14bd694def9227808091450d9580d051334f8d98d423878068b4eb53af368",
+      "signatures": {
+        "AstralArmillary": "AstralArmillary(ring='minecraft:waxed_cut_copper', crystal='minecraft:amethyst_block')",
+        "AstralObservatory": "AstralObservatory(stone='minecraft:calcite', trim='minecraft:polished_deepslate')"
+      },
+      "size": [
+        23,
+        39,
+        23
+      ],
+      "version": 1,
+      "y_offset": -8
+    }
+  ]
+}

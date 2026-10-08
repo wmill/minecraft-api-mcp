@@ -1,8 +1,8 @@
 {
   "author": "claude",
   "created_at": "2026-10-08T21:17:25Z",
-  "description": "Medieval stone blacksmith (20x14x16): stone brick and cobblestone walls on a cobblestone foundation with a wide archway forge opening, polished andesite floor. Working smithy with anvil, smithing table, blast furnaces, furnace, grindstone and cauldron, plus barrels, chests and lantern posts. Glowing \"Ash & Anvil Smithy - Repairs & Tools\" sign.",
-  "latest": 1,
+  "description": "Reusable south-facing stone smithy, 16x14x20, with forge porch, chimney, functional workstations and storage. AshAndAnvilSmithy() has walking plane at local Y=2; set parent ground_level=2 or offset component. Sign mounted beside entrance, porch lamps supported. Sparse build: clear vegetation/terrain before placement.",
+  "latest": 2,
   "name": "ash_and_anvil_smithy",
   "tags": [
     "smithy",
@@ -10,12 +10,11 @@
     "forge",
     "medieval",
     "workshop",
-    "stone",
-    "village",
-    "danishire"
+    "reusable",
+    "repaired"
   ],
   "title": "Ash & Anvil Smithy",
-  "updated_at": "2026-10-08T21:17:25Z",
+  "updated_at": "2026-10-08T23:23:25Z",
   "versions": [
     {
       "artifact_id": "slk_048ce5cdef3f00a7",
@@ -54,6 +53,48 @@
       ],
       "version": 1,
       "y_offset": -1
+    },
+    {
+      "artifact_id": "slk_974820ed3ac3adcb",
+      "author": "codex-library-repairs",
+      "block_count": 1246,
+      "created_at": "2026-10-08T23:23:25Z",
+      "entry": "build",
+      "exports": [
+        "AshAndAnvilSmithy"
+      ],
+      "ground_level": 2,
+      "loads": [
+        "lib/structural.star:Foundation,Floor",
+        "lib/openings.star:Window,Archway",
+        "lib/fixtures.star:Barrel,Chest,LanternPost"
+      ],
+      "notes": "Move standing sign out of entry to supported wall sign; support porch lamp bases; correct ground_level to 2; export south-facing AshAndAnvilSmithy without nested metadata.",
+      "palette_top": [
+        "minecraft:cobblestone",
+        "minecraft:stone_bricks",
+        "minecraft:polished_andesite",
+        "minecraft:dark_oak_slab",
+        "minecraft:spruce_slab",
+        "minecraft:air",
+        "minecraft:stripped_spruce_log",
+        "minecraft:spruce_fence"
+      ],
+      "params": [],
+      "parent": "ash_and_anvil_smithy@1",
+      "props": {},
+      "root_size": null,
+      "sha256": "2d877b68fa0c5e98e52814a54ae1cfb9da080e316e1d922b2ec24559539ce9b4",
+      "signatures": {
+        "AshAndAnvilSmithy": "AshAndAnvilSmithy()"
+      },
+      "size": [
+        16,
+        14,
+        20
+      ],
+      "version": 2,
+      "y_offset": -2
     }
   ]
 }

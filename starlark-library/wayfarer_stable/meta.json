@@ -1,8 +1,8 @@
 {
   "author": "claude",
   "created_at": "2026-10-08T21:17:31Z",
-  "description": "Medieval stable/barn (29x14x17): dark oak log and cobblestone walls, gable roof, archway entrances, with a fenced paddock, hay bale stacks, water cauldrons, barrels, chests, a loft ladder and lantern posts. Glowing \"Wayfarer Stable - Feed & Tack\" sign.",
-  "latest": 1,
+  "description": "Reusable south-facing medieval stable and paddock. WayfarerStable() is 17x14x29 with walking plane at local Y=2; parent scenes set ground_level=2 or offset the component. Loft ladder backed by north wall, clear sign-free entrance, connected level paddock and supported lights. Sparse build: clear vegetation/terrain before placement.",
+  "latest": 2,
   "name": "wayfarer_stable",
   "tags": [
     "stable",
@@ -10,11 +10,11 @@
     "farm",
     "paddock",
     "medieval",
-    "village",
-    "danishire"
+    "reusable",
+    "repaired"
   ],
   "title": "Wayfarer Stable",
-  "updated_at": "2026-10-08T21:17:31Z",
+  "updated_at": "2026-10-08T23:23:25Z",
   "versions": [
     {
       "artifact_id": "slk_1d2d95083cf6ac8f",
@@ -55,6 +55,50 @@
       ],
       "version": 1,
       "y_offset": -1
+    },
+    {
+      "artifact_id": "slk_05061000df93d621",
+      "author": "codex-library-repairs",
+      "block_count": 1662,
+      "created_at": "2026-10-08T23:23:25Z",
+      "entry": "build",
+      "exports": [
+        "WayfarerStable"
+      ],
+      "ground_level": 2,
+      "loads": [
+        "lib/structural.star:Foundation,Floor",
+        "lib/openings.star:Archway,Window",
+        "lib/roofs.star:GableRoof",
+        "lib/outdoor.star:FenceRing,HayBaleStack",
+        "lib/fixtures.star:Barrel,Chest,LanternPost,Ladder"
+      ],
+      "notes": "Move doorway sign onto exterior wall; support loft ladder and lantern; level paddock with barn and open connecting passage; support porch lamps; correct ground_level to 2; export south-facing WayfarerStable without nested metadata.",
+      "palette_top": [
+        "minecraft:coarse_dirt",
+        "minecraft:cobblestone",
+        "minecraft:spruce_planks",
+        "minecraft:spruce_stairs",
+        "minecraft:dark_oak_log",
+        "minecraft:spruce_fence",
+        "minecraft:hay_block",
+        "minecraft:air"
+      ],
+      "params": [],
+      "parent": "wayfarer_stable@1",
+      "props": {},
+      "root_size": null,
+      "sha256": "a1a37c265f0c419de43cab5a407c617c7a800d6434327ba0392c65191eed99c2",
+      "signatures": {
+        "WayfarerStable": "WayfarerStable()"
+      },
+      "size": [
+        17,
+        14,
+        29
+      ],
+      "version": 2,
+      "y_offset": -2
     }
   ]
 }
