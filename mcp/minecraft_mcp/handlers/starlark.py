@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 from typing import Any
 
 import httpx
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult, ImageContent, TextContent
 from pydantic import ValidationError
 
 from ..client.minecraft_api import MinecraftAPIClient
@@ -14,6 +15,10 @@ from ..config import STARLARK_SERVICE_URL
 from ..utils.formatting import area_lock_error, format_dry_run, format_success_response, undo_hint
 from ..utils.starlark_diagnostics import compact_diagnostics, diagnostic_text
 from ..utils.starlark_models import Placement, StarlarkResult
+
+THUMBNAIL_PX = 384
+ORIENTATION_NOTE = ("Top view has north up and east right; side views are elevations seen from that side "
+                    "(south = the +Z face, the default front); iso is viewed from the south-east.")
 
 BUILD_FIELDS = ("artifact_id", "size", "block_count", "entity_count", "ground_level",
                 "y_offset", "cached", "build_ms", "nbt_bytes", "palette")
@@ -118,10 +123,27 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
                      + (f" {undo_hint(result)}" if undo_hint(result) else ""))
 
 
+def _image(data: bytes) -> ImageContent:
+    return ImageContent(type="image", mimeType="image/png", data=base64.b64encode(data).decode("ascii"))
+
+
+async def _with_thumbnail(result: CallToolResult, client: StarlarkServiceClient, artifact_id: str) -> CallToolResult:
+    """Attach a small iso preview; best-effort, so a render failure never fails the build."""
+    try:
+        data = await client.get_artifact_image(artifact_id, "iso", THUMBNAIL_PX)
+    except Exception as exc:
+        result.content.append(TextContent(type="text", text=f"(Preview unavailable: {exc})"))
+        return result
+    result.content.append(_image(data))
+    result.content.append(TextContent(type="text", text="Iso preview from the south-east; "
+                                      "get_starlark_preview(view=\"sheet\") shows all six views."))
+    return result
+
+
 async def handle_build_starlark_structure(
     api_client: MinecraftAPIClient, source: str, entry: str = "build",
     props: dict[str, Any] | None = None, root_size: list[int] | None = None,
-    placement: dict[str, Any] | None = None, **arguments,
+    placement: dict[str, Any] | None = None, include_preview: bool = False, **arguments,
 ) -> CallToolResult:
     try:
         target = Placement.model_validate(placement) if placement is not None else None
@@ -141,9 +163,14 @@ async def handle_build_starlark_structure(
     if target is not None:
         placed = await _place(api_client, client, result, target)
         payload.update(placed.structuredContent)
-        return _response(payload, summary + "\n" + placed.content[0].text)
-    return _response(payload, summary + "\nNext: place_starlark_structure with this artifact ID and world coordinates; ground offset is automatic."
-                     " If the result is worth reusing, save_starlark_script it to the shared library.")
+        response = _response(payload, summary + "\n" + placed.content[0].text)
+    else:
+        response = _response(payload, summary + "\nNext: check it with get_starlark_preview, then place_starlark_structure "
+                             "with this artifact ID and world coordinates; ground offset is automatic."
+                             " If the result is worth reusing, save_starlark_script it to the shared library.")
+    if include_preview:
+        return await _with_thumbnail(response, client, result["artifact_id"])
+    return response
 
 
 async def handle_place_starlark_structure(
@@ -167,6 +194,27 @@ async def handle_place_starlark_structure(
     except Exception as exc:
         return _service_error(exc, artifact_id=artifact_id)
     return await _place(api_client, client, {**metadata, "artifact_id": artifact_id}, target)
+
+
+async def handle_get_starlark_preview(api_client: MinecraftAPIClient, artifact_id: str, view: str = "sheet",
+                                      max_px: int | None = None, **arguments) -> CallToolResult:
+    try:
+        data = await _starlark_client().get_artifact_image(artifact_id, view, max_px)
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status == 404:
+            return _failure("not_found", f"Artifact {artifact_id} is unavailable (evicted or never built).",
+                            "Recompile the original source, entry, props, and root_size, then use the returned ID.")
+        if status == 503:
+            return _failure("preview_unavailable", _detail(exc),
+                            "The artifact is still placeable; inspect it in the world with a dry run instead.")
+        return _service_error(exc)
+    except Exception as exc:
+        return _service_error(exc)
+    return CallToolResult(content=[
+        _image(data),
+        TextContent(type="text", text=f"Artifact {artifact_id} {view} preview. {ORIENTATION_NOTE}"),
+    ])
 
 
 async def handle_get_starlark_docs(api_client: MinecraftAPIClient, topic: str = "quickstart",

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -73,12 +74,18 @@ def store_source(cache_dir: Path, identifier: str, source: str) -> None:
     path.write_text(source, encoding="utf-8")
 
 
+def _previews_bytes(path: Path) -> int:
+    """Size of an artifact's rendered preview directory (see previews.py), if any."""
+    previews = path.with_suffix(".previews")
+    return sum(p.stat().st_size for p in previews.iterdir()) if previews.is_dir() else 0
+
+
 def stats(cache_dir: Path) -> dict[str, int]:
     artifacts = 0
     total = 0
     for path in cache_dir.glob("*/slk_*.nbt"):
         artifacts += 1
-        total += path.stat().st_size
+        total += path.stat().st_size + _previews_bytes(path)
         for companion in (path.with_suffix(".json"), path.with_suffix(".star")):
             if companion.exists():
                 total += companion.stat().st_size
@@ -86,12 +93,13 @@ def stats(cache_dir: Path) -> dict[str, int]:
 
 
 def evict(cache_dir: Path, max_bytes: int) -> None:
-    """Delete oldest artifact pairs (by NBT mtime) until under the byte cap."""
+    """Delete oldest artifacts (by NBT mtime) and their companions and previews until under the byte cap."""
     entries = []
     total = 0
     for path in cache_dir.glob("*/slk_*.nbt"):
         companions = [path.with_suffix(".json"), path.with_suffix(".star")]
-        size = path.stat().st_size + sum(c.stat().st_size for c in companions if c.exists())
+        size = (path.stat().st_size + sum(c.stat().st_size for c in companions if c.exists())
+                + _previews_bytes(path))
         entries.append((path.stat().st_mtime, path, companions, size))
         total += size
     entries.sort()
@@ -101,6 +109,7 @@ def evict(cache_dir: Path, max_bytes: int) -> None:
         path.unlink(missing_ok=True)
         for companion in companions:
             companion.unlink(missing_ok=True)
+        shutil.rmtree(path.with_suffix(".previews"), ignore_errors=True)
         total -= size
 
 

@@ -220,6 +220,12 @@ async def test_client_requests_match_http_contract(monkeypatch):
     assert dict(requests[-1].url.params) == {"topic": "quickstart"}
     await service.get_catalog(component="Bench")
     assert dict(requests[-1].url.params) == {"component": "Bench"}
+    await service.get_artifact_image("slk_0123456789abcdef", "top", 128)
+    assert requests[-1].url.path == "/artifacts/slk_0123456789abcdef/images/top"
+    assert dict(requests[-1].url.params) == {"max_px": "128"}
+    await service.get_artifact_image("slk_0123456789abcdef")
+    assert requests[-1].url.path.endswith("/images/sheet")
+    assert not requests[-1].url.params
     await MinecraftAPIClient("http://minecraft").place_nbt_structure_bytes(
         b"nbt", "build.nbt", 1, 63, 2, rotation="CLOCKWISE_90", include_entities=False)
     request = requests[-1]
@@ -249,6 +255,7 @@ STARLARK_TOOLS = [
     "save_starlark_script",
     "search_starlark_library",
     "get_starlark_script",
+    "get_starlark_preview",
 ]
 
 
@@ -352,3 +359,59 @@ async def test_get_script_not_found(clients):
     result = await starlark.handle_get_starlark_script(api, "missing")
     assert result.isError
     assert "not found" in result.content[0].text
+
+
+PNG = b"\x89PNG\r\n\x1a\nfake"
+
+
+async def test_preview_returns_image_with_orientation(clients):
+    api, service = clients
+    service.get_artifact_image.return_value = PNG
+    result = await starlark.handle_get_starlark_preview(api, "slk_0123456789abcdef", view="top", max_px=256)
+    assert not result.isError
+    assert result.content[0].type == "image"
+    assert result.content[0].mimeType == "image/png"
+    assert "north up" in result.content[1].text
+    service.get_artifact_image.assert_awaited_once_with("slk_0123456789abcdef", "top", 256)
+
+
+@pytest.mark.parametrize("status, kind", [(404, "not_found"), (503, "preview_unavailable"), (400, "invalid_request")])
+async def test_preview_errors_are_classified(clients, status, kind):
+    api, service = clients
+    service.get_artifact_image.side_effect = status_error(status, "nope")
+    result = await starlark.handle_get_starlark_preview(api, "slk_0123456789abcdef")
+    assert result.isError
+    assert result.structuredContent["error_kind"] == kind
+
+
+async def test_build_attaches_thumbnail_only_when_asked(clients):
+    api, service = clients
+    service.get_artifact_image.return_value = PNG
+    plain = await starlark.handle_build_starlark_structure(api, "source")
+    assert all(item.type == "text" for item in plain.content)
+    service.get_artifact_image.assert_not_called()
+
+    result = await starlark.handle_build_starlark_structure(api, "source", include_preview=True)
+    checked(result)
+    assert [item.type for item in result.content] == ["text", "image", "text"]
+    service.get_artifact_image.assert_awaited_once_with(BUILT["artifact_id"], "iso", starlark.THUMBNAIL_PX)
+
+
+async def test_thumbnail_failure_never_fails_the_build(clients):
+    api, service = clients
+    service.get_artifact_image.side_effect = status_error(503, "render timeout")
+    result = await starlark.handle_build_starlark_structure(
+        api, "source", include_preview=True, placement={"x": 1, "y": 64, "z": 2})
+    data = checked(result)
+    assert data["ok"] is True
+    assert data["placement"]["status"] == "placed"
+    assert "Preview unavailable" in result.content[-1].text
+
+
+async def test_failed_build_never_renders(clients):
+    api, service = clients
+    service.build.return_value = {"ok": False, "error_kind": "starlark_error", "diagnostics": [
+        {"code": "starlark_error", "message": "boom", "component_path": "build"}]}
+    result = await starlark.handle_build_starlark_structure(api, "source", include_preview=True)
+    assert result.isError
+    service.get_artifact_image.assert_not_called()

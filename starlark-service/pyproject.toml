@@ -5,6 +5,8 @@ description = "Optional Starlark build service for minecraft-mcp-api"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.0",
+    "nbt-image-gen",
+    "pillow>=10.1",
     "python-dotenv>=1.0.0",
     "starlark-to-nbt",
     "uvicorn>=0.30.0",
@@ -19,6 +21,8 @@ dev = [
 [tool.uv.sources]
 # Editable so submodule bumps (compiler and builtins, not just lib/) take effect without a reinstall.
 starlark-to-nbt = { path = "starlark-to-nbt", editable = true }
+# Second submodule: renders artifact preview images (previews.py).
+nbt-image-gen = { path = "nbt-image-gen", editable = true }
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -31,4 +35,4 @@ packages = ["starlark_service"]
 starlark-service = "starlark_service.main:main"
 
 [tool.pytest.ini_options]
-testpaths = ["test_app.py", "test_cache.py", "test_library.py", "test_sandbox.py"]
+testpaths = ["test_app.py", "test_cache.py", "test_library.py", "test_sandbox.py", "test_previews.py"]

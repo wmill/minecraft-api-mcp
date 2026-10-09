@@ -1990,6 +1990,14 @@ TOOL_BUILD_STARLARK_STRUCTURE = Tool(
                     "Optional [width, height, length] root bounds. Not needed when the root "
                     "component declares min_size or width/height/length are all in props"
                 )
+            },
+            "include_preview": {
+                "type": "boolean",
+                "default": False,
+                "description": (
+                    "Attach a small iso render of the compiled structure (about 200 tokens) to check "
+                    "its look before placing"
+                )
             }
         },
         "required": ["source"]
@@ -2017,6 +2025,36 @@ TOOL_PLACE_STARLARK_STRUCTURE = Tool(
         },
         "required": ["artifact_id", "x", "y", "z"],
     },
+)
+
+TOOL_GET_STARLARK_PREVIEW = Tool(
+    name="get_starlark_preview",
+    description=(
+        "Render a compiled Starlark artifact without placing it. The default 'sheet' is one labelled image "
+        "(about 600 tokens) with the iso render, top-down plan, and the north/south/east/west elevations; "
+        "use it to catch clipping, misplaced parts, or a front facing the wrong way before placement. "
+        "Colors are flat per block type (no textures). A single view at max_px=768 costs about 800 tokens."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "artifact_id": {"type": "string", "description": "Artifact ID returned by build_starlark_structure"},
+            "view": {
+                "type": "string",
+                "enum": ["sheet", "iso", "top", "north", "south", "east", "west"],
+                "default": "sheet",
+                "description": "sheet = all views in one image; top has north up; side views are seen from that side"
+            },
+            "max_px": {
+                "type": "integer",
+                "minimum": 64,
+                "maximum": 1024,
+                "description": "Longest edge for a single view (default 768), or tile size for the sheet (default 256)"
+            }
+        },
+        "required": ["artifact_id"]
+    }
 )
 
 TOOL_GET_STARLARK_DOCS = Tool(
@@ -2224,6 +2262,7 @@ TOOL_SCHEMAS = [
     TOOL_SAVE_STARLARK_SCRIPT,
     TOOL_SEARCH_STARLARK_LIBRARY,
     TOOL_GET_STARLARK_SCRIPT,
+    TOOL_GET_STARLARK_PREVIEW,
 ]
 
 # Apply the same optional token contract to every world-write tool.

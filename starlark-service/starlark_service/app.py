@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
-from . import cache, library
+from . import cache, library, previews
 from .config import ServiceConfig, load_config
 from .docs import UnknownDocs, catalog_view
 from .sandbox import BuildQueueFull, Sandbox
@@ -49,6 +49,7 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
     cfg = config or load_config()
     app = FastAPI(title="Minecraft Starlark Build Service")
     sandbox = Sandbox(cfg)
+    renderer = previews.Renderer(cfg.cache_dir, cfg.preview_timeout_s, cfg.max_concurrent_builds)
     fingerprint = cache.lib_fingerprint(cfg.tool_dir)
     library_lock = asyncio.Lock()
 
@@ -193,6 +194,26 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="artifact not found (evicted or never built); rebuilding the same source yields the same id")
         cache.touch(cfg.cache_dir, artifact_id)
         return FileResponse(path, media_type="application/octet-stream", filename=path.name)
+
+    @app.get("/artifacts/{artifact_id}/images/{view}")
+    async def get_artifact_image(artifact_id: str, view: str, max_px: int | None = None) -> Response:
+        identifier = valid_artifact_id(artifact_id)
+        if view != previews.SHEET and view not in previews.VIEWS:
+            raise HTTPException(status_code=400,
+                                detail=f"view must be one of {', '.join((previews.SHEET,) + previews.VIEWS)}")
+        if not cache.nbt_path(cfg.cache_dir, identifier).exists():
+            raise HTTPException(status_code=404, detail="artifact not found (evicted or never built); rebuilding the same source yields the same id")
+        cache.touch(cfg.cache_dir, identifier)
+        try:
+            directory = await renderer.ensure(identifier)
+        except previews.PreviewFailed as exc:
+            raise HTTPException(status_code=503, detail=f"preview unavailable: {exc}") from exc
+        if view == previews.SHEET:
+            data = previews.render_sheet(directory, previews.clamp_px(max_px, previews.DEFAULT_TILE_PX))
+        else:
+            data = previews.render_view(directory / f"{view}.png",
+                                        previews.clamp_px(max_px, previews.DEFAULT_VIEW_PX))
+        return Response(content=data, media_type="image/png")
 
     @app.get("/docs/catalog")
     async def get_catalog(topic: str = "quickstart", component: str | None = None) -> PlainTextResponse:

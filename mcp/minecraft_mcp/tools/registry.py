@@ -95,6 +95,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     # Starlark build service tools
     "build_starlark_structure": starlark.handle_build_starlark_structure,
     "place_starlark_structure": starlark.handle_place_starlark_structure,
+    "get_starlark_preview": starlark.handle_get_starlark_preview,
     "get_starlark_docs": starlark.handle_get_starlark_docs,
     "list_starlark_examples": starlark.handle_list_starlark_examples,
     "get_starlark_example": starlark.handle_get_starlark_example,

@@ -5,10 +5,12 @@ WORKDIR /app
 
 # Submodule checkout: lib/, docs/, and examples/ ride along with the package
 COPY starlark-to-nbt ./starlark-to-nbt
+# Submodule checkout: artifact preview renderer
+COPY nbt-image-gen ./nbt-image-gen
 COPY pyproject.toml ./
 COPY starlark_service ./starlark_service
 
-RUN pip install --no-cache-dir ./starlark-to-nbt && pip install --no-cache-dir .
+RUN pip install --no-cache-dir ./starlark-to-nbt ./nbt-image-gen && pip install --no-cache-dir .
 
 ENV STARLARK_TOOL_DIR=/app/starlark-to-nbt \
     STARLARK_CACHE_DIR=/data \

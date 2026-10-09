@@ -12,7 +12,7 @@ This is a Minecraft 1.21.7 Fabric mod combined with a Python Model Context Proto
 - PostgreSQL database for persistent build task management
 - Optional Python schematic catalog service on port 7080
 - Optional Elasticsearch-backed schematic search index
-- Optional Python Starlark build service on port 7090 (starlark-to-nbt vendored as a git submodule at `starlark-service/starlark-to-nbt`; run `git submodule update --init` after cloning)
+- Optional Python Starlark build service on port 7090 (starlark-to-nbt and nbt-image-gen vendored as git submodules at `starlark-service/starlark-to-nbt` and `starlark-service/nbt-image-gen`; run `git submodule update --init` after cloning)
 - Docker containerization for deployment
 
 ## Build and Development Commands
@@ -101,7 +101,7 @@ uv run python -c "from schematic_service.config import load_config; from schemat
 ### Python Starlark Build Service
 ```bash
 cd starlark-service
-git submodule update --init   # once, after cloning: vendors starlark-to-nbt
+git submodule update --init   # once, after cloning: vendors starlark-to-nbt and nbt-image-gen
 uv sync
 
 uv run starlark-service                                                # main.py entrypoint (port 7090)
@@ -293,6 +293,7 @@ Compiles Starlark build scripts submitted by MCP users into placeable structure 
 - **Sandboxed builds**: the tool has no evaluation budget of its own, so each build runs in a killable subprocess (`starlark_service/runner.py`) under a wall-clock timeout (SIGKILL), an `RLIMIT_DATA` memory cap, and root-volume/NBT-byte caps. Do not lower `STARLARK_BUILD_MEMORY_MB` below ~1024: the Rust starlark runtime reserves ~1GB of data mappings up front and SIGABRTs under smaller caps.
 - **Confined `load()`**: submitted scripts can only load from the vendored `lib/` component library and saved `library/` versions (upstream `loader_root` confinement; uniform "module not found" errors prevent filesystem probing). Scripts use `load("../lib/structural.star", ...)`, the same convention as the upstream `examples/`.
 - **Script library** (`starlark-library/`, repo root, git-tracked): agents save working scripts via `POST /library` so later builds can fork them or `load()` their components. Layout is `<name>/meta.json` + append-only `v<N>.star`; versions are **immutable** (never edit/delete a published `v<N>.star` — scripts load them by pinned path and the artifact cache keys on source text only, so the lib fingerprint doesn't need to cover the library). Saves are rebuilt first and rejected (200 `{ok:false, diagnostics}`) if they fail; identical re-saves are no-ops. Scripts load saved versions as `load("../library/<name>/v<N>.star", ...)` through the submodule loader's `mounts` option (`runner.py` mounts `library` → `STARLARK_LIBRARY_DIR`); library modules use the same load paths as top-level scripts. `meta.json` records title/description/tags/author, and per version: lineage (`parent` as `name@N`, notes), entry params and UpperCamel component exports with signatures (parsed with Python `ast`, regex fallback), loads, and build stats (size, block_count, palette_top, artifact_id).
+- **Artifact previews**: `GET /artifacts/{id}/images/{view}` renders the artifact with [nbt-image-gen](https://github.com/wmill/nbt-image-gen) (submodule at `starlark-service/nbt-image-gen`) on first request, in a subprocess under `STARLARK_PREVIEW_TIMEOUT_S`, into `<artifact_id>.previews/` beside the NBT (evicted with it, counted in cache bytes). Views match the schematic previews (`iso` from the south-east, `top` north up, side elevations, labelled 3x2 `sheet`), but are flattened onto slate rather than white so white blocks stay visible.
 - **Build failures are HTTP 200** with `{ok: false, error_kind, diagnostics, hint}` — a build that ran and produced diagnostics is a successful request, keeping the MCP edit→build-error→edit loop exception-free. `error_kind` is one of `starlark_error`, `build_error`, `timeout`, `resource_limit`, `crash`.
 
 **Service modules:**
@@ -303,6 +304,8 @@ Compiles Starlark build scripts submitted by MCP users into placeable structure 
 - `cache.py` - artifact hashing, sharded disk layout, LRU eviction, lib fingerprint
 - `library.py` - saved-script library: versioned storage, source analysis (params/exports/loads), local search
 - `docs.py` - focused views of the component catalog plus the `library` usage topic
+- `previews.py` - lazy per-artifact preview rendering (bounded concurrency, per-artifact lock), downscaled views and contact sheet
+- `preview_worker.py` - in-subprocess nbt-image-gen render of all six views plus `meta.json`
 
 **Configuration via environment variables (or `.env` in `starlark-service/`):**
 ```bash
@@ -316,12 +319,14 @@ STARLARK_MAX_NBT_BYTES=16777216
 STARLARK_MAX_CONCURRENT_BUILDS=2
 STARLARK_CACHE_MAX_BYTES=1073741824
 STARLARK_LIBRARY_DIR=../starlark-library # saved-script library (git-tracked; /library in Docker)
+STARLARK_PREVIEW_TIMEOUT_S=30            # wall-clock cap for rendering one artifact's previews
 ```
 
 **HTTP API:**
 - `GET /health`
 - `POST /build` — `{source, entry?, props?, root_size?}`
 - `GET /artifacts/{artifact_id}` and `GET /artifacts/{artifact_id}/nbt`
+- `GET /artifacts/{artifact_id}/images/{view}?max_px=...` - `view` is `sheet` or one of `iso/top/north/south/east/west`; same sizing as the schematic image route; 404 for unknown artifacts, 503 if rendering fails or times out
 - `GET /docs/catalog` — the script API reference (component catalog markdown)
 - `GET /examples` and `GET /examples/{name}`
 - `POST /library` — `{name, artifact_id | source, title, description, tags?, author?, notes?, parent?, entry?, props?, root_size?}`; title/description required for a new name
@@ -329,7 +334,8 @@ STARLARK_LIBRARY_DIR=../starlark-library # saved-script library (git-tracked; /l
 - `GET /library/{name}` (meta plus computed `used_by` reverse dependencies) and `GET /library/{name}/source?version=` (version in `X-Library-Version` header)
 
 **MCP tools using this service:**
-- `build_starlark_structure` — compile source; failure text lists numbered diagnostics for the edit loop
+- `build_starlark_structure` — compile source; failure text lists numbered diagnostics for the edit loop; `include_preview` attaches a small iso render (best-effort)
+- `get_starlark_preview` — preview sheet or single view of a compiled artifact as MCP image content
 - `place_starlark_structure` — fetch artifact NBT, apply its `y_offset`, place via the mod's NBT placement endpoint
 - `get_starlark_docs`
 - `list_starlark_examples` / `get_starlark_example`
@@ -382,6 +388,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - python-dotenv >= 1.0.0 - Environment configuration
 - uvicorn >= 0.30.0 - ASGI server
 - starlark-to-nbt - editable path dependency on the vendored submodule (pulls nbtlib and starlark-pyo3), so submodule bumps apply without reinstalling
+- nbt-image-gen - editable path dependency on the second submodule (pulls numpy and pillow) for artifact previews
 
 ### Resource Structure
 
@@ -410,7 +417,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_final_verification.py` - Final verification tests
 - `test_schematic_tools.py` - Schematic MCP tool registration/config tests
 - `test_schematic_images.py` - `get_schematic_image` and search thumbnails
-- `test_starlark_tools.py` - Starlark MCP tool registration/config tests
+- `test_starlark_tools.py` - Starlark MCP tool registration/config tests, `get_starlark_preview` and build thumbnails
 - `test_undo_dry_run.py` - `undo_build` and `dry_run` placement tools
 
 **Schematic Service Tests** (`schematic-service/`):
@@ -423,6 +430,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_cache.py` - Artifact id hashing, LRU eviction, lib fingerprint
 - `test_sandbox.py` - Timeout kill, resource-limit rejections, queue-full 429
 - `test_library.py` - Save/version immutability, failed-build rejection, save by artifact id, loading saved versions, search filters
+- `test_previews.py` - Preview views/sheet, orientation, render failure/timeout 503, eviction of preview dirs
 
 **Testing Best Practices** (see TESTING.md):
 - Extract pure logic from endpoints into testable helper methods
@@ -469,7 +477,7 @@ The project includes full Docker containerization with PostgreSQL:
 - `nginx` - Optional reverse proxy with basic auth support
 - `elasticsearch` - Optional schematic search index, enabled by the `schematics` profile
 - `schematic-service` - Optional schematic catalog/NBT service on port 7080, enabled by the `schematics` profile
-- `starlark-service` - Optional Starlark build service on port 7090, enabled by the `starlark` profile (Docker build requires the submodule: `git submodule update --init`)
+- `starlark-service` - Optional Starlark build service on port 7090, enabled by the `starlark` profile (Docker build requires the submodules: `git submodule update --init`)
 
 **Database access:**
 ```bash

@@ -40,6 +40,15 @@ class StarlarkServiceClient:
             response.raise_for_status()
             return response.content
 
+    async def get_artifact_image(self, artifact_id: str, view: str = "sheet",
+                                 max_px: Optional[int] = None) -> bytes:
+        # The first request for an artifact renders all views (service timeout 30s by default).
+        params = {"max_px": max_px} if max_px is not None else None
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.get(f"{self.base_url}/artifacts/{artifact_id}/images/{view}", params=params)
+            response.raise_for_status()
+            return response.content
+
     async def get_catalog(self, topic: str = "quickstart", component: str | None = None) -> str:
         async with httpx.AsyncClient(timeout=10.0) as client:
             params = {"component": component} if component is not None else {"topic": topic}

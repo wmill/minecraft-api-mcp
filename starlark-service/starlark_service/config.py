@@ -21,6 +21,7 @@ class ServiceConfig:
     max_concurrent_builds: int
     cache_max_bytes: int
     library_dir: Path
+    preview_timeout_s: float = 30.0
 
     @property
     def lib_dir(self) -> Path:
@@ -55,4 +56,5 @@ def load_config() -> ServiceConfig:
         max_concurrent_builds=int(env.get("STARLARK_MAX_CONCURRENT_BUILDS", "2")),
         cache_max_bytes=int(env.get("STARLARK_CACHE_MAX_BYTES", str(1024 * 1024 * 1024))),
         library_dir=Path(env.get("STARLARK_LIBRARY_DIR", repo_dir / "starlark-library")).resolve(),
+        preview_timeout_s=float(env.get("STARLARK_PREVIEW_TIMEOUT_S", "30")),
     )
