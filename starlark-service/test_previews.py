@@ -3,11 +3,13 @@ from __future__ import annotations
 import io
 import os
 
+import numpy as np
 from fastapi.testclient import TestClient
+from nbt_image_gen.loader import AIR
 from PIL import Image
 
 from conftest import SIMPLE_SOURCE, make_config
-from starlark_service import cache, previews
+from starlark_service import cache, previews, render
 from starlark_service.app import create_app
 
 # A stone block with one red marker jutting out of its north (-Z) face.
@@ -116,3 +118,114 @@ def test_eviction_and_stats_include_previews(config):
     assert not cache.nbt_path(config.cache_dir, old).exists()
     assert not old_previews.exists()
     assert cache.nbt_path(config.cache_dir, new).exists()
+
+
+# A closed two-storey stone box: floor slabs at y=0 and y=4, roof at y=8, and a red block on
+# the ground floor that no exterior view can see.
+ROOM_SOURCE = (
+    "def build():\n"
+    '    stone = block("minecraft:stone_bricks")\n'
+    '    parts = [place_block([3, 1, 3], block("minecraft:red_wool"))]\n'
+    "    for y in [0, 4, 8]:\n"
+    "        parts.append(fill_region([0, y, 0], [7, y + 1, 7], stone))\n"
+    "    for y in [1, 5]:\n"
+    "        parts.append(fill_region([0, y, 0], [7, y + 3, 1], stone))\n"
+    "        parts.append(fill_region([0, y, 6], [7, y + 3, 7], stone))\n"
+    "        parts.append(fill_region([0, y, 1], [1, y + 3, 6], stone))\n"
+    "        parts.append(fill_region([6, y, 1], [7, y + 3, 6], stone))\n"
+    '    return component(name="Room", props={}, min_size=[7, 9, 7], body=group(parts))\n'
+)
+
+
+def has_red(img: Image.Image) -> bool:
+    data = img.convert("RGB").tobytes()
+    return any(data[i] > 150 and data[i + 1] < 80 and data[i + 2] < 80 for i in range(0, len(data), 3))
+
+
+def build_room(client: TestClient) -> str:
+    result = client.post("/build", json={"source": ROOM_SOURCE}).json()
+    assert result["ok"] is True, result
+    return result["artifact_id"]
+
+
+def test_cuts_reveal_the_interior(config):
+    client = TestClient(create_app(config))
+    artifact = build_room(client)
+    url = f"/artifacts/{artifact}/images"
+    assert not has_red(png(client.get(f"{url}/iso")))
+    response = client.get(f"{url}/iso", params={"cut_y": 2})
+    assert response.headers["x-artifact-size"] == "7x9x7"
+    assert has_red(png(response))
+    assert has_red(png(client.get(f"{url}/section", params={"cut_y": 1})))  # through the marker
+    assert has_red(png(client.get(f"{url}/section", params={"cut_z": 3})))
+    assert has_red(png(client.get(f"{url}/iso", params={"cut_x": 3})))
+    # Cut through the upper storey: it is empty and its floor slab hides the marker.
+    assert not has_red(png(client.get(f"{url}/section", params={"cut_y": 6})))
+    # Variants are cached beside the base views.
+    names = {p.name for p in previews.preview_dir(config.cache_dir, artifact).iterdir()}
+    assert {"iso_y2.png", "section_y1.png", "section_z3.png", "iso_x3.png", "section_y6.png"} <= names
+
+
+def test_cut_sheet_has_cutaway_and_section(config):
+    client = TestClient(create_app(config))
+    artifact = build_room(client)
+    sheet = png(client.get(f"/artifacts/{artifact}/images/sheet", params={"cut_y": 2, "max_px": 96}))
+    assert sheet.size == (2 * 96 + 3 * previews.PAD, previews.LABEL_H + 96 + 2 * previews.PAD)
+    assert has_red(sheet)
+
+
+def test_floors_sheet_lists_detected_storeys(config):
+    client = TestClient(create_app(config))
+    artifact = build_room(client)
+    response = client.get(f"/artifacts/{artifact}/images/floors", params={"max_px": 96})
+    assert response.headers["x-preview-floors"] == "0:2,4:6"
+    sheet = png(response)
+    assert sheet.size == (2 * 96 + 3 * previews.PAD, previews.LABEL_H + 96 + 2 * previews.PAD)
+    assert has_red(sheet)
+
+
+def test_invalid_cuts_are_rejected(config):
+    client = TestClient(create_app(config))
+    artifact = build_room(client)
+    url = f"/artifacts/{artifact}/images"
+    assert client.get(f"{url}/iso", params={"cut_x": 1, "cut_y": 1}).status_code == 400
+    assert client.get(f"{url}/top", params={"cut_y": 1}).status_code == 400
+    assert client.get(f"{url}/section").status_code == 400
+    assert client.get(f"{url}/floors", params={"cut_y": 1}).status_code == 400
+    out_of_range = client.get(f"{url}/iso", params={"cut_y": 9})
+    assert out_of_range.status_code == 400
+    assert "y 0..8" in out_of_range.json()["detail"]
+
+
+def test_outdated_preview_directory_is_rerendered(config):
+    client = TestClient(create_app(config))
+    artifact = build(client)
+    png(client.get(f"/artifacts/{artifact}/images/iso"))
+    directory = previews.preview_dir(config.cache_dir, artifact)
+    (directory / "meta.json").write_text('{"size": {"width": 3, "height": 5, "depth": 3}}')
+    (directory / "stale.png").write_bytes(b"")
+    png(client.get(f"/artifacts/{artifact}/images/iso"))
+    assert previews.read_meta(directory)["preview_version"] == previews.PREVIEW_VERSION
+    assert not (directory / "stale.png").exists()
+
+
+def test_detect_floors_and_cut_height():
+    grid = np.full((5, 12, 5), AIR, dtype=np.int16)
+    grid[:, 0, :] = grid[:, 5, :] = grid[:, 11, :] = 0  # ground, mid floor, roof
+    assert render.detect_floors(grid) == [0, 5]
+    assert render.floor_cut(5, 12) == 7
+    assert render.floor_cut(10, 12) == 11
+    # No roofs anywhere: fall back to evenly spaced levels rather than nothing.
+    open_grid = np.full((5, 12, 5), AIR, dtype=np.int16)
+    open_grid[:, 0, :] = 0
+    assert render.detect_floors(open_grid) == [0, 3, 6, 9]
+
+
+def test_background_avoids_silhouette_colours():
+    def blob(colour):
+        img = Image.new("RGBA", (20, 20), (0, 0, 0, 0))
+        img.paste(Image.new("RGBA", (10, 10), colour + (255,)), (5, 5))
+        return img
+    assert render.choose_background([blob((120, 80, 40))])[0] == "slate"
+    # Pale blue glass blends into slate, so it moves to another background.
+    assert render.choose_background([blob((175, 188, 205))])[0] != "slate"

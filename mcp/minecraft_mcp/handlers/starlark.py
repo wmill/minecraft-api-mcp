@@ -196,10 +196,34 @@ async def handle_place_starlark_structure(
     return await _place(api_client, client, {**metadata, "artifact_id": artifact_id}, target)
 
 
+CUT_NOTE = ("Cuts use the artifact's local coordinates (0 = its west/bottom/north edge, before placement "
+            "rotation and y_offset). The cutaway iso removes everything above y (or east of x / south of z) "
+            "so the cut faces the camera; the section looks straight at the cut plane: blocks on the plane are "
+            "full colour with black outlines where the material changes, blocks further back fade out.")
+
+
+def _preview_text(artifact_id: str, view: str, cut: dict[str, int], info: dict[str, str]) -> str:
+    size = info.get("x-artifact-size")
+    sized = f" (size {size}, x by y by z)" if size else ""
+    if cut:
+        (key, at), = cut.items()
+        return f"Artifact {artifact_id}{sized} {view} at {key}={at}. {CUT_NOTE}"
+    if view == "floors":
+        levels = [entry.split(":") for entry in info.get("x-preview-floors", "").split(",") if entry]
+        listed = ", ".join(f"floor y={floor} (cut y={cut_y})" for floor, cut_y in levels) or "none"
+        return (f"Artifact {artifact_id}{sized} floor plans: {listed}. Each plan looks down from two blocks above "
+                f"the floor, north up. {CUT_NOTE} Use cut_y with view='iso' for a 3D cutaway of one storey.")
+    return (f"Artifact {artifact_id}{sized} {view} preview. {ORIENTATION_NOTE} "
+            "To check interiors, use view='floors' or a cut_y/cut_x/cut_z.")
+
+
 async def handle_get_starlark_preview(api_client: MinecraftAPIClient, artifact_id: str, view: str = "sheet",
-                                      max_px: int | None = None, **arguments) -> CallToolResult:
+                                      max_px: int | None = None, cut_x: int | None = None,
+                                      cut_y: int | None = None, cut_z: int | None = None,
+                                      **arguments) -> CallToolResult:
+    cut = {key: value for key, value in (("cut_x", cut_x), ("cut_y", cut_y), ("cut_z", cut_z)) if value is not None}
     try:
-        data = await _starlark_client().get_artifact_image(artifact_id, view, max_px)
+        data, info = await _starlark_client().get_artifact_preview(artifact_id, view, max_px, cut or None)
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status == 404:
@@ -213,7 +237,7 @@ async def handle_get_starlark_preview(api_client: MinecraftAPIClient, artifact_i
         return _service_error(exc)
     return CallToolResult(content=[
         _image(data),
-        TextContent(type="text", text=f"Artifact {artifact_id} {view} preview. {ORIENTATION_NOTE}"),
+        TextContent(type="text", text=_preview_text(artifact_id, view, cut, info)),
     ])
 
 

@@ -49,6 +49,21 @@ class StarlarkServiceClient:
             response.raise_for_status()
             return response.content
 
+    async def get_artifact_preview(self, artifact_id: str, view: str = "sheet", max_px: Optional[int] = None,
+                                   cut: Optional[dict[str, int]] = None) -> tuple[bytes, dict[str, str]]:
+        """Image plus the service's info headers (X-Artifact-Size, X-Preview-Floors).
+
+        `cut` is at most one of {"cut_x"|"cut_y"|"cut_z": local coordinate}.
+        """
+        params: dict[str, int] = dict(cut or {})
+        if max_px is not None:
+            params["max_px"] = max_px
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.get(f"{self.base_url}/artifacts/{artifact_id}/images/{view}", params=params or None)
+            response.raise_for_status()
+            return response.content, {key: response.headers[key] for key in ("x-artifact-size", "x-preview-floors")
+                                      if key in response.headers}
+
     async def get_catalog(self, topic: str = "quickstart", component: str | None = None) -> str:
         async with httpx.AsyncClient(timeout=10.0) as client:
             params = {"component": component} if component is not None else {"topic": topic}

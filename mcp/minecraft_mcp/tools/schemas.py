@@ -2033,7 +2033,11 @@ TOOL_GET_STARLARK_PREVIEW = Tool(
         "Render a compiled Starlark artifact without placing it. The default 'sheet' is one labelled image "
         "(about 600 tokens) with the iso render, top-down plan, and the north/south/east/west elevations; "
         "use it to catch clipping, misplaced parts, or a front facing the wrong way before placement. "
-        "Colors are flat per block type (no textures). A single view at max_px=768 costs about 800 tokens."
+        "Exterior views cannot show interiors: use view='floors' for a plan of every detected storey, or "
+        "cut_y (or cut_x/cut_z) to slice the build open and check floors, furniture, doors and lighting. "
+        "With a cut, 'sheet' shows a cutaway iso and the section side by side, 'iso' the cutaway only, "
+        "'section' the flat cross-section only. Colors are flat per block type (no textures). "
+        "A single view at max_px=768 costs about 800 tokens."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
     inputSchema={
@@ -2042,15 +2046,28 @@ TOOL_GET_STARLARK_PREVIEW = Tool(
             "artifact_id": {"type": "string", "description": "Artifact ID returned by build_starlark_structure"},
             "view": {
                 "type": "string",
-                "enum": ["sheet", "iso", "top", "north", "south", "east", "west"],
+                "enum": ["sheet", "iso", "top", "north", "south", "east", "west", "section", "floors"],
                 "default": "sheet",
-                "description": "sheet = all views in one image; top has north up; side views are seen from that side"
+                "description": (
+                    "sheet = all views in one image (or cutaway + section with a cut); top has north up; side "
+                    "views are seen from that side; section needs a cut; floors = plan of each storey"
+                )
             },
+            "cut_y": {
+                "type": "integer", "minimum": 0,
+                "description": ("Slice horizontally at this local y (0 = the artifact's bottom layer) and remove "
+                                "everything above; floor + 2 cuts through doors, windows and furniture")
+            },
+            "cut_x": {"type": "integer", "minimum": 0,
+                      "description": "Slice at this local x and remove everything east of it (the section is seen from the east)"},
+            "cut_z": {"type": "integer", "minimum": 0,
+                      "description": "Slice at this local z and remove everything south of it (the section is seen from the south)"},
             "max_px": {
                 "type": "integer",
                 "minimum": 64,
                 "maximum": 1024,
-                "description": "Longest edge for a single view (default 768), or tile size for the sheet (default 256)"
+                "description": ("Longest edge for a single view (default 768), or tile size for a sheet "
+                                "(default 256; 384 for a cut sheet)")
             }
         },
         "required": ["artifact_id"]

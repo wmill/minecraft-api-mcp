@@ -366,19 +366,38 @@ PNG = b"\x89PNG\r\n\x1a\nfake"
 
 async def test_preview_returns_image_with_orientation(clients):
     api, service = clients
-    service.get_artifact_image.return_value = PNG
+    service.get_artifact_preview.return_value = (PNG, {"x-artifact-size": "7x9x7"})
     result = await starlark.handle_get_starlark_preview(api, "slk_0123456789abcdef", view="top", max_px=256)
     assert not result.isError
     assert result.content[0].type == "image"
     assert result.content[0].mimeType == "image/png"
     assert "north up" in result.content[1].text
-    service.get_artifact_image.assert_awaited_once_with("slk_0123456789abcdef", "top", 256)
+    assert "size 7x9x7" in result.content[1].text
+    assert "view='floors'" in result.content[1].text
+    service.get_artifact_preview.assert_awaited_once_with("slk_0123456789abcdef", "top", 256, None)
+
+
+async def test_preview_passes_one_cut_and_explains_it(clients):
+    api, service = clients
+    service.get_artifact_preview.return_value = (PNG, {"x-artifact-size": "7x9x7"})
+    result = await starlark.handle_get_starlark_preview(api, "slk_0123456789abcdef", view="iso", cut_y=2)
+    assert not result.isError
+    assert "iso at cut_y=2" in result.content[1].text
+    assert "local coordinates" in result.content[1].text
+    service.get_artifact_preview.assert_awaited_once_with("slk_0123456789abcdef", "iso", None, {"cut_y": 2})
+
+
+async def test_floors_preview_lists_levels(clients):
+    api, service = clients
+    service.get_artifact_preview.return_value = (PNG, {"x-preview-floors": "0:2,4:6"})
+    result = await starlark.handle_get_starlark_preview(api, "slk_0123456789abcdef", view="floors")
+    assert "floor y=0 (cut y=2), floor y=4 (cut y=6)" in result.content[1].text
 
 
 @pytest.mark.parametrize("status, kind", [(404, "not_found"), (503, "preview_unavailable"), (400, "invalid_request")])
 async def test_preview_errors_are_classified(clients, status, kind):
     api, service = clients
-    service.get_artifact_image.side_effect = status_error(status, "nope")
+    service.get_artifact_preview.side_effect = status_error(status, "nope")
     result = await starlark.handle_get_starlark_preview(api, "slk_0123456789abcdef")
     assert result.isError
     assert result.structuredContent["error_kind"] == kind

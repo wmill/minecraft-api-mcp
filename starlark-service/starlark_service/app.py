@@ -196,24 +196,64 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         return FileResponse(path, media_type="application/octet-stream", filename=path.name)
 
     @app.get("/artifacts/{artifact_id}/images/{view}")
-    async def get_artifact_image(artifact_id: str, view: str, max_px: int | None = None) -> Response:
+    async def get_artifact_image(artifact_id: str, view: str, max_px: int | None = None,
+                                 cut_x: int | None = None, cut_y: int | None = None,
+                                 cut_z: int | None = None) -> Response:
         identifier = valid_artifact_id(artifact_id)
-        if view != previews.SHEET and view not in previews.VIEWS:
+        all_views = (previews.SHEET,) + previews.VIEWS + (previews.SECTION, previews.FLOORS)
+        if view not in all_views:
+            raise HTTPException(status_code=400, detail=f"view must be one of {', '.join(all_views)}")
+        cuts = [(axis, at) for axis, at in zip(previews.AXES, (cut_x, cut_y, cut_z)) if at is not None]
+        if len(cuts) > 1:
+            raise HTTPException(status_code=400, detail="give at most one of cut_x, cut_y, cut_z")
+        if cuts and view not in previews.CUT_VIEWS:
             raise HTTPException(status_code=400,
-                                detail=f"view must be one of {', '.join((previews.SHEET,) + previews.VIEWS)}")
+                                detail=f"with a cut, view must be one of {', '.join(previews.CUT_VIEWS)}")
+        if view == previews.SECTION and not cuts:
+            raise HTTPException(status_code=400, detail="view=section needs cut_x, cut_y or cut_z")
         if not cache.nbt_path(cfg.cache_dir, identifier).exists():
             raise HTTPException(status_code=404, detail="artifact not found (evicted or never built); rebuilding the same source yields the same id")
         cache.touch(cfg.cache_dir, identifier)
         try:
             directory = await renderer.ensure(identifier)
+            size = previews.artifact_size(directory)
+            headers = {"X-Artifact-Size": "x".join(map(str, size))}
+            if cuts:
+                axis, at = cuts[0]
+                limit = size[previews.AXES.index(axis)]
+                if not 0 <= at < limit:
+                    raise HTTPException(status_code=400,
+                                        detail=f"cut_{axis}={at} is outside the artifact ({axis} 0..{limit - 1})")
+                files = {}
+                for kind in ("iso", previews.SECTION):
+                    if view in (kind, previews.SHEET):
+                        files[kind] = await renderer.ensure_variant(identifier, f"{kind}:{axis}:{at}",
+                                                                    f"{kind}_{axis}{at}.png")
+            elif view == previews.FLOORS:
+                await renderer.ensure_variant(identifier, previews.FLOORS, "floors.json")
+                floors = previews.read_floors(directory)
+                headers["X-Preview-Floors"] = ",".join(f"{f['floor']}:{f['cut']}" for f in floors)
         except previews.PreviewFailed as exc:
             raise HTTPException(status_code=503, detail=f"preview unavailable: {exc}") from exc
-        if view == previews.SHEET:
+        bg = previews.background(directory)
+        if cuts:
+            if view == previews.SHEET:
+                tiles = tuple((previews.cut_label(kind, axis, at), path) for kind, path in files.items())
+                data = previews.render_tiles(tiles, previews.clamp_px(max_px, previews.DEFAULT_CUT_TILE_PX), bg)
+            else:
+                data = previews.render_view(files[view], previews.clamp_px(max_px, previews.DEFAULT_VIEW_PX), bg)
+        elif view == previews.FLOORS:
+            if not floors:
+                raise HTTPException(status_code=400, detail="the artifact is empty; there are no floors to show")
+            tiles = tuple((f"FLOOR y={f['floor']} (cut y={f['cut']})", directory / f"section_y{f['cut']}.png")
+                          for f in floors)
+            data = previews.render_tiles(tiles, previews.clamp_px(max_px, previews.DEFAULT_TILE_PX), bg)
+        elif view == previews.SHEET:
             data = previews.render_sheet(directory, previews.clamp_px(max_px, previews.DEFAULT_TILE_PX))
         else:
             data = previews.render_view(directory / f"{view}.png",
-                                        previews.clamp_px(max_px, previews.DEFAULT_VIEW_PX))
-        return Response(content=data, media_type="image/png")
+                                        previews.clamp_px(max_px, previews.DEFAULT_VIEW_PX), bg)
+        return Response(content=data, media_type="image/png", headers=headers)
 
     @app.get("/docs/catalog")
     async def get_catalog(topic: str = "quickstart", component: str | None = None) -> PlainTextResponse:

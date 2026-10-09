@@ -293,7 +293,7 @@ Compiles Starlark build scripts submitted by MCP users into placeable structure 
 - **Sandboxed builds**: the tool has no evaluation budget of its own, so each build runs in a killable subprocess (`starlark_service/runner.py`) under a wall-clock timeout (SIGKILL), an `RLIMIT_DATA` memory cap, and root-volume/NBT-byte caps. Do not lower `STARLARK_BUILD_MEMORY_MB` below ~1024: the Rust starlark runtime reserves ~1GB of data mappings up front and SIGABRTs under smaller caps.
 - **Confined `load()`**: submitted scripts can only load from the vendored `lib/` component library and saved `library/` versions (upstream `loader_root` confinement; uniform "module not found" errors prevent filesystem probing). Scripts use `load("../lib/structural.star", ...)`, the same convention as the upstream `examples/`.
 - **Script library** (`starlark-library/`, repo root, git-tracked): agents save working scripts via `POST /library` so later builds can fork them or `load()` their components. Layout is `<name>/meta.json` + append-only `v<N>.star`; versions are **immutable** (never edit/delete a published `v<N>.star` — scripts load them by pinned path and the artifact cache keys on source text only, so the lib fingerprint doesn't need to cover the library). Saves are rebuilt first and rejected (200 `{ok:false, diagnostics}`) if they fail; identical re-saves are no-ops. Scripts load saved versions as `load("../library/<name>/v<N>.star", ...)` through the submodule loader's `mounts` option (`runner.py` mounts `library` → `STARLARK_LIBRARY_DIR`); library modules use the same load paths as top-level scripts. `meta.json` records title/description/tags/author, and per version: lineage (`parent` as `name@N`, notes), entry params and UpperCamel component exports with signatures (parsed with Python `ast`, regex fallback), loads, and build stats (size, block_count, palette_top, artifact_id).
-- **Artifact previews**: `GET /artifacts/{id}/images/{view}` renders the artifact with [nbt-image-gen](https://github.com/wmill/nbt-image-gen) (submodule at `starlark-service/nbt-image-gen`) on first request, in a subprocess under `STARLARK_PREVIEW_TIMEOUT_S`, into `<artifact_id>.previews/` beside the NBT (evicted with it, counted in cache bytes). Views match the schematic previews (`iso` from the south-east, `top` north up, side elevations, labelled 3x2 `sheet`), but are flattened onto slate rather than white so white blocks stay visible.
+- **Artifact previews**: `GET /artifacts/{id}/images/{view}` renders the artifact with [nbt-image-gen](https://github.com/wmill/nbt-image-gen) (submodule at `starlark-service/nbt-image-gen`) on first request, in a subprocess under `STARLARK_PREVIEW_TIMEOUT_S`, into `<artifact_id>.previews/` beside the NBT (evicted with it, counted in cache bytes). Views match the schematic previews (`iso` from the south-east, `top` north up, side elevations, labelled 3x2 `sheet`), but are flattened onto a per-artifact background (slate by default; charcoal, sand or, as a last resort, magenta when the build's silhouette colours would blend in) and the iso view has material-edge outlines. Because exterior views hide interiors, the same route also serves on-demand **cutaways and sections** (`cut_x`/`cut_y`/`cut_z` in local coordinates: the cutaway iso removes the side facing the camera, the section looks at the cut plane with depth fading) and a **`floors`** sheet of section plans for each auto-detected storey; these variants are rendered in the same subprocess and cached in the preview directory. Bump `previews.PREVIEW_VERSION` when base renders change so stale preview directories re-render.
 - **Build failures are HTTP 200** with `{ok: false, error_kind, diagnostics, hint}` — a build that ran and produced diagnostics is a successful request, keeping the MCP edit→build-error→edit loop exception-free. `error_kind` is one of `starlark_error`, `build_error`, `timeout`, `resource_limit`, `crash`.
 
 **Service modules:**
@@ -304,8 +304,9 @@ Compiles Starlark build scripts submitted by MCP users into placeable structure 
 - `cache.py` - artifact hashing, sharded disk layout, LRU eviction, lib fingerprint
 - `library.py` - saved-script library: versioned storage, source analysis (params/exports/loads), local search
 - `docs.py` - focused views of the component catalog plus the `library` usage topic
-- `previews.py` - lazy per-artifact preview rendering (bounded concurrency, per-artifact lock), downscaled views and contact sheet
-- `preview_worker.py` - in-subprocess nbt-image-gen render of all six views plus `meta.json`
+- `previews.py` - lazy per-artifact preview rendering (bounded concurrency, per-artifact lock), on-demand cut/floor variants, downscaled views and labelled tile sheets
+- `preview_worker.py` - in-subprocess render of all six views plus `meta.json` (with the chosen background), or one cut/floors variant
+- `render.py` - outlined iso renderer, cutaways, sections, floor detection, background choice (on top of nbt-image-gen's loader and palette)
 
 **Configuration via environment variables (or `.env` in `starlark-service/`):**
 ```bash
@@ -326,7 +327,7 @@ STARLARK_PREVIEW_TIMEOUT_S=30            # wall-clock cap for rendering one arti
 - `GET /health`
 - `POST /build` — `{source, entry?, props?, root_size?}`
 - `GET /artifacts/{artifact_id}` and `GET /artifacts/{artifact_id}/nbt`
-- `GET /artifacts/{artifact_id}/images/{view}?max_px=...` - `view` is `sheet` or one of `iso/top/north/south/east/west`; same sizing as the schematic image route; 404 for unknown artifacts, 503 if rendering fails or times out
+- `GET /artifacts/{artifact_id}/images/{view}?max_px=...&cut_x|cut_y|cut_z=...` - `view` is `sheet`, one of `iso/top/north/south/east/west`, `section` (needs a cut), or `floors`; with a cut only `sheet` (cutaway + section), `iso` and `section` are allowed; responses carry `X-Artifact-Size` and, for `floors`, `X-Preview-Floors` (`floor:cut,...`); same sizing as the schematic image route; 400 for bad cuts, 404 for unknown artifacts, 503 if rendering fails or times out
 - `GET /docs/catalog` — the script API reference (component catalog markdown)
 - `GET /examples` and `GET /examples/{name}`
 - `POST /library` — `{name, artifact_id | source, title, description, tags?, author?, notes?, parent?, entry?, props?, root_size?}`; title/description required for a new name
@@ -335,7 +336,7 @@ STARLARK_PREVIEW_TIMEOUT_S=30            # wall-clock cap for rendering one arti
 
 **MCP tools using this service:**
 - `build_starlark_structure` — compile source; failure text lists numbered diagnostics for the edit loop; `include_preview` attaches a small iso render (best-effort)
-- `get_starlark_preview` — preview sheet or single view of a compiled artifact as MCP image content
+- `get_starlark_preview` — preview sheet or single view of a compiled artifact as MCP image content; `cut_x`/`cut_y`/`cut_z` and `view="floors"` show interiors
 - `place_starlark_structure` — fetch artifact NBT, apply its `y_offset`, place via the mod's NBT placement endpoint
 - `get_starlark_docs`
 - `list_starlark_examples` / `get_starlark_example`
@@ -430,7 +431,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_cache.py` - Artifact id hashing, LRU eviction, lib fingerprint
 - `test_sandbox.py` - Timeout kill, resource-limit rejections, queue-full 429
 - `test_library.py` - Save/version immutability, failed-build rejection, save by artifact id, loading saved versions, search filters
-- `test_previews.py` - Preview views/sheet, orientation, render failure/timeout 503, eviction of preview dirs
+- `test_previews.py` - Preview views/sheet, orientation, cutaways/sections/floors, cut validation, background choice, stale preview re-render, render failure/timeout 503, eviction of preview dirs
 
 **Testing Best Practices** (see TESTING.md):
 - Extract pure logic from endpoints into testable helper methods
