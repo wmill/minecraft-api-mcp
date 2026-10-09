@@ -18,9 +18,11 @@ def build_url(base_url: str, path: str, query_pairs: list[str]) -> str:
     return f"{base_url.rstrip('/')}{path}" + (f"?{query}" if query else "")
 
 
-def request_json(method: str, url: str, data: str | None) -> object:
+def request_json(method: str, url: str, data: str | None, lock_id: str | None = None) -> object:
     body = data.encode("utf-8") if data is not None else None
     headers = {"Accept": "application/json"}
+    if lock_id:
+        headers["X-Area-Lock-Id"] = lock_id
     if body is not None:
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=body, headers=headers, method=method.upper())
@@ -35,6 +37,8 @@ def main() -> int:
     parser.add_argument("path", help="HTTP path like /api/world/players")
     parser.add_argument("--data", help="JSON request body")
     parser.add_argument("--query", action="append", default=[], help="Query parameter in key=value form")
+    parser.add_argument("--lock-id", default=os.environ.get("MINECRAFT_AREA_LOCK_ID"),
+                        help="Area lock token sent as X-Area-Lock-Id")
     parser.add_argument("--base-url", default=os.environ.get("MINECRAFT_API_BASE_URL", DEFAULT_BASE_URL))
     args = parser.parse_args()
 
@@ -42,7 +46,7 @@ def main() -> int:
         if args.data is not None:
             json.loads(args.data)
         url = build_url(args.base_url, args.path, args.query)
-        result = request_json(args.method, url, args.data)
+        result = request_json(args.method, url, args.data, args.lock_id)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
     except urllib.error.HTTPError as exc:

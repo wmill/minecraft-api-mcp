@@ -9,11 +9,16 @@ from pathlib import Path
 
 
 DEFAULT_BASE_URL = "http://localhost:7070"
+LOCK_HEADER = "X-Area-Lock-Id"
 
 
-def request_json(method: str, url: str, payload: dict | None = None) -> object:
+def lock_headers(lock_id: str | None) -> dict[str, str]:
+    return {LOCK_HEADER: lock_id} if lock_id else {}
+
+
+def request_json(method: str, url: str, payload: dict | None = None, extra_headers: dict | None = None) -> object:
     body = None if payload is None else json.dumps(payload).encode("utf-8")
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": "application/json", **(extra_headers or {})}
     if body is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
@@ -22,7 +27,8 @@ def request_json(method: str, url: str, payload: dict | None = None) -> object:
         return json.loads(raw) if raw else {}
 
 
-def request_multipart(url: str, fields: dict[str, str], file_field: str, file_path: Path) -> object:
+def request_multipart(url: str, fields: dict[str, str], file_field: str, file_path: Path,
+                      extra_headers: dict | None = None) -> object:
     boundary = "----minecraft-http-gateway-boundary"
     parts: list[bytes] = []
     for name, value in fields.items():
@@ -43,7 +49,8 @@ def request_multipart(url: str, fields: dict[str, str], file_field: str, file_pa
     req = urllib.request.Request(
         url,
         data=body,
-        headers={"Accept": "application/json", "Content-Type": f"multipart/form-data; boundary={boundary}"},
+        headers={"Accept": "application/json", "Content-Type": f"multipart/form-data; boundary={boundary}",
+                 **(extra_headers or {})},
         method="POST",
     )
     with urllib.request.urlopen(req) as response:
@@ -73,6 +80,11 @@ def add_world(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--world", help="World name, defaults to minecraft:overworld")
 
 
+def add_lock(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--lock-id", default=os.environ.get("MINECRAFT_AREA_LOCK_ID"),
+                        help="Area lock token (X-Area-Lock-Id); defaults to MINECRAFT_AREA_LOCK_ID")
+
+
 def add_xyz(parser: argparse.ArgumentParser) -> None:
     for axis in ("x", "y", "z"):
         parser.add_argument(f"--{axis}", type=int, required=True)
@@ -94,12 +106,14 @@ def main() -> int:
     fill.add_argument("--block-type", required=True)
     fill.add_argument("--notify-neighbors", action="store_true")
     add_world(fill)
+    add_lock(fill)
 
     set_block = subparsers.add_parser("set-block")
     add_xyz(set_block)
     set_block.add_argument("--block-name", required=True)
     set_block.add_argument("--block-states", type=lambda value: parse_json_object(value, "block-states"))
     add_world(set_block)
+    add_lock(set_block)
 
     set_blocks = subparsers.add_parser("set-blocks")
     set_blocks.add_argument("--start-x", type=int, required=True)
@@ -107,6 +121,7 @@ def main() -> int:
     set_blocks.add_argument("--start-z", type=int, required=True)
     set_blocks.add_argument("--blocks-json", required=True, help="3D blocks array JSON")
     add_world(set_blocks)
+    add_lock(set_blocks)
 
     spawn = subparsers.add_parser("spawn-entity")
     spawn.add_argument("--type", required=True)
@@ -141,6 +156,7 @@ def main() -> int:
     rain_fire.add_argument("--density", type=float, required=True)
     rain_fire.add_argument("--seed", type=int)
     add_world(rain_fire)
+    add_lock(rain_fire)
 
     door = subparsers.add_parser("door")
     door.add_argument("--start-x", type=int, required=True)
@@ -153,6 +169,7 @@ def main() -> int:
     door.add_argument("--open", action="store_true")
     door.add_argument("--double-doors", action="store_true")
     add_world(door)
+    add_lock(door)
 
     stairs = subparsers.add_parser("stairs")
     for field in ("start-x", "start-y", "start-z", "end-x", "end-y", "end-z"):
@@ -162,6 +179,7 @@ def main() -> int:
     stairs.add_argument("--staircase-direction", required=True, choices=["north", "south", "east", "west"])
     stairs.add_argument("--fill-support", action="store_true")
     add_world(stairs)
+    add_lock(stairs)
 
     window = subparsers.add_parser("window")
     for field in ("start-x", "start-y", "start-z", "end-x", "end-z", "height"):
@@ -169,12 +187,14 @@ def main() -> int:
     window.add_argument("--block-type", required=True)
     window.add_argument("--waterlogged", action="store_true")
     add_world(window)
+    add_lock(window)
 
     torch = subparsers.add_parser("torch")
     add_xyz(torch)
     torch.add_argument("--block-type", required=True)
     torch.add_argument("--facing", choices=["north", "south", "east", "west"])
     add_world(torch)
+    add_lock(torch)
 
     sign = subparsers.add_parser("sign")
     add_xyz(sign)
@@ -185,6 +205,7 @@ def main() -> int:
     sign.add_argument("--rotation", type=int)
     sign.add_argument("--glowing", action="store_true")
     add_world(sign)
+    add_lock(sign)
 
     ladder = subparsers.add_parser("ladder")
     add_xyz(ladder)
@@ -192,17 +213,20 @@ def main() -> int:
     ladder.add_argument("--block-type", default="minecraft:ladder")
     ladder.add_argument("--facing", choices=["north", "south", "east", "west"])
     add_world(ladder)
+    add_lock(ladder)
 
     nbt = subparsers.add_parser("place-nbt")
     nbt.add_argument("--file", required=True)
     add_xyz(nbt)
     nbt.add_argument("--rotation", default="NONE", choices=["NONE", "CLOCKWISE_90", "CLOCKWISE_180", "COUNTERCLOCKWISE_90"])
     nbt.add_argument("--include-entities", default="true", choices=["true", "false"])
-    nbt.add_argument("--replace-blocks", default="true", choices=["true", "false"])
+    nbt.add_argument("--dry-run", action="store_true", help="Report what would be overwritten without writing")
     add_world(nbt)
+    add_lock(nbt)
 
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
+    locked = lock_headers(getattr(args, "lock_id", None))
 
     try:
         if args.command == "fill":
@@ -213,14 +237,14 @@ def main() -> int:
                 "notify_neighbors": args.notify_neighbors,
             }
             maybe_world(payload, args.world)
-            result = request_json("POST", f"{base_url}/api/world/blocks/fill", payload)
+            result = request_json("POST", f"{base_url}/api/world/blocks/fill", payload, locked)
         elif args.command == "set-block":
             block = {"block_name": args.block_name}
             if args.block_states:
                 block["block_states"] = args.block_states
             payload = {"start_x": args.x, "start_y": args.y, "start_z": args.z, "blocks": [[[block]]]}
             maybe_world(payload, args.world)
-            result = request_json("POST", f"{base_url}/api/world/blocks/set", payload)
+            result = request_json("POST", f"{base_url}/api/world/blocks/set", payload, locked)
         elif args.command == "set-blocks":
             payload = {
                 "start_x": args.start_x,
@@ -229,7 +253,7 @@ def main() -> int:
                 "blocks": parse_json_array(args.blocks_json, "blocks-json"),
             }
             maybe_world(payload, args.world)
-            result = request_json("POST", f"{base_url}/api/world/blocks/set", payload)
+            result = request_json("POST", f"{base_url}/api/world/blocks/set", payload, locked)
         elif args.command == "spawn-entity":
             payload = {"type": args.type, "x": args.x, "y": args.y, "z": args.z}
             maybe_world(payload, args.world)
@@ -261,17 +285,17 @@ def main() -> int:
             if args.seed is not None:
                 payload["seed"] = args.seed
             maybe_world(payload, args.world)
-            result = request_json("POST", f"{base_url}/api/world/effects/rain-fire", payload)
+            result = request_json("POST", f"{base_url}/api/world/effects/rain-fire", payload, locked)
         elif args.command in {"door", "stairs", "window", "torch", "sign", "ladder"}:
             payload = vars(args).copy()
-            for key in ("command", "base_url"):
+            for key in ("command", "base_url", "lock_id"):
                 payload.pop(key, None)
             if args.command == "sign":
                 payload["front_lines"] = payload.pop("front_line")
                 payload["back_lines"] = payload.pop("back_line")
             payload = {key: value for key, value in payload.items() if value is not None}
             endpoint = "window-pane" if args.command == "window" else args.command
-            result = request_json("POST", f"{base_url}/api/world/prefabs/{endpoint}", payload)
+            result = request_json("POST", f"{base_url}/api/world/prefabs/{endpoint}", payload, locked)
         else:
             file_path = Path(args.file)
             fields = {
@@ -280,10 +304,11 @@ def main() -> int:
                 "z": str(args.z),
                 "rotation": args.rotation,
                 "include_entities": args.include_entities,
-                "replace_blocks": args.replace_blocks,
                 "world": args.world or "minecraft:overworld",
             }
-            result = request_multipart(f"{base_url}/api/world/structure/place", fields, "nbt_file", file_path)
+            if args.dry_run:
+                fields["dry_run"] = "true"
+            result = request_multipart(f"{base_url}/api/world/structure/place", fields, "nbt_file", file_path, locked)
 
         print_json(result)
         return 0

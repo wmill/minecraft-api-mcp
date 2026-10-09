@@ -63,6 +63,11 @@ def main() -> int:
     preview.add_argument("--iso-scale", type=int, default=6)
     preview.add_argument("--view-direction", choices=["south", "west", "north", "east"], default="south")
 
+    survey = subparsers.add_parser("survey", help="Assess ground, slope, water and occupancy of a footprint")
+    for field in ("x1", "z1", "x2", "z2"):
+        survey.add_argument(f"--{field}", type=int, required=True)
+    add_world(survey)
+
     chunk = subparsers.add_parser("chunk", help="Read a block chunk")
     for field in ("start-x", "start-y", "start-z", "size-x", "size-y", "size-z"):
         chunk.add_argument(f"--{field}", type=int, required=True)
@@ -112,6 +117,11 @@ def main() -> int:
                 output.write(raw)
             print_json({"success": True, "output": args.output, "bytes": len(raw)})
             return 0
+        elif args.command == "survey":
+            payload = {"x1": args.x1, "z1": args.z1, "x2": args.x2, "z2": args.z2}
+            if args.world:
+                payload["world"] = args.world
+            result = request_json("POST", f"{base_url}/api/world/blocks/survey", payload)
         else:
             payload = {
                 "start_x": args.start_x,

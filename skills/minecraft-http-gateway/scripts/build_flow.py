@@ -9,11 +9,14 @@ import urllib.request
 
 
 DEFAULT_BASE_URL = "http://localhost:7070"
+LOCK_HEADER = "X-Area-Lock-Id"
 
 
-def request(method: str, url: str, payload: dict | None = None) -> tuple[bytes, str]:
+def request(method: str, url: str, payload: dict | None = None, lock_id: str | None = None) -> tuple[bytes, str]:
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     headers = {"Accept": "application/json"}
+    if lock_id:
+        headers[LOCK_HEADER] = lock_id
     if body is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
@@ -21,8 +24,8 @@ def request(method: str, url: str, payload: dict | None = None) -> tuple[bytes, 
         return response.read(), response.headers.get_content_type()
 
 
-def request_json(method: str, url: str, payload: dict | None = None) -> object:
-    raw, content_type = request(method, url, payload)
+def request_json(method: str, url: str, payload: dict | None = None, lock_id: str | None = None) -> object:
+    raw, content_type = request(method, url, payload, lock_id)
     if not raw:
         return {}
     if content_type != "application/json":
@@ -55,6 +58,11 @@ def maybe_world(target: dict, world: str | None) -> None:
 
 def add_world(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--world", help="World name, defaults to minecraft:overworld")
+
+
+def add_lock(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--lock-id", default=os.environ.get("MINECRAFT_AREA_LOCK_ID"),
+                        help="Area lock token (X-Area-Lock-Id); defaults to MINECRAFT_AREA_LOCK_ID")
 
 
 def add_description(parser: argparse.ArgumentParser) -> None:
@@ -90,9 +98,25 @@ def main() -> int:
     create.add_argument("--description", default="")
     add_world(create)
 
-    for name in ("status", "tasks", "execute", "replay", "audit"):
+    for name in ("status", "tasks", "audit", "clone"):
         p = subparsers.add_parser(name)
         p.add_argument("--build-id", required=True)
+
+    for name in ("execute", "replay"):
+        p = subparsers.add_parser(name)
+        p.add_argument("--build-id", required=True)
+        add_lock(p)
+
+    for name in ("undo", "redo"):
+        p = subparsers.add_parser(name, help=f"{name.capitalize()} a recorded NBT placement from its snapshot")
+        p.add_argument("--build-id", required=True)
+        p.add_argument("--force", action="store_true", help="Restore even if later builds overlap (erases them)")
+        add_lock(p)
+
+    translate = subparsers.add_parser("translate", help="Shift every task of a queued build")
+    translate.add_argument("--build-id", required=True)
+    for field in ("dx", "dy", "dz"):
+        translate.add_argument(f"--{field}", type=int, default=0)
 
     preview = subparsers.add_parser("preview")
     preview.add_argument("--build-id", required=True)
@@ -232,10 +256,16 @@ def main() -> int:
             result = request_json("GET", f"{base_url}/api/builds/{args.build_id}")
         elif args.command == "tasks":
             result = request_json("GET", f"{base_url}/api/builds/{args.build_id}/tasks")
-        elif args.command == "execute":
-            result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/execute")
-        elif args.command == "replay":
-            result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/replay")
+        elif args.command in ("execute", "replay"):
+            result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/{args.command}", lock_id=args.lock_id)
+        elif args.command in ("undo", "redo"):
+            payload = {"force": True} if args.force else {}
+            result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/{args.command}", payload, args.lock_id)
+        elif args.command == "clone":
+            result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/clone")
+        elif args.command == "translate":
+            result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/translate",
+                                  {"dx": args.dx, "dy": args.dy, "dz": args.dz})
         elif args.command == "audit":
             result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/audit")
         elif args.command == "preview":

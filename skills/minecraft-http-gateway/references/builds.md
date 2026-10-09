@@ -9,7 +9,16 @@ uv run python skills/minecraft-http-gateway/scripts/build_flow.py create --name 
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py add-single-block --build-id <uuid> --x 0 --y 64 --z 0 --block-name minecraft:stone
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py status --build-id <uuid>
 uv run python skills/minecraft-http-gateway/scripts/build_flow.py audit --build-id <uuid>
-uv run python skills/minecraft-http-gateway/scripts/build_flow.py execute --build-id <uuid>
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py execute --build-id <uuid> --lock-id <token>
+```
+
+`execute` and `replay` carry the lock token into each task; the check happens when a task writes. On a lock failure the build becomes `FAILED` with completed tasks left in place. After resolving the reservation, `execute` retries failed and pending tasks, skipping completed ones; `replay` resets and re-runs every replayable task.
+
+Before building, check what is already recorded in the area:
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py query-location \
+  --min-x 100 --min-y 0 --min-z 200 --max-x 140 --max-y 320 --max-z 240
 ```
 
 ## Common Task Commands
@@ -25,6 +34,29 @@ uv run python skills/minecraft-http-gateway/scripts/build_flow.py execute --buil
 - `add-ladder`
 
 Use `--task-order` on add commands to insert at a specific queue position.
+
+## Copy And Move
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py clone --build-id <uuid>
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py translate --build-id <uuid> --dx 40 --dz -10
+```
+
+`clone` creates a new queued build with copies of the source's tasks (NBT placements are skipped) and prints `new_build_id`. Translate the clone, then execute it to stamp a second copy. `translate` shifts the coordinates of a build that has not run yet; completed builds or builds with completed tasks are rejected with 409, so clone first.
+
+## Undo And Redo
+
+NBT placements (`world_ops.py place-nbt`, `starlark.py place`, `schematics.py place`) snapshot their cuboid first. If the placement response says `undo_available: true`:
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py undo --build-id <uuid> --lock-id <token>
+uv run python skills/minecraft-http-gateway/scripts/build_flow.py redo --build-id <uuid> --lock-id <token>
+```
+
+- Undo restores the region and marks the build `REVERTED`; redo restores the placed state and marks it `COMPLETED`. Both are repeatable in alternation; a duplicate returns 409.
+- If later recorded builds overlap, undo/redo returns 409 `undo_conflict` / `redo_conflict` listing them. `--force` restores anyway and erases them. Force does not bypass area locks.
+- Entities are not removed or respawned. Queued task builds cannot be undone; `replay` is not redo.
+- A timeout (504) is an unknown outcome: inspect the build status and the world before retrying. See `docs/undo-and-dry-run.md`.
 
 ## Queue Maintenance
 

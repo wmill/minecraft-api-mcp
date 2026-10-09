@@ -13,6 +13,16 @@ uv run python skills/minecraft-http-gateway/scripts/world_query.py heightmap --x
 uv run python skills/minecraft-http-gateway/scripts/world_query.py chunk --start-x 0 --start-y 64 --start-z 0 --size-x 5 --size-y 5 --size-z 5
 ```
 
+Heightmap requests are capped at 10,000 columns; split larger areas.
+
+Survey a footprint before choosing a build site (read-only; chunks must already be loaded):
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/world_query.py survey --x1 100 --z1 200 --x2 139 --z2 239
+```
+
+The response gives resolved ground heights, slope, water/lava/vegetation coverage, a `grading.suggested_walking_y` with `cut_blocks`/`fill_blocks` estimates, and up to five overlapping `reservations` and `builds`. It never declares an area free: unrecorded player builds are not covered. See `docs/site-survey.md`.
+
 Render a terrain preview:
 
 ```bash
@@ -36,6 +46,8 @@ uv run python skills/minecraft-http-gateway/scripts/world_ops.py fill \
 
 Prefer build queues for large fills, clears with `minecraft:air`, or multi-step structures.
 
+Direct fills are capped at 100,000 blocks. Add `--lock-id <token>` (or set `MINECRAFT_AREA_LOCK_ID`) to every write inside a reserved area.
+
 ## Prefabs And Operations
 
 `world_ops.py` wraps direct prefab and operational endpoints:
@@ -53,3 +65,18 @@ Example:
 uv run python skills/minecraft-http-gateway/scripts/world_ops.py torch \
   --x 10 --y 65 --z 10 --block-type minecraft:torch
 ```
+
+## NBT Structures
+
+`place-nbt` uploads a structure file. Placement writes the template's air cells too, so it can carve terrain or a neighbouring build. Dry-run first:
+
+```bash
+uv run python skills/minecraft-http-gateway/scripts/world_ops.py place-nbt \
+  --file house.nbt --x 100 --y 64 --z 200 --rotation CLOCKWISE_90 --dry-run
+```
+
+The dry run reports `bounds`, `overwrite` (`replaced`, `air_carved`, `placed_into_air`, `replaced_by_category`, `top_replaced`), `lock_check`, and overlapping `reservations`/`builds`, without writing or loading chunks. A real placement is recorded as a build: keep the returned build id so it can be reverted with `build_flow.py undo`.
+
+Rotation pivots on the origin: `CLOCKWISE_90` maps local `(x, z)` to world `(x0 - z, z0 + x)`, so the structure extends west of `--x`. Check the dry-run `bounds`.
+
+For Starlark builds and catalogued schematics, use `starlark.py place` and `schematics.py place` instead; they apply the ground offset for you (see `structures.md`).
