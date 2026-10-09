@@ -1,0 +1,82 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-09T00:54:40Z",
+  "description": "Pier(length=24, depth=6, ...) is a 5-wide spruce boardwalk on log pilings running toward +Z with fence rails and lantern posts, ending in a 15-wide T-head with a FishingHut (7x8x7 gable-roofed hut with smoker, fish barrel, gear chest), bench and barrels; size [15, depth+9, length], deck at local y=depth, entry at z=0. Sailboat(hull, deck, keel, sail, mast) is a 5x12x12 block boat (waterline local y=0) with a triangular sail and pennant. build(length, depth, boats=True) adds two moored boats (27 wide); ground_level=depth+1 so the placement y is the deck walking plane (deck = water surface + 1). Entry 'boat'(style 0-3) places a single sailboat with y = water surface + 1. Rotate CLOCKWISE_90 to run the pier west.",
+  "latest": 1,
+  "name": "harbour_pier",
+  "tags": [
+    "pier",
+    "dock",
+    "harbour",
+    "boat",
+    "sailboat",
+    "fishing",
+    "hut",
+    "sea",
+    "coast",
+    "component"
+  ],
+  "title": "Harbour pier, fishing hut and sailboats",
+  "updated_at": "2026-10-09T00:54:40Z",
+  "versions": [
+    {
+      "artifact_id": "slk_d98d32d095e7d94d",
+      "author": "claude",
+      "block_count": 778,
+      "created_at": "2026-10-09T00:54:40Z",
+      "entry": "build",
+      "exports": [
+        "Sailboat",
+        "FishingHut",
+        "Pier"
+      ],
+      "ground_level": 7,
+      "loads": [
+        "lib/roofs.star:GableRoof",
+        "lib/openings.star:SingleDoor,Window",
+        "lib/fixtures.star:Barrel,Chest,LanternPost,WallSign,Bench"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:spruce_planks",
+        "minecraft:spruce_log",
+        "minecraft:dark_oak_planks",
+        "minecraft:spruce_fence",
+        "minecraft:spruce_slab",
+        "minecraft:dark_oak_stairs",
+        "minecraft:white_wool",
+        "minecraft:yellow_wool"
+      ],
+      "params": [
+        {
+          "default": 24,
+          "name": "length"
+        },
+        {
+          "default": 6,
+          "name": "depth"
+        },
+        {
+          "default": true,
+          "name": "boats"
+        }
+      ],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "dabe6f961008695ce374920e9200d1ef648d957d85c0e6b5378baa0cc7a83019",
+      "signatures": {
+        "FishingHut": "FishingHut(wall='minecraft:spruce_planks', trim='minecraft:stripped_spruce_log', roof='minecraft:dark_oak_stairs', ridge='minecraft:dark_oak_planks')",
+        "Pier": "Pier(length=24, depth=6, piling='minecraft:spruce_log', deck='minecraft:spruce_planks', rail='minecraft:spruce_fence', head=True)",
+        "Sailboat": "Sailboat(hull='minecraft:blue_terracotta', deck='minecraft:spruce_slab', keel='minecraft:dark_oak_planks', sail='minecraft:white_wool', mast='minecraft:spruce_log')"
+      },
+      "size": [
+        27,
+        18,
+        24
+      ],
+      "version": 1,
+      "y_offset": -7
+    }
+  ]
+}

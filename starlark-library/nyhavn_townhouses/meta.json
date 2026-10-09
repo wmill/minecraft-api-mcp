@@ -1,0 +1,72 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-09T00:54:40Z",
+  "description": "NyhavnHouse(color, floors=3, width=5, depth=7, trim, roof, ridge, door) is a Copenhagen-style terraced townhouse facing south: coloured terracotta walls, white string courses at each floor, 1x2 street and side windows, a brick gable roof with the gable to the street, chimney, ladder between plank floors, beds, chests and lanterns on each storey. width must be odd (>=5). NyhavnRow(count=6, depth=7, quay=5) lines up houses in rotating colours/heights/widths facing a cobbled quay with bollards and lantern posts. build(count) is the 34x21x12 row, ground_level 1. Rotate CLOCKWISE_90 to face the quay west.",
+  "latest": 1,
+  "name": "nyhavn_townhouses",
+  "tags": [
+    "townhouse",
+    "house",
+    "row",
+    "danish",
+    "copenhagen",
+    "harbour",
+    "colorful",
+    "quay",
+    "furnished",
+    "component"
+  ],
+  "title": "Nyhavn harbour townhouses",
+  "updated_at": "2026-10-09T00:54:40Z",
+  "versions": [
+    {
+      "artifact_id": "slk_3c1ae6268f4d119d",
+      "author": "claude",
+      "block_count": 2589,
+      "created_at": "2026-10-09T00:54:40Z",
+      "entry": "build",
+      "exports": [
+        "NyhavnHouse",
+        "NyhavnRow"
+      ],
+      "ground_level": 1,
+      "loads": [
+        "lib/roofs.star:GableRoof",
+        "lib/openings.star:SingleDoor",
+        "lib/fixtures.star:Ladder,Bed,Chest,Table,Chair,LanternPost"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:stone_bricks",
+        "minecraft:light_blue_terracotta",
+        "minecraft:red_terracotta",
+        "minecraft:yellow_terracotta",
+        "minecraft:spruce_planks",
+        "minecraft:brick_stairs",
+        "minecraft:cyan_terracotta",
+        "minecraft:orange_terracotta"
+      ],
+      "params": [
+        {
+          "default": 6,
+          "name": "count"
+        }
+      ],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "2cb7d3513dd57d9c2639004dea2341e7dcc1d4bc1be905401551822ecb798f05",
+      "signatures": {
+        "NyhavnHouse": "NyhavnHouse(color='minecraft:orange_terracotta', floors=3, width=5, depth=7, trim='minecraft:white_concrete', roof='minecraft:brick_stairs', ridge='minecraft:bricks', door='minecraft:dark_oak_door')",
+        "NyhavnRow": "NyhavnRow(count=6, depth=7, quay=5)"
+      },
+      "size": [
+        34,
+        21,
+        12
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

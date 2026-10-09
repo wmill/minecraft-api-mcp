@@ -1,0 +1,71 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-09T00:54:40Z",
+  "description": "Longhouse(length=21, wall, post, roof, ridge, base, floor) is an 11 x 11 x length Norse hall with bowed long walls (so the roof ridge curves), dark oak walls with log posts every 4 blocks, spruce stair roof, crossed dragon boards on both gables, doors at the south gable and both long sides amidships. Inside: long hearth of campfires, wall benches, high seat flanked by gold and lanterns, chests, barrels, tables, hanging lanterns. Floor local y=0. RuneStone() is a 3x6x2 Jelling-style carved stone. build(length) is a 21 x 11 x (length+7) yard with path, runestone, spruces and a woodpile; ground_level 1, door south.",
+  "latest": 1,
+  "name": "viking_longhouse",
+  "tags": [
+    "viking",
+    "longhouse",
+    "hall",
+    "danish",
+    "norse",
+    "medieval",
+    "furnished",
+    "runestone",
+    "component"
+  ],
+  "title": "Viking longhouse and runestone",
+  "updated_at": "2026-10-09T00:54:40Z",
+  "versions": [
+    {
+      "artifact_id": "slk_08e8446b52f6d25e",
+      "author": "claude",
+      "block_count": 769,
+      "created_at": "2026-10-09T00:54:40Z",
+      "entry": "build",
+      "exports": [
+        "Longhouse",
+        "RuneStone"
+      ],
+      "ground_level": 1,
+      "loads": [
+        "lib/openings.star:SingleDoor",
+        "lib/fixtures.star:Chest,Barrel,Table",
+        "lib/outdoor.star:Tree"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:spruce_stairs",
+        "minecraft:dark_oak_planks",
+        "minecraft:spruce_planks",
+        "minecraft:cobblestone",
+        "minecraft:spruce_leaves",
+        "minecraft:dark_oak_log",
+        "minecraft:spruce_log",
+        "minecraft:dirt_path"
+      ],
+      "params": [
+        {
+          "default": 21,
+          "name": "length"
+        }
+      ],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "d16570e352e666a42f99a3489d36a8e9c9f6f3952688c08454d357c4ff4a789f",
+      "signatures": {
+        "Longhouse": "Longhouse(length=21, wall='minecraft:dark_oak_planks', post='minecraft:dark_oak_log', roof='minecraft:spruce_stairs', ridge='minecraft:spruce_planks', base='minecraft:cobblestone', floor='minecraft:spruce_planks')",
+        "RuneStone": "RuneStone(stone='minecraft:stone', rune='minecraft:polished_blackstone', moss='minecraft:mossy_cobblestone')"
+      },
+      "size": [
+        21,
+        11,
+        28
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}

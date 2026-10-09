@@ -1,0 +1,80 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-09T00:54:40Z",
+  "description": "Lighthouse(height=22, stripe_a, stripe_b, band=3, roof, glass) is an 11 x (height+12) x 11 red/white banded round tower: 2-thick radius-4 lower half, radius-3 upper half, one radius-2 shaft with a ladder on the north side, slit windows, a railed smooth-stone gallery, a yellow-glass lamp room with a sea lantern/glowstone core, red dome and lightning rod; south door at (5,1,9). RockIsland(radius, depth, seed) is a jagged mixed-stone pedestal. build(height, depth, seed) puts the lighthouse on a 15-wide rock islet; ground_level=depth, so place with y = one above the water surface in water about `depth` deep.",
+  "latest": 1,
+  "name": "striped_lighthouse",
+  "tags": [
+    "lighthouse",
+    "coast",
+    "harbour",
+    "sea",
+    "tower",
+    "rock",
+    "island",
+    "landmark",
+    "component"
+  ],
+  "title": "Striped lighthouse on a rock islet",
+  "updated_at": "2026-10-09T00:54:40Z",
+  "versions": [
+    {
+      "artifact_id": "slk_fe7abaacc0389f42",
+      "author": "claude",
+      "block_count": 1762,
+      "created_at": "2026-10-09T00:54:40Z",
+      "entry": "build",
+      "exports": [
+        "RockIsland",
+        "Lighthouse"
+      ],
+      "ground_level": 5,
+      "loads": [
+        "lib/shapes.star:ring_cells,disc_cells,fill_cells,Dome",
+        "lib/openings.star:SingleDoor",
+        "lib/fixtures.star:Ladder,Chest,Bed,WallSign",
+        "lib/random.star:random_cycle,random_number"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:white_concrete",
+        "minecraft:red_concrete",
+        "minecraft:stone",
+        "minecraft:andesite",
+        "minecraft:cobblestone",
+        "minecraft:gravel",
+        "minecraft:mossy_cobblestone",
+        "minecraft:smooth_stone"
+      ],
+      "params": [
+        {
+          "default": 22,
+          "name": "height"
+        },
+        {
+          "default": 5,
+          "name": "depth"
+        },
+        {
+          "default": 1,
+          "name": "seed"
+        }
+      ],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "97bbccae8ea2cadeff297cc05c6bf6dbcfc0b84be65616f14467d6ae3f7375eb",
+      "signatures": {
+        "Lighthouse": "Lighthouse(height=22, stripe_a='minecraft:white_concrete', stripe_b='minecraft:red_concrete', band=3, roof='minecraft:red_terracotta', glass='minecraft:yellow_stained_glass')",
+        "RockIsland": "RockIsland(radius=6, depth=5, seed=0)"
+      },
+      "size": [
+        15,
+        37,
+        15
+      ],
+      "version": 1,
+      "y_offset": -5
+    }
+  ]
+}

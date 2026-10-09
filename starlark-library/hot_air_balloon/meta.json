@@ -1,0 +1,60 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-09T00:54:40Z",
+  "description": "HotAirBalloon(color_a, color_b, stripes=8, radius=5, basket) is a (2r+1) x (2r+7) x (2r+1) floating balloon: hollow envelope with `stripes` vertical gores in two colours, open mouth and skirt, chain rigging, fenced basket with a barrel and a hanging soul-lantern burner. No ground; basket floor is local y=0, so place it in the sky. build() is a 37x30x24 BalloonFlotilla of three balloons (red/yellow, light-blue/white, magenta/lime) at staggered heights.",
+  "latest": 1,
+  "name": "hot_air_balloon",
+  "tags": [
+    "balloon",
+    "sky",
+    "floating",
+    "decoration",
+    "festival",
+    "colorful",
+    "component"
+  ],
+  "title": "Hot-air balloons",
+  "updated_at": "2026-10-09T00:54:40Z",
+  "versions": [
+    {
+      "artifact_id": "slk_de0e167d8862930f",
+      "author": "claude",
+      "block_count": 1143,
+      "created_at": "2026-10-09T00:54:40Z",
+      "entry": "build",
+      "exports": [
+        "HotAirBalloon"
+      ],
+      "ground_level": 0,
+      "loads": [
+        "lib/shapes.star:sphere_layer_cells,disc_cells,fill_cells"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:red_wool",
+        "minecraft:light_blue_wool",
+        "minecraft:lime_wool",
+        "minecraft:magenta_wool",
+        "minecraft:white_wool",
+        "minecraft:yellow_wool",
+        "minecraft:chain",
+        "minecraft:spruce_planks"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "38710e32d8f2ecb609e0e2f450ec391cd5563f1525211a5cccdb336cc0a715c2",
+      "signatures": {
+        "HotAirBalloon": "HotAirBalloon(color_a='minecraft:red_wool', color_b='minecraft:yellow_wool', stripes=8, radius=5, basket='minecraft:spruce_planks')"
+      },
+      "size": [
+        37,
+        30,
+        24
+      ],
+      "version": 1,
+      "y_offset": 0
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-09T00:54:40Z",
+  "description": "Danish 'galleri-m\u00f8lle' windmill. Windmill(base, upper, roof_stair, roof_cap, sail, arm, deck, rail) is 17x21x12: white terracotta lower body (radius 4) with a railed gallery deck at y6, dark oak upper body (radius 3), steep cone cap, and four pinwheel sails in the plane z=11 turning in front of a south door at (8,1,9). Inside: grindstone millstone, flour barrels, ladder through a hatch to the loft, gallery door. Floor is local y=0. build(fields=True) is a 35x22x16 farm with wheat and carrot CropPlots, hay and a glowing sign; ground_level 1.",
+  "latest": 1,
+  "name": "danish_windmill",
+  "tags": [
+    "windmill",
+    "mill",
+    "farm",
+    "danish",
+    "sails",
+    "rural",
+    "component",
+    "cheesedanish"
+  ],
+  "title": "Danish gallery windmill",
+  "updated_at": "2026-10-09T00:54:40Z",
+  "versions": [
+    {
+      "artifact_id": "slk_6bad4a83ef32d4a6",
+      "author": "claude",
+      "block_count": 972,
+      "created_at": "2026-10-09T00:54:40Z",
+      "entry": "build",
+      "exports": [
+        "Windmill"
+      ],
+      "ground_level": 1,
+      "loads": [
+        "lib/shapes.star:ring_cells,disc_cells,fill_cells",
+        "lib/roofs.star:ConeRoof",
+        "lib/openings.star:SingleDoor",
+        "lib/fixtures.star:Ladder,Barrel,Sign,LanternPost",
+        "lib/outdoor.star:CropPlot,HayBaleStack"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:white_terracotta",
+        "minecraft:farmland",
+        "minecraft:dark_oak_planks",
+        "minecraft:spruce_planks",
+        "minecraft:oak_log",
+        "minecraft:dark_oak_stairs",
+        "minecraft:carrots",
+        "minecraft:wheat"
+      ],
+      "params": [
+        {
+          "default": true,
+          "name": "fields"
+        }
+      ],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "07787dad897b22be5b7c538bc409cf2353dfd2d2c88d0ed3479686f554261bdd",
+      "signatures": {
+        "Windmill": "Windmill(base='minecraft:white_terracotta', upper='minecraft:dark_oak_planks', roof_stair='minecraft:dark_oak_stairs', roof_cap='minecraft:dark_oak_planks', sail='minecraft:white_wool', arm='minecraft:stripped_spruce_log', deck='minecraft:spruce_slab', rail='minecraft:spruce_fence')"
+      },
+      "size": [
+        35,
+        22,
+        16
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}
