@@ -1,0 +1,56 @@
+{
+  "author": "Codex",
+  "created_at": "2026-10-10T02:31:28Z",
+  "description": "22x10x18 calcite and spruce furnished guest cottage with dark oak roof, yellow market stall, pergola seating, flower beds, lanterns and patterned solid paving. Entrance faces south. ground_level=1. Interior explicitly carved to remove terrain vegetation. Previewed on all three cut axes and live placement undo/redo tested.",
+  "latest": 1,
+  "name": "cheesedanish_garden_retreat",
+  "tags": [
+    "cottage",
+    "garden",
+    "market",
+    "cheesedanish",
+    "furnished"
+  ],
+  "title": "Cheesedanish Garden Retreat",
+  "updated_at": "2026-10-10T02:31:28Z",
+  "versions": [
+    {
+      "artifact_id": "slk_3e17c734922f45a2",
+      "author": "Codex",
+      "block_count": 836,
+      "created_at": "2026-10-10T02:31:28Z",
+      "entry": "build",
+      "exports": [],
+      "ground_level": 1,
+      "loads": [
+        "lib/dwellings.star:GuestHouse",
+        "lib/outdoor.star:MarketStall,Pergola,FlowerBed",
+        "lib/fixtures.star:Bench,Table,LanternPost,Sign"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:andesite",
+        "minecraft:air",
+        "minecraft:stone_bricks",
+        "minecraft:stripped_spruce_log",
+        "minecraft:oak_planks",
+        "minecraft:mossy_stone_bricks",
+        "minecraft:dark_oak_stairs",
+        "minecraft:calcite"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "b0ee24d489ccf332b20824136a189bc5165b05f6055f8e4e7fb2634e01112e2d",
+      "signatures": {},
+      "size": [
+        22,
+        10,
+        18
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}
