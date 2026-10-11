@@ -1,0 +1,51 @@
+info:
+  name: Search the script library
+  type: http
+  seq: 2
+  tags:
+    - library
+
+http:
+  method: GET
+  url: "{{baseUrl}}/library/search"
+  params:
+    - name: q
+      value: "cheese"
+      type: query
+      description: Search text
+    - name: tag
+      value: ""
+      type: query
+      description: Filter by tag
+      disabled: true
+    - name: author
+      value: ""
+      type: query
+      description: Filter by author
+      disabled: true
+    - name: max_x
+      value: "32"
+      type: query
+      description: Maximum build width
+      disabled: true
+    - name: max_y
+      value: "32"
+      type: query
+      description: Maximum build height
+      disabled: true
+    - name: max_z
+      value: "32"
+      type: query
+      description: Maximum build depth
+      disabled: true
+    - name: limit
+      value: "10"
+      type: query
+      description: Maximum number of results
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

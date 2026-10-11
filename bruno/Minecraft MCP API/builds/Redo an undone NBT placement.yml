@@ -1,0 +1,101 @@
+info:
+  name: Redo an undone NBT placement
+  type: http
+  seq: 17
+  tags:
+    - builds
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/builds/:id/redo"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID of a REVERTED NBT placement
+  headers:
+    - name: X-Area-Lock-Id
+      value: ""
+      description: Area lock id when writing inside a reserved area
+      disabled: true
+  body:
+    type: json
+    data: |-
+      {
+        "force": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 409 Response
+    description: Later builds overlap the placement
+    request:
+      url: "{{baseUrl}}/api/builds/:id/redo"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID of a REVERTED NBT placement
+      body:
+        type: json
+        data: |-
+          {
+            "force": false
+          }
+    response:
+      status: 409
+      statusText: Conflict
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "code": "redo_conflict",
+            "error": "Later builds overlap this placement and would be erased by redo; pass force=true to restore anyway",
+            "total": 1,
+            "builds": [
+              {
+                "build_id": "",
+                "name": "",
+                "status": "COMPLETED"
+              }
+            ]
+          }
+  - name: 503 Response
+    description: Build snapshots are not configured on this server
+    request:
+      url: "{{baseUrl}}/api/builds/:id/redo"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID of a REVERTED NBT placement
+      body:
+        type: json
+        data: |-
+          {
+            "force": false
+          }
+    response:
+      status: 503
+      statusText: Service Unavailable
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": "Build snapshots are not configured on this server"
+          }

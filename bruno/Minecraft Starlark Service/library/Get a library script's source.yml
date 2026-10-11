@@ -1,0 +1,53 @@
+info:
+  name: Get a library script's source
+  type: http
+  seq: 4
+  tags:
+    - library
+
+http:
+  method: GET
+  url: "{{baseUrl}}/library/:name/source"
+  params:
+    - name: name
+      value: "cheese_wheel"
+      type: path
+      description: Library entry name
+    - name: version
+      value: "1"
+      type: query
+      description: Version number (defaults to latest)
+      disabled: true
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Script source; resolved version in X-Library-Version
+    request:
+      url: "{{baseUrl}}/library/:name/source"
+      method: GET
+      params:
+        - name: name
+          value: "cheese_wheel"
+          type: path
+          description: Library entry name
+        - name: version
+          value: "1"
+          type: query
+          description: Version number (defaults to latest)
+          disabled: true
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: text/plain
+      body:
+        type: text
+        data: ""

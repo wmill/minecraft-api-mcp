@@ -1,0 +1,35 @@
+info:
+  name: Update an area lock's bounds
+  type: http
+  seq: 3
+  tags:
+    - area-locks
+
+http:
+  method: PATCH
+  url: "{{baseUrl}}/api/area-locks/:lock_id"
+  params:
+    - name: lock_id
+      value: ""
+      type: path
+      description: Lock id returned when the lock was acquired
+  body:
+    type: json
+    data: |-
+      {
+        "bounds": {
+          "min_x": 0,
+          "min_y": 60,
+          "min_z": 0,
+          "max_x": 15,
+          "max_y": 90,
+          "max_z": 15
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

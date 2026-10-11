@@ -10,7 +10,7 @@ http:
   url: "{{baseUrl}}/artifacts/:artifact_id/nbt"
   params:
     - name: artifact_id
-      value: "slk_d33c698e147858c4"
+      value: "slk_8758b8833e674ea8"
       type: path
       description: Artifact id returned by POST /build
   auth: inherit

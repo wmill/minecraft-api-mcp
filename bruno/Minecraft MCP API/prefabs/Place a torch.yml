@@ -8,6 +8,11 @@ info:
 http:
   method: POST
   url: "{{baseUrl}}/api/world/prefabs/torch"
+  headers:
+    - name: X-Area-Lock-Id
+      value: ""
+      description: Area lock id when writing inside a reserved area
+      disabled: true
   body:
     type: json
     data: |-

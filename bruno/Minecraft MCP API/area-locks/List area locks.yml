@@ -1,0 +1,53 @@
+info:
+  name: List area locks
+  type: http
+  seq: 2
+  tags:
+    - area-locks
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/area-locks"
+  params:
+    - name: world
+      value: "minecraft:overworld"
+      type: query
+      description: Only locks in this world
+      disabled: true
+    - name: min_x
+      value: "0"
+      type: query
+      description: Only locks overlapping these bounds (all six or none)
+      disabled: true
+    - name: min_y
+      value: "60"
+      type: query
+      description: Only locks overlapping these bounds (all six or none)
+      disabled: true
+    - name: min_z
+      value: "0"
+      type: query
+      description: Only locks overlapping these bounds (all six or none)
+      disabled: true
+    - name: max_x
+      value: "15"
+      type: query
+      description: Only locks overlapping these bounds (all six or none)
+      disabled: true
+    - name: max_y
+      value: "90"
+      type: query
+      description: Only locks overlapping these bounds (all six or none)
+      disabled: true
+    - name: max_z
+      value: "15"
+      type: query
+      description: Only locks overlapping these bounds (all six or none)
+      disabled: true
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

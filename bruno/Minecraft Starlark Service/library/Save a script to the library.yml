@@ -1,0 +1,79 @@
+info:
+  name: Save a script to the library
+  type: http
+  seq: 1
+  tags:
+    - library
+
+http:
+  method: POST
+  url: "{{baseUrl}}/library"
+  body:
+    type: json
+    data: |-
+      {
+        "name": "stone_cell",
+        "artifact_id": "slk_8758b8833e674ea8",
+        "title": "Stone cell",
+        "description": "A single stone block",
+        "tags": [
+          "test"
+        ],
+        "author": "",
+        "notes": "",
+        "parent": null
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Saved (or identical re-save)
+    request:
+      url: "{{baseUrl}}/library"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "name": "stone_cell",
+            "artifact_id": "slk_8758b8833e674ea8",
+            "title": "Stone cell",
+            "description": "A single stone block",
+            "tags": [
+              "test"
+            ],
+            "author": "",
+            "notes": "",
+            "parent": null
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "ok": true,
+            "created": true,
+            "name": "stone_cell",
+            "version": 1,
+            "load_path": "../library/stone_cell/v1.star",
+            "artifact_id": "slk_8758b8833e674ea8",
+            "exports": [],
+            "signatures": {},
+            "params": [],
+            "size": [
+              1,
+              1,
+              1
+            ]
+          }

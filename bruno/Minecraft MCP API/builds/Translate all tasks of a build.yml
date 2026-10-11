@@ -1,0 +1,68 @@
+info:
+  name: Translate all tasks of a build
+  type: http
+  seq: 19
+  tags:
+    - builds
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/builds/:id/translate"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Build UUID
+  body:
+    type: json
+    data: |-
+      {
+        "dx": 0,
+        "dy": 0,
+        "dz": 0
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Tasks shifted by the offset
+    request:
+      url: "{{baseUrl}}/api/builds/:id/translate"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Build UUID
+      body:
+        type: json
+        data: |-
+          {
+            "dx": 0,
+            "dy": 0,
+            "dz": 0
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": true,
+            "build_id": "",
+            "dx": 0,
+            "dy": 0,
+            "dz": 0,
+            "task_count": 0,
+            "message": "Build translated successfully"
+          }

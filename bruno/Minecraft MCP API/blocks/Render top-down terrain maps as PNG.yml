@@ -1,0 +1,136 @@
+info:
+  name: Render top-down terrain maps as PNG
+  type: http
+  seq: 7
+  tags:
+    - blocks
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/world/blocks/heightmap/map"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "x1": 3087,
+        "z1": 963,
+        "x2": 3161,
+        "z2": 1001,
+        "heightmap_type": "WORLD_SURFACE",
+        "layers": [
+          "relief",
+          "surface"
+        ],
+        "px_per_block": null,
+        "contour_interval": null
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Base64 relief and surface PNGs plus map metadata
+    request:
+      url: "{{baseUrl}}/api/world/blocks/heightmap/map"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x1": 3087,
+            "z1": 963,
+            "x2": 3161,
+            "z2": 1001,
+            "heightmap_type": "WORLD_SURFACE",
+            "layers": [
+              "relief",
+              "surface"
+            ],
+            "px_per_block": null,
+            "contour_interval": null
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": true,
+            "world": "minecraft:overworld",
+            "area_bounds": {
+              "min": {
+                "x": 3087,
+                "z": 963
+              },
+              "max": {
+                "x": 3161,
+                "z": 1001
+              }
+            },
+            "size": {
+              "x": 75,
+              "z": 39
+            },
+            "heightmap_type": "WORLD_SURFACE",
+            "px_per_block": 10,
+            "contour_interval": 5,
+            "grid_step": 8,
+            "y": {
+              "min": 70,
+              "median": 70,
+              "max": 124
+            },
+            "coverage": {
+              "building": 0.3,
+              "paving": 0.15,
+              "grass/dirt": 0.4
+            },
+            "labels": true,
+            "relief_png": "",
+            "surface_png": ""
+          }
+  - name: 400 Response
+    description: Area too large. Maximum 10000 height points allowed
+    request:
+      url: "{{baseUrl}}/api/world/blocks/heightmap/map"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x1": 3087,
+            "z1": 963,
+            "x2": 3161,
+            "z2": 1001,
+            "heightmap_type": "WORLD_SURFACE",
+            "layers": [
+              "relief",
+              "surface"
+            ],
+            "px_per_block": null,
+            "contour_interval": null
+          }
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": "Area too large. Maximum 10000 height points allowed"
+          }

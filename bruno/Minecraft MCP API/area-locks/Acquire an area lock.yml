@@ -1,0 +1,100 @@
+info:
+  name: Acquire an area lock
+  type: http
+  seq: 1
+  tags:
+    - area-locks
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/area-locks"
+  body:
+    type: json
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "bounds": {
+          "min_x": 0,
+          "min_y": 60,
+          "min_z": 0,
+          "max_x": 15,
+          "max_y": 90,
+          "max_z": 15
+        },
+        "label": ""
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 409 Response
+    description: Bounds overlap another active lock
+    request:
+      url: "{{baseUrl}}/api/area-locks"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "bounds": {
+              "min_x": 0,
+              "min_y": 60,
+              "min_z": 0,
+              "max_x": 15,
+              "max_y": 90,
+              "max_z": 15
+            },
+            "label": ""
+          }
+    response:
+      status: 409
+      statusText: Conflict
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": false,
+            "code": "area_locked",
+            "error": "Placement area overlaps an active reservation"
+          }
+  - name: 400 Response
+    description: bounds requires six integer coordinates
+    request:
+      url: "{{baseUrl}}/api/area-locks"
+      method: POST
+      body:
+        type: json
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "bounds": {
+              "min_x": 0,
+              "min_y": 60,
+              "min_z": 0,
+              "max_x": 15,
+              "max_y": 90,
+              "max_z": 15
+            },
+            "label": ""
+          }
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "error": "bounds requires six integer coordinates"
+          }

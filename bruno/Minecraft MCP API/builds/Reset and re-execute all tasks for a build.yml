@@ -13,6 +13,11 @@ http:
       value: ""
       type: path
       description: Build UUID
+  headers:
+    - name: X-Area-Lock-Id
+      value: ""
+      description: Area lock id when writing inside a reserved area
+      disabled: true
   auth: inherit
 
 settings:

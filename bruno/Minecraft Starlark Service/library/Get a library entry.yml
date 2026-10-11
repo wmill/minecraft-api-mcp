@@ -1,0 +1,22 @@
+info:
+  name: Get a library entry
+  type: http
+  seq: 3
+  tags:
+    - library
+
+http:
+  method: GET
+  url: "{{baseUrl}}/library/:name"
+  params:
+    - name: name
+      value: "cheese_wheel"
+      type: path
+      description: Library entry name
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,49 @@
+info:
+  name: Clone a build and its tasks
+  type: http
+  seq: 18
+  tags:
+    - builds
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/builds/:id/clone"
+  params:
+    - name: id
+      value: ""
+      type: path
+      description: Source build UUID
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: Build cloned
+    request:
+      url: "{{baseUrl}}/api/builds/:id/clone"
+      method: POST
+      params:
+        - name: id
+          value: ""
+          type: path
+          description: Source build UUID
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "success": true,
+            "source_build_id": "",
+            "new_build_id": "",
+            "tasks_cloned": 0
+          }

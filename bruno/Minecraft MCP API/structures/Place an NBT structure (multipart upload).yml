@@ -8,6 +8,11 @@ info:
 http:
   method: POST
   url: "{{baseUrl}}/api/world/structure/place"
+  headers:
+    - name: X-Area-Lock-Id
+      value: ""
+      description: Area lock id when writing inside a reserved area
+      disabled: true
   body:
     type: multipart-form
     data:
@@ -31,9 +36,6 @@ http:
         type: text
         value: NONE
       - name: include_entities
-        type: text
-        value: "true"
-      - name: replace_blocks
         type: text
         value: "true"
   auth: inherit
@@ -73,9 +75,6 @@ examples:
             type: text
             value: NONE
           - name: include_entities
-            type: text
-            value: "true"
-          - name: replace_blocks
             type: text
             value: "true"
     response:
@@ -136,9 +135,6 @@ examples:
           - name: include_entities
             type: text
             value: "true"
-          - name: replace_blocks
-            type: text
-            value: "true"
     response:
       status: 400
       statusText: Bad Request
@@ -179,9 +175,6 @@ examples:
             type: text
             value: NONE
           - name: include_entities
-            type: text
-            value: "true"
-          - name: replace_blocks
             type: text
             value: "true"
     response:

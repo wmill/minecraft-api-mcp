@@ -1,0 +1,183 @@
+info:
+  name: Get an artifact preview image
+  type: http
+  seq: 3
+  tags:
+    - artifacts
+
+http:
+  method: GET
+  url: "{{baseUrl}}/artifacts/:artifact_id/images/:view"
+  params:
+    - name: artifact_id
+      value: "slk_8758b8833e674ea8"
+      type: path
+      description: Artifact id returned by POST /build
+    - name: view
+      value: "sheet"
+      type: path
+      description: sheet, iso, top, north, south, east, west, section (needs a cut) or floors
+    - name: max_px
+      value: "768"
+      type: query
+      description: Longest side in px (64-1024); per tile for sheets
+      disabled: true
+    - name: cut_x
+      value: "0"
+      type: query
+      description: Cutaway/section at local x (only sheet, iso, section)
+      disabled: true
+    - name: cut_y
+      value: "0"
+      type: query
+      description: Cutaway/section at local y (only sheet, iso, section)
+      disabled: true
+    - name: cut_z
+      value: "0"
+      type: query
+      description: Cutaway/section at local z (only sheet, iso, section)
+      disabled: true
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: 200 Response
+    description: PNG image (X-Artifact-Size header; X-Preview-Floors for floors)
+    request:
+      url: "{{baseUrl}}/artifacts/:artifact_id/images/:view"
+      method: GET
+      params:
+        - name: artifact_id
+          value: "slk_8758b8833e674ea8"
+          type: path
+          description: Artifact id returned by POST /build
+        - name: view
+          value: "sheet"
+          type: path
+          description: sheet, iso, top, north, south, east, west, section (needs a cut) or floors
+        - name: max_px
+          value: "768"
+          type: query
+          description: Longest side in px (64-1024); per tile for sheets
+          disabled: true
+        - name: cut_x
+          value: "0"
+          type: query
+          description: Cutaway/section at local x (only sheet, iso, section)
+          disabled: true
+        - name: cut_y
+          value: "0"
+          type: query
+          description: Cutaway/section at local y (only sheet, iso, section)
+          disabled: true
+        - name: cut_z
+          value: "0"
+          type: query
+          description: Cutaway/section at local z (only sheet, iso, section)
+          disabled: true
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: image/png
+      body:
+        type: text
+        data: ""
+  - name: 400 Response
+    description: Invalid view or cut
+    request:
+      url: "{{baseUrl}}/artifacts/:artifact_id/images/:view"
+      method: GET
+      params:
+        - name: artifact_id
+          value: "slk_8758b8833e674ea8"
+          type: path
+          description: Artifact id returned by POST /build
+        - name: view
+          value: "sheet"
+          type: path
+          description: sheet, iso, top, north, south, east, west, section (needs a cut) or floors
+        - name: max_px
+          value: "768"
+          type: query
+          description: Longest side in px (64-1024); per tile for sheets
+          disabled: true
+        - name: cut_x
+          value: "0"
+          type: query
+          description: Cutaway/section at local x (only sheet, iso, section)
+          disabled: true
+        - name: cut_y
+          value: "0"
+          type: query
+          description: Cutaway/section at local y (only sheet, iso, section)
+          disabled: true
+        - name: cut_z
+          value: "0"
+          type: query
+          description: Cutaway/section at local z (only sheet, iso, section)
+          disabled: true
+    response:
+      status: 400
+      statusText: Bad Request
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "detail": "view=section needs cut_x, cut_y or cut_z"
+          }
+  - name: 503 Response
+    description: Rendering failed or timed out
+    request:
+      url: "{{baseUrl}}/artifacts/:artifact_id/images/:view"
+      method: GET
+      params:
+        - name: artifact_id
+          value: "slk_8758b8833e674ea8"
+          type: path
+          description: Artifact id returned by POST /build
+        - name: view
+          value: "sheet"
+          type: path
+          description: sheet, iso, top, north, south, east, west, section (needs a cut) or floors
+        - name: max_px
+          value: "768"
+          type: query
+          description: Longest side in px (64-1024); per tile for sheets
+          disabled: true
+        - name: cut_x
+          value: "0"
+          type: query
+          description: Cutaway/section at local x (only sheet, iso, section)
+          disabled: true
+        - name: cut_y
+          value: "0"
+          type: query
+          description: Cutaway/section at local y (only sheet, iso, section)
+          disabled: true
+        - name: cut_z
+          value: "0"
+          type: query
+          description: Cutaway/section at local z (only sheet, iso, section)
+          disabled: true
+    response:
+      status: 503
+      statusText: Service Unavailable
+      headers:
+        - name: Content-Type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "detail": "preview unavailable: "
+          }

@@ -8,6 +8,16 @@ info:
 http:
   method: GET
   url: "{{baseUrl}}/docs/catalog"
+  params:
+    - name: topic
+      value: "quickstart"
+      type: query
+      description: quickstart, full, dsl, composition, errors, library, components, math, or a lib module name
+    - name: component
+      value: "GableRoof"
+      type: query
+      description: One component's reference (overrides topic)
+      disabled: true
   auth: inherit
 
 settings:

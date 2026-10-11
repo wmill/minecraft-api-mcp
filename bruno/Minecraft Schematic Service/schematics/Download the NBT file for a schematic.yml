@@ -10,7 +10,7 @@ http:
   url: "{{baseUrl}}/schematics/:schematic_id/nbt"
   params:
     - name: schematic_id
-      value: "12345"
+      value: "156"
       type: path
       description: Numeric schematic identifier
   auth: inherit
@@ -29,7 +29,7 @@ examples:
       method: GET
       params:
         - name: schematic_id
-          value: "12345"
+          value: "156"
           type: path
           description: Numeric schematic identifier
     response:
@@ -48,7 +48,7 @@ examples:
       method: GET
       params:
         - name: schematic_id
-          value: "12345"
+          value: "156"
           type: path
           description: Numeric schematic identifier
     response:
@@ -70,7 +70,7 @@ examples:
       method: GET
       params:
         - name: schematic_id
-          value: "12345"
+          value: "156"
           type: path
           description: Numeric schematic identifier
     response:
@@ -92,7 +92,7 @@ examples:
       method: GET
       params:
         - name: schematic_id
-          value: "12345"
+          value: "156"
           type: path
           description: Numeric schematic identifier
     response:

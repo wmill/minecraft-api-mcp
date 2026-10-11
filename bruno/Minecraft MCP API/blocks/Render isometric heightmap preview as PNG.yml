@@ -10,7 +10,17 @@ http:
   url: "{{baseUrl}}/api/world/blocks/heightmap/preview"
   body:
     type: json
-    data: "{}"
+    data: |-
+      {
+        "world": "minecraft:overworld",
+        "x1": 0,
+        "z1": 0,
+        "x2": 63,
+        "z2": 63,
+        "heightmap_type": "WORLD_SURFACE",
+        "iso_scale": 6,
+        "view_direction": "south"
+      }
   auth: inherit
 
 settings:
@@ -27,7 +37,17 @@ examples:
       method: POST
       body:
         type: json
-        data: "{}"
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x1": 0,
+            "z1": 0,
+            "x2": 63,
+            "z2": 63,
+            "heightmap_type": "WORLD_SURFACE",
+            "iso_scale": 6,
+            "view_direction": "south"
+          }
     response:
       status: 200
       statusText: OK
@@ -44,7 +64,17 @@ examples:
       method: POST
       body:
         type: json
-        data: "{}"
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x1": 0,
+            "z1": 0,
+            "x2": 63,
+            "z2": 63,
+            "heightmap_type": "WORLD_SURFACE",
+            "iso_scale": 6,
+            "view_direction": "south"
+          }
     response:
       status: 204
       statusText: No Content
@@ -58,7 +88,17 @@ examples:
       method: POST
       body:
         type: json
-        data: "{}"
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x1": 0,
+            "z1": 0,
+            "x2": 63,
+            "z2": 63,
+            "heightmap_type": "WORLD_SURFACE",
+            "iso_scale": 6,
+            "view_direction": "south"
+          }
     response:
       status: 400
       statusText: Bad Request
@@ -78,7 +118,17 @@ examples:
       method: POST
       body:
         type: json
-        data: "{}"
+        data: |-
+          {
+            "world": "minecraft:overworld",
+            "x1": 0,
+            "z1": 0,
+            "x2": 63,
+            "z2": 63,
+            "heightmap_type": "WORLD_SURFACE",
+            "iso_scale": 6,
+            "view_direction": "south"
+          }
     response:
       status: 500
       statusText: Internal Server Error
