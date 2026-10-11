@@ -399,6 +399,48 @@ public class BlocksEndpointCore {
             return CompletableFuture.completedFuture(result.heights());
         });
     }
+
+    /**
+     * Heightmap plus the id of the top block in each column (the block just below the
+     * heightmap Y), sampled on the server thread for the terrain map renderer.
+     */
+    public CompletableFuture<TerrainSampleResult> getTerrainSample(HeightmapRequest request) {
+        return getHeightmap(request).thenCompose(heightmap -> {
+            if (!heightmap.success()) {
+                return CompletableFuture.completedFuture(
+                    new TerrainSampleResult(false, heightmap.error(), heightmap, null));
+            }
+            CompletableFuture<TerrainSampleResult> future = new CompletableFuture<>();
+            RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(heightmap.world());
+            ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
+            if (world == null) {
+                future.complete(new TerrainSampleResult(false, "Unknown world: " + heightmap.world(), heightmap, null));
+                return future;
+            }
+            int minX = heightmap.areaBounds().get("min").get("x");
+            int minZ = heightmap.areaBounds().get("min").get("z");
+            int[][] heights = heightmap.heights();
+            server.execute(() -> {
+                try {
+                    String[][] blocks = new String[heights.length][];
+                    BlockPos.Mutable pos = new BlockPos.Mutable();
+                    for (int x = 0; x < heights.length; x++) {
+                        blocks[x] = new String[heights[x].length];
+                        for (int z = 0; z < heights[x].length; z++) {
+                            pos.set(minX + x, heights[x][z] - 1, minZ + z);
+                            blocks[x][z] = Registries.BLOCK.getId(world.getBlockState(pos).getBlock()).toString();
+                        }
+                    }
+                    future.complete(new TerrainSampleResult(true, null, heightmap, blocks));
+                } catch (Exception e) {
+                    logger.error("Error sampling surface blocks", e);
+                    future.complete(new TerrainSampleResult(false,
+                        "Exception during surface sampling: " + e.getMessage(), heightmap, null));
+                }
+            });
+            return future;
+        });
+    }
 }
 
 // Result classes for core operations
@@ -406,3 +448,4 @@ record BlockSetResult(boolean success, String error, int blocksSet, int blocksSk
 record ChunkResult(boolean success, String error, String world, Map<String, Integer> startPosition, Map<String, Integer> size, BlockData[][][] blocks) implements OperationResult {}
 record FillResult(boolean success, String error, int blocksSet, int blocksFailed, int totalBlocks, String world, Map<String, Map<String, Integer>> boxBounds) implements OperationResult {}
 record HeightmapResult(boolean success, String error, String world, Map<String, Map<String, Integer>> areaBounds, Map<String, Integer> size, String heightmapType, Map<String, Integer> heightRange, int[][] heights) implements OperationResult {}
+record TerrainSampleResult(boolean success, String error, HeightmapResult heightmap, String[][] surfaceBlocks) implements OperationResult {}

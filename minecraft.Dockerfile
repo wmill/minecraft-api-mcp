@@ -1,7 +1,8 @@
 # Use Eclipse Temurin JRE 21 (OpenJDK)
 FROM eclipse-temurin:21-jre
 
-RUN apt-get update && apt-get install -y curl gosu tmux && rm -rf /var/lib/apt/lists/*
+# fontconfig + DejaVu: the terrain map renderer (java.awt) draws coordinate and contour labels
+RUN apt-get update && apt-get install -y curl gosu tmux fontconfig fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /minecraft

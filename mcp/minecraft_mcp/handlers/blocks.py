@@ -335,3 +335,79 @@ async def handle_preview_heightmap(
         )
     except Exception as e:
         return format_error_response(e, "rendering heightmap preview")
+
+
+async def handle_map_terrain(
+    api_client: MinecraftAPIClient,
+    x1: int,
+    z1: int,
+    x2: int,
+    z2: int,
+    heightmap_type: str = "WORLD_SURFACE",
+    world: str = None,
+    layers: Optional[List[str]] = None,
+    px_per_block: Optional[int] = None,
+    contour_interval: Optional[int] = None,
+    **arguments
+) -> CallToolResult:
+    """
+    Render top-down relief (labelled contours, spot heights) and surface-material maps.
+    """
+    try:
+        result = await api_client.map_terrain(
+            x1,
+            z1,
+            x2,
+            z2,
+            heightmap_type=heightmap_type,
+            world=world,
+            layers=layers,
+            px_per_block=px_per_block,
+            contour_interval=contour_interval,
+        )
+
+        if result.get("status_code") != 200 or not result.get("success"):
+            return CallToolResult(
+                content=[TextContent(
+                    type="text",
+                    text=f"❌ Terrain map failed: {result.get('error', 'Unknown error')}"
+                )]
+            )
+
+        content: List[Any] = []
+        for key in ("relief_png", "surface_png"):
+            if result.get(key):
+                content.append(ImageContent(type="image", mimeType="image/png", data=result[key]))
+        content.append(TextContent(type="text", text=format_terrain_map_summary(result)))
+        return CallToolResult(content=content)
+    except Exception as e:
+        return format_error_response(e, "rendering terrain map")
+
+
+def format_terrain_map_summary(result: Dict[str, Any]) -> str:
+    """The exact numbers behind the map images, and how to read them."""
+    bounds = result.get("area_bounds") or {}
+    lo, hi = bounds.get("min", {}), bounds.get("max", {})
+    size = result.get("size") or {}
+    y = result.get("y") or {}
+    interval = result.get("contour_interval")
+
+    lines = [
+        f"**Terrain map** X {lo.get('x')}..{hi.get('x')}, Z {lo.get('z')}..{hi.get('z')} "
+        f"({size.get('x')}x{size.get('z')} columns), {result.get('world')}, {result.get('heightmap_type')}",
+        f"Top-down, north up: +X east (right), +Z south (down). 1 block = {result.get('px_per_block')} px; "
+        f"grid every {result.get('grid_step')} blocks, labelled with world X (top) and Z (left).",
+        f"Heights are standing Y (first air above the surface). "
+        f"Y min/median/max: {y.get('min')}/{y.get('median')}/{y.get('max')}. "
+        f"Contours every {interval}, bold every {interval * 5 if interval else '?'}; "
+        f"dots are spot heights at grid-cell centres.",
+    ]
+    coverage = result.get("coverage") or {}
+    if coverage:
+        parts = [f"{name} {fraction * 100:.0f}%" if fraction >= 0.01 else f"{name} <1%"
+                 for name, fraction in coverage.items()]
+        lines.append("Surface coverage (top block): " + ", ".join(parts) + ".")
+    if result.get("labels") is False:
+        lines.append("⚠️ The server could not draw text, so the images have no labels; use the numbers above.")
+    return "\n".join(lines)
+

@@ -432,6 +432,54 @@ class MinecraftAPIClient:
                     result["error"] = response.text or f"HTTP {response.status_code}"
             return result
 
+    async def map_terrain(
+        self,
+        x1: int,
+        z1: int,
+        x2: int,
+        z2: int,
+        heightmap_type: str = "WORLD_SURFACE",
+        world: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+        px_per_block: Optional[int] = None,
+        contour_interval: Optional[int] = None,
+    ) -> dict:
+        """
+        Fetch top-down relief and surface-material map PNGs (base64) plus their stats.
+
+        Returns:
+            dict: the JSON body plus ``status_code``; on non-200 it carries ``error``.
+        """
+        payload: Dict[str, Any] = {
+            "x1": x1,
+            "z1": z1,
+            "x2": x2,
+            "z2": z2,
+            "heightmap_type": heightmap_type,
+        }
+        if world:
+            payload["world"] = world
+        if layers:
+            payload["layers"] = layers
+        if px_per_block is not None:
+            payload["px_per_block"] = px_per_block
+        if contour_interval is not None:
+            payload["contour_interval"] = contour_interval
+
+        async with self._http_client() as client:
+            response = await client.post(
+                f"{self.base_url}/api/world/blocks/heightmap/map",
+                json=payload,
+            )
+            try:
+                body = response.json()
+            except Exception:
+                body = {"error": response.text or f"HTTP {response.status_code}"}
+            if not isinstance(body, dict):
+                body = {"error": str(body)}
+            body["status_code"] = response.status_code
+            return body
+
     async def broadcast_message(
         self,
         message: str,

@@ -16,7 +16,8 @@ from .blocks import (
     handle_fill_box,
     handle_get_heightmap,
     handle_summarize_heightmap,
-    handle_preview_heightmap
+    handle_preview_heightmap,
+    handle_map_terrain
 )
 
 from .messages import (
@@ -80,6 +81,7 @@ __all__ = [
     "handle_get_heightmap",
     "handle_summarize_heightmap",
     "handle_preview_heightmap",
+    "handle_map_terrain",
     # Message handlers
     "handle_broadcast_message",
     "handle_send_message_to_player",

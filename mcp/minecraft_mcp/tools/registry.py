@@ -36,6 +36,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "survey_site": survey.handle_survey_site,
     "summarize_heightmap": blocks.handle_summarize_heightmap,
     "preview_heightmap": blocks.handle_preview_heightmap,
+    "map_terrain": blocks.handle_map_terrain,
     
     # Message tools
     "broadcast_message": messages.handle_broadcast_message,

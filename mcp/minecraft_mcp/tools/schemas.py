@@ -249,7 +249,7 @@ TOOL_SURVEY_SITE = Tool(
 
 TOOL_GET_HEIGHTMAP = Tool(
     name="get_heightmap",
-    description="Get raw heightmap data with inclusive bounds and heights[x_offset][z_offset], relative to the minimum X/Z. Each value is first-air Y above the surface selected by heightmap_type, not necessarily safe walking ground (e.g. treetops or water). Use survey_site for compact ground assessment.",
+    description="Get raw heightmap data with inclusive bounds and heights[x_offset][z_offset], relative to the minimum X/Z. Each value is first-air Y above the surface selected by heightmap_type, not necessarily safe walking ground (e.g. treetops or water). Use survey_site for compact ground assessment and map_terrain to see the terrain.",
     inputSchema={
         "type": "object",
         "properties": {
@@ -328,7 +328,8 @@ TOOL_PREVIEW_HEIGHTMAP = Tool(
     description=(
         "Render a flat-shaded isometric PNG terrain preview from sampled "
         "heightmap data. This is a surface-only preview derived from the "
-        "selected heightmap type, not a textured world render."
+        "selected heightmap type, not a textured world render. For reading "
+        "heights, coordinates and materials, prefer map_terrain."
     ),
     inputSchema={
         "type": "object",
@@ -376,6 +377,62 @@ TOOL_PREVIEW_HEIGHTMAP = Tool(
     }
 )
 
+
+TOOL_MAP_TERRAIN = Tool(
+    name="map_terrain",
+    description=(
+        "First choice for reading a site's terrain. Returns two top-down PNG maps (north up, "
+        "+X east to the right) with world-coordinate grid labels: a greyscale relief map with "
+        "labelled contour lines and spot heights (lighter = higher, water tinted blue), and a "
+        "surface-material map (water, sand, grass, trees, stone, snow, farm, path, plus built "
+        "blocks split into 'building' when raised above nearby natural ground and 'paving' when "
+        "within 1 block of it) with a legend. A text summary gives bounds, scale, Y min/median/max and material coverage. "
+        "Heights are standing Y (first air above the surface). Maximum 10000 columns. Use "
+        "MOTION_BLOCKING_NO_LEAVES to see the ground under trees."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "x1": {"type": "integer", "description": "First corner X coordinate (east positive, west negative)"},
+            "z1": {"type": "integer", "description": "First corner Z coordinate (south positive, north negative)"},
+            "x2": {"type": "integer", "description": "Second corner X coordinate (east positive, west negative)"},
+            "z2": {"type": "integer", "description": "Second corner Z coordinate (south positive, north negative)"},
+            "world": {
+                "type": "string",
+                "description": "World name (optional, defaults to minecraft:overworld)",
+                "default": "minecraft:overworld"
+            },
+            "heightmap_type": {
+                "type": "string",
+                "description": "Surface used for heights and the top block",
+                "enum": ["WORLD_SURFACE", "MOTION_BLOCKING", "MOTION_BLOCKING_NO_LEAVES", "OCEAN_FLOOR"],
+                "default": "WORLD_SURFACE"
+            },
+            "layers": {
+                "type": "array",
+                "description": "Which maps to return (default both)",
+                "items": {"type": "string", "enum": ["relief", "surface"]},
+                "minItems": 1,
+                "uniqueItems": True
+            },
+            "px_per_block": {
+                "type": "integer",
+                "description": "Pixels per block (1-16). Default fits the map to about 768 px.",
+                "minimum": 1,
+                "maximum": 16
+            },
+            "contour_interval": {
+                "type": "integer",
+                "description": "Blocks between contour lines (1-100). Default picks 1/2/5/10/20/50 from the height range.",
+                "minimum": 1,
+                "maximum": 100
+            }
+        },
+        "required": ["x1", "z1", "x2", "z2"],
+        "additionalProperties": False
+    }
+)
 
 # Message Tools
 TOOL_BROADCAST_MESSAGE = Tool(
@@ -2221,6 +2278,7 @@ TOOL_SCHEMAS = [
     TOOL_SURVEY_SITE,
     TOOL_SUMMARIZE_HEIGHTMAP,
     TOOL_PREVIEW_HEIGHTMAP,
+    TOOL_MAP_TERRAIN,
     # Message tools
     TOOL_BROADCAST_MESSAGE,
     TOOL_SEND_MESSAGE_TO_PLAYER,

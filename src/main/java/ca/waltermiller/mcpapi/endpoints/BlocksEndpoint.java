@@ -4,6 +4,7 @@ import ca.waltermiller.mcpapi.preview.BlockGrid;
 import ca.waltermiller.mcpapi.preview.IsoRenderer;
 import ca.waltermiller.mcpapi.preview.PreviewViewDirection;
 import ca.waltermiller.mcpapi.preview.TerrainHeightmapGridAdapter;
+import ca.waltermiller.mcpapi.preview.TerrainMapRenderer;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import io.javalin.Javalin;
 import net.minecraft.block.Block;
@@ -13,6 +14,11 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.Identifier;
 import net.minecraft.state.property.Property;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
@@ -159,6 +165,52 @@ public class BlocksEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
             }
         });
+
+        // Top-down relief (contours, spot heights) and surface-material maps as base64 PNGs
+        app.post("/api/world/blocks/heightmap/map", ctx -> {
+            TerrainMapRequest req = ctx.bodyAsClass(TerrainMapRequest.class);
+            String invalid = req.validate();
+            if (invalid != null) {
+                ctx.status(400).json(Map.of("error", invalid));
+                return;
+            }
+            boolean relief = req.wantsLayer("relief");
+            boolean surface = req.wantsLayer("surface");
+            // Surface blocks are sampled even for relief-only maps: they mark water.
+            respond(ctx, core.getTerrainSample(req), BULK_TIMEOUT_SECONDS, "terrain map operation",
+                TerrainSampleResult::success, TerrainSampleResult::error,
+                result -> terrainMapBody(result, new TerrainMapRenderer.Options(
+                    req.px_per_block, req.contour_interval, relief, surface)));
+        });
+    }
+
+    private static Map<String, Object> terrainMapBody(TerrainSampleResult result, TerrainMapRenderer.Options options) {
+        HeightmapResult hm = result.heightmap();
+        Map<String, Map<String, Integer>> bounds = hm.areaBounds();
+        TerrainMapRenderer.Result map;
+        try {
+            map = TerrainMapRenderer.render(hm.heights(), result.surfaceBlocks(),
+                bounds.get("min").get("x"), bounds.get("min").get("z"), options);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        TerrainMapRenderer.Meta meta = map.meta();
+        Base64.Encoder base64 = Base64.getEncoder();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", true);
+        body.put("world", hm.world());
+        body.put("area_bounds", bounds);
+        body.put("size", hm.size());
+        body.put("heightmap_type", hm.heightmapType());
+        body.put("px_per_block", meta.pxPerBlock());
+        body.put("contour_interval", meta.contourInterval());
+        body.put("grid_step", meta.gridStep());
+        body.put("y", Map.of("min", meta.minY(), "median", meta.medianY(), "max", meta.maxY()));
+        body.put("coverage", meta.coverage());
+        body.put("labels", meta.labels());
+        if (map.reliefPng() != null) body.put("relief_png", base64.encodeToString(map.reliefPng()));
+        if (map.surfacePng() != null) body.put("surface_png", base64.encodeToString(map.surfacePng()));
+        return body;
     }
 
     /**
@@ -270,4 +322,32 @@ class HeightmapRequest {
 class HeightmapPreviewRequest extends HeightmapRequest {
     public Integer iso_scale; // optional, defaults to 6
     public String view_direction; // optional, defaults to south
+}
+
+class TerrainMapRequest extends HeightmapRequest {
+    public Integer px_per_block; // optional, auto-fit to ~768 px
+    public Integer contour_interval; // optional, auto from the height range
+    public List<String> layers; // optional subset of ["relief", "surface"], defaults to both
+
+    boolean wantsLayer(String layer) {
+        return layers == null || layers.isEmpty() || layers.contains(layer);
+    }
+
+    /** Returns an error message for out-of-range options, or null when valid. */
+    String validate() {
+        if (px_per_block != null && (px_per_block < TerrainMapRenderer.MIN_PX_PER_BLOCK
+                || px_per_block > TerrainMapRenderer.MAX_PX_PER_BLOCK)) {
+            return "px_per_block must be between " + TerrainMapRenderer.MIN_PX_PER_BLOCK
+                + " and " + TerrainMapRenderer.MAX_PX_PER_BLOCK;
+        }
+        if (contour_interval != null && (contour_interval < TerrainMapRenderer.MIN_CONTOUR_INTERVAL
+                || contour_interval > TerrainMapRenderer.MAX_CONTOUR_INTERVAL)) {
+            return "contour_interval must be between " + TerrainMapRenderer.MIN_CONTOUR_INTERVAL
+                + " and " + TerrainMapRenderer.MAX_CONTOUR_INTERVAL;
+        }
+        if (layers != null && layers.stream().anyMatch(l -> !"relief".equals(l) && !"surface".equals(l))) {
+            return "layers may only contain \"relief\" and \"surface\"";
+        }
+        return null;
+    }
 }
