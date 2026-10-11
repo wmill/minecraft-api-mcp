@@ -1,0 +1,83 @@
+{
+  "author": "claude",
+  "created_at": "2026-10-10T19:37:22Z",
+  "description": "Flat building terrace for hilly terrain. A bottom-rounded dirt RoundedCuboid fills below the walking plane and gets a grass cap. A bottom-rounded air RoundedCuboid carves the slope above it. The result has a curved scoop instead of a boxy notch. The flat floor is the central (width-2*radius) x (length-2*radius) rectangle, so keep buildings inside it. Place at the min corner (x, z) with y = the desired walking plane. The fill reaches fill_height+1 blocks below the walking plane, and the carve reaches carve_height blocks above it. Pick carve_height to clear the highest terrain in the footprint. Place the terrace first, then build on it with a separate placement, because the carve step erases any structure inside its volume. Default 31x25 radius 6 gives a 19x13 flat floor.",
+  "latest": 1,
+  "name": "hillside_terrace",
+  "tags": [
+    "terrain",
+    "terraform",
+    "terrace",
+    "pad",
+    "hillside",
+    "rounded",
+    "flatten",
+    "foundation"
+  ],
+  "title": "Hillside Terrace (RoundedCuboid cut and fill)",
+  "updated_at": "2026-10-10T19:37:22Z",
+  "versions": [
+    {
+      "artifact_id": "slk_bed0de084a727b4e",
+      "author": "claude",
+      "block_count": 19260,
+      "created_at": "2026-10-10T19:37:22Z",
+      "entry": "build",
+      "exports": [
+        "HillsideTerrace"
+      ],
+      "ground_level": 14,
+      "loads": [
+        "lib/shapes.star:RoundedCuboid,fill_cells"
+      ],
+      "notes": "Initial version. Parameterized from the build placed for cheesedanish near (3209, 80, 1273): 31x25, r=6, fill 13, carve 14.",
+      "palette_top": [
+        "minecraft:air",
+        "minecraft:dirt",
+        "minecraft:grass_block"
+      ],
+      "params": [
+        {
+          "default": 31,
+          "name": "width"
+        },
+        {
+          "default": 25,
+          "name": "length"
+        },
+        {
+          "default": 6,
+          "name": "radius"
+        },
+        {
+          "default": 13,
+          "name": "fill_height"
+        },
+        {
+          "default": 14,
+          "name": "carve_height"
+        }
+      ],
+      "parent": null,
+      "props": {
+        "carve_height": 14,
+        "fill_height": 13,
+        "length": 25,
+        "radius": 6,
+        "width": 31
+      },
+      "root_size": null,
+      "sha256": "605bc6657470932efb6761c634dccf1e7768a104b6c2a414bf10214ae1d36ffe",
+      "signatures": {
+        "HillsideTerrace": "HillsideTerrace(width, length, radius=6, fill_height=13, carve_height=14)"
+      },
+      "size": [
+        31,
+        28,
+        25
+      ],
+      "version": 1,
+      "y_offset": -14
+    }
+  ]
+}
