@@ -2,6 +2,22 @@ opencollection: 1.0.0
 
 info:
   name: Minecraft MCP API
+config:
+  proxy:
+    inherit: true
+    config:
+      protocol: http
+      hostname: ""
+      port: ""
+      auth:
+        username: ""
+        password: ""
+      bypassProxy: ""
+
+request:
+  variables:
+    - name: baseUrl
+      value: http://localhost:7070
 bundled: false
 extensions:
   bruno:

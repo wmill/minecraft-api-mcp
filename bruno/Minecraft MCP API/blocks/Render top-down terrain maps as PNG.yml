@@ -13,10 +13,10 @@ http:
     data: |-
       {
         "world": "minecraft:overworld",
-        "x1": 3087,
-        "z1": 963,
-        "x2": 3161,
-        "z2": 1001,
+        "x1": {{x1}},
+        "z1": {{z1}},
+        "x2": {{x2}},
+        "z2": {{z2}},
         "heightmap_type": "WORLD_SURFACE",
         "layers": [
           "relief",
@@ -26,6 +26,63 @@ http:
         "contour_interval": null
       }
   auth: inherit
+
+runtime:
+  variables:
+    - name: x1
+      value: "3087"
+    - name: z1
+      value: "963"
+    - name: x2
+      value: "3161"
+    - name: z2
+      value: "1001"
+  scripts:
+    - type: after-response
+      code: |-
+        const images = [];
+
+        function findImages(obj, path = '$') {
+          if (typeof obj === 'string') {
+            let base64 = obj;
+
+            // Handle data:image/png;base64,... strings.
+            if (base64.startsWith('data:image/png;base64,')) {
+              base64 = base64.slice('data:image/png;base64,'.length);
+            }
+
+            // PNG files begin with this Base64 signature.
+            if (base64.startsWith('iVBORw0KGgo')) {
+              images.push({ path, base64 });
+            }
+          } else if (Array.isArray(obj)) {
+            obj.forEach((value, index) => {
+              findImages(value, `${path}[${index}]`);
+            });
+          } else if (obj && typeof obj === 'object') {
+            for (const [key, value] of Object.entries(obj)) {
+              findImages(value, `${path}.${key}`);
+            }
+          }
+        }
+
+        findImages(res.getBody());
+
+        const html = images.map(({ path, base64 }, i) => `
+          <div style="margin-bottom: 24px; color: #f5f5f5;">
+            <h3>Image ${i + 1}</h3>
+            <p>${path.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>
+            <img
+              src="data:image/png;base64,${base64}"
+              style="max-width: 100%; height: auto"
+            />
+          </div>
+        `).join('');
+
+        bru.visualize('html', {
+          name: 'Embedded Images',
+          content: html || '<p>No PNG images found.</p>'
+        });
 
 settings:
   encodeUrl: true
