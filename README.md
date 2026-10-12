@@ -118,9 +118,9 @@ MCP tools added for this flow:
 
 ## Starlark build service
 
-There is an optional Starlark build service in `starlark-service/`. MCP users submit Starlark build scripts; the service compiles them into structure NBT with [starlark-to-nbt](https://github.com/wmill/starlark-to-nbt), returns structured diagnostics on failure (so the LLM can edit and resubmit), caches successful builds by content hash, and serves the NBT so MCP can place it through the existing `/api/world/structure/place` endpoint.
+There is an optional Starlark build service in `starlark-service/`. MCP users submit Starlark build scripts; the service compiles them into structure NBT with [starlark-to-nbt](https://github.com/wmill/starlark-to-nbt), returns structured diagnostics on failure (so the LLM can edit and resubmit), caches successful builds by content hash, renders preview images of the result, keeps a shared library of saved scripts, and serves the NBT so MCP can place it through the existing `/api/world/structure/place` endpoint.
 
-The starlark-to-nbt tool is vendored as a **git submodule** at `starlark-service/starlark-to-nbt`. After cloning this repo (or pulling this change), run:
+Two tools are vendored as **git submodules**: starlark-to-nbt at `starlark-service/starlark-to-nbt` and [nbt-image-gen](https://github.com/wmill/nbt-image-gen) (preview rendering) at `starlark-service/nbt-image-gen`. After cloning this repo, run:
 
 ```bash
 git submodule update --init
@@ -133,7 +133,12 @@ docker compose --profile starlark up -d starlark-service
 curl http://localhost:7090/health
 ```
 
-The artifact cache lives under `starlark-service-data/` (git-ignored). Builds run in a killable subprocess with a wall-clock timeout, memory rlimit, and volume/output-size caps; `load()` in submitted scripts is confined to the vendored `lib/` component library.
+Builds run in a killable subprocess with a wall-clock timeout, memory rlimit, and volume/output-size caps. `load()` in submitted scripts is confined to the vendored `lib/` component library and saved library versions (`load("../lib/structural.star", ...)`, `load("../library/<name>/v<N>.star", ...)`). Build failures are HTTP 200 responses with `{"ok": false, "error_kind", "diagnostics", "hint"}`, not errors.
+
+Data lives in two places:
+
+- `starlark-service-data/` — artifact cache (NBT, metadata, rendered previews). Git-ignored and safe to delete: identical source always rebuilds to the same artifact id.
+- `starlark-library/` — saved scripts, `<name>/meta.json` plus immutable `v<N>.star` versions. Durable and meant to be committed; never edit or delete a published version (see `starlark-library/README.md`).
 
 For local service development:
 
@@ -144,19 +149,27 @@ uv run starlark-service          # or: uv run uvicorn starlark_service.app:app -
 uv run pytest                    # service tests
 ```
 
+Settings come from environment variables or `starlark-service/.env`; see `starlark_service/config.py` and `CLAUDE.md` for the full list (`STARLARK_BUILD_TIMEOUT_S`, `STARLARK_BUILD_MEMORY_MB`, `STARLARK_CACHE_MAX_BYTES`, `STARLARK_LIBRARY_DIR`, `STARLARK_PREVIEW_TIMEOUT_S`, ...). Keep `STARLARK_BUILD_MEMORY_MB` at 1024 or above: the Rust starlark runtime reserves about 1GB up front and every build aborts under a smaller cap.
+
 Useful endpoints:
 
 - `GET http://localhost:7090/health`
 - `POST http://localhost:7090/build` — `{"source": "...", "entry": "build", "props": {}, "root_size": [w, h, l]}`
 - `GET http://localhost:7090/artifacts/{artifact_id}` and `.../nbt`
-- `GET http://localhost:7090/docs/catalog` — the script API reference
+- `GET http://localhost:7090/artifacts/{artifact_id}/images/{view}?max_px=...` — `view` is `sheet`, `iso`, `top`, `north`, `south`, `east`, `west`, `floors` (a plan of each detected storey), or `section`; add one of `cut_x`/`cut_y`/`cut_z` for a cutaway (`sheet`, `iso`, `section` only)
+- `GET http://localhost:7090/docs/catalog?topic=quickstart` — the script API reference; topics include `quickstart`, `full`, `dsl`, `composition`, `errors`, `components`, `math`, `library`, and one per lib module, or pass `component=Name`
 - `GET http://localhost:7090/examples` and `GET http://localhost:7090/examples/{name}`
+- `POST http://localhost:7090/library` — save a script by `source` or `artifact_id` (with `name`, `title`, `description`, optional `tags`, `author`, `notes`, `parent`); it is rebuilt first and rejected if it fails
+- `GET http://localhost:7090/library/search?q=&tag=&author=&max_x=&max_y=&max_z=&limit=`
+- `GET http://localhost:7090/library/{name}` and `GET http://localhost:7090/library/{name}/source?version=`
 
 MCP tools added for this flow:
 
-- `build_starlark_structure` — compile source; success returns an artifact id, failure returns diagnostics to fix and resubmit
-- `place_starlark_structure` — place a built artifact (applies the artifact's `y_offset` automatically)
+- `build_starlark_structure` — compile source; success returns an artifact id (with `include_preview`, a small iso render too), failure returns numbered diagnostics to fix and resubmit
+- `get_starlark_preview` — preview sheet or single view of a built artifact; `cut_x`/`cut_y`/`cut_z` and `view="floors"` show interiors
+- `place_starlark_structure` — place a built artifact (applies the artifact's `y_offset` automatically; supports `dry_run` and undo like other NBT placements)
 - `get_starlark_docs`, `list_starlark_examples`, `get_starlark_example`
+- `save_starlark_script`, `search_starlark_library`, `get_starlark_script` — the shared script library
 
 ## Rail planning debug loop
 
