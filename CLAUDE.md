@@ -10,6 +10,7 @@ This is a Minecraft 1.21.7 Fabric mod combined with a Python Model Context Proto
 - Java Fabric mod with Javalin REST API server
 - Python MCP server with stdio and SSE transport support
 - PostgreSQL database for persistent build task management
+- In-memory area locks (reservations) so several MCP conversations can build on one server
 - Optional Python schematic catalog service on port 7080
 - Optional Elasticsearch-backed schematic search index
 - Optional Python Starlark build service on port 7090 (starlark-to-nbt and nbt-image-gen vendored as git submodules at `starlark-service/starlark-to-nbt` and `starlark-service/nbt-image-gen`; run `git submodule update --init` after cloning)
@@ -128,6 +129,9 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 **Shared helpers:**
 - `WorldResolver.resolveWorldKey(String)` - single place that maps world identifier strings to registry keys (null/blank → overworld, malformed → null; callers treat null as "unknown world" and return 400)
 - `OperationResult` - common `success()`/`error()` interface implemented by all core result records, used by `TaskExecutor`'s generic dispatch helpers
+- `PlacementBounds` - conservative bounds of a direct write (including stair clearance, rail supports, rotated NBT) used for area-lock checks
+- `GuardedPlacement` - submits a placement to the server thread through `AreaLockService.execute()` so the lock check and the write happen together
+- `StructurePlacementEffect` - small smoke-particle burst emitted after NBT placement/restore
 
 **Key Endpoints:**
 - `PlayersEndpoint` - Query online players with positions/rotations
@@ -138,7 +142,9 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 - `PrefabEndpoint` - Place prefab structures: doors, stairs, windows, torches, signs, ladders (core logic in `PrefabEndpointCore`)
 - `NBTStructureEndpoint` - Place NBT data structures; snapshots the target cuboid before writing (undo) and supports `dry_run` overwrite reports
 - `RainFireEndpoint` - Rain fire effect over a radius
-- `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, undo, clone, translate, preview, rail planning, and location query routes
+- `AreaLockEndpoint` - Acquire/renew/resize/release/list area reservations (`/api/area-locks`)
+- `SiteSurveyEndpoint` - Read-only footprint assessment (`POST /api/world/blocks/survey`): walking-plane heights, slope, water/lava/vegetation coverage, cut/fill grading suggestion, overlapping reservations and builds (logic in `survey/`)
+- `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, undo/redo, clone, translate, preview, rail planning, and location query routes
 - `TaskExecutor` - Executes queued build tasks on the Minecraft server thread; generic `executeAsync`/`dispatch` helpers parse task data and route it to the endpoint cores
 - `RailRenderInspectionService` - Dry-run rail placement inspection used by the audit route
 
@@ -154,9 +160,20 @@ Top-down terrain maps for LLM site reading (`POST /api/world/blocks/heightmap/ma
 
 - `SnapshotStore` - gzipped structure NBT per build id in `BUILD_SNAPSHOT_DIR` (default `<run dir>/build-snapshots`), capped by `BUILD_SNAPSHOT_MAX_VOLUME` voxels (default 2,000,000)
 - `RegionSnapshot` - server-thread capture/restore and the dry-run template-vs-world scan
+- `SnapshotRestorer` - reversible restore: persists the current region as the opposite snapshot and a pending marker before writing, so an interrupted restore blocks further undo/redo until inspected; runs on the server thread inside the area lock
 - `OverwriteTally` - pure counting/categorization for dry-run reports
 
-`POST /api/builds/{id}/undo` restores the snapshot once (build becomes `REVERTED`); later overlapping builds return 409 `undo_conflict` unless `force`. See `docs/undo-and-dry-run.md`.
+`POST /api/builds/{id}/undo` restores the pre-placement snapshot (build becomes `REVERTED`) and saves the current region so `POST /api/builds/{id}/redo` can put it back (build becomes `COMPLETED` again). Undo and redo alternate; a duplicate returns 409, and later unreverted overlapping builds return 409 `undo_conflict`/`redo_conflict` unless `force`. `replay_build` is not redo. See `docs/undo-and-dry-run.md`.
+
+#### Area Locks
+**Location**: `src/main/java/ca/waltermiller/mcpapi/arealock/`
+
+`AreaLockService` holds reservations in server memory (no PostgreSQL; lost on server restart) with an idle timeout of `AREA_LOCK_IDLE_SECONDS` (default 900), renewed by successful placements and explicit `PATCH`. `AreaBounds` is the inclusive cuboid. Writes overlapping a reservation need its token in the `X-Area-Lock-Id` header (MCP: top-level `lock_id` on the tools in `tools/area_locks.py` `LOCK_WRITE_TOOLS`), and a token-bearing write must fit inside its cuboid. Queued build tasks are checked when each task writes; a lock failure stops the build as `FAILED`. 409 error codes: `area_locked`, `outside_area_lock`, `invalid_area_lock`. See `docs/area-locks.md`.
+
+#### Site Survey
+**Location**: `src/main/java/ca/waltermiller/mcpapi/survey/`
+
+`SiteSurvey` (pure measurement), `WorldSurveyTerrain` (column scans from `WORLD_SURFACE`, only already-loaded chunks, max 10,000 columns) and `SurveyOccupancy` (overlapping reservations and recorded builds). Never modifies blocks or renews locks. See `docs/site-survey.md`.
 
 #### Build Task System
 **Location**: `src/main/java/ca/waltermiller/mcpapi/buildtask/`
@@ -166,7 +183,7 @@ A comprehensive system for queuing, persisting, and executing complex build oper
 **Architecture Pattern**: Repository-Service-Executor
 - **Repositories** (`repository/`): PostgreSQL data access with implementations for Build, Task, and RailPlanningJob entities
 - **Services** (`service/`): Business logic for task validation, location queries, build orchestration, and rail planning
-- **Models** (`model/`): Data classes (Build, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus incl. `REVERTED`, RailPlanningJob, RailPlanningStatus)
+- **Models** (`model/`): Data classes (Build, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus incl. `REVERTED`, RailPlanningJob, RailPlanningStatus) plus `TaskDataTranslator`, which shifts task_data coordinates for `translate`
 
 **Task Types:**
 - `BLOCK_SET` - Place a 3D array of blocks
@@ -214,11 +231,13 @@ DB_PASSWORD=your_password
 #### Server Core
 - **`server.py`**: `MinecraftMCPServer` class orchestrates tool registration and routing
 - **`__main__.py`**: Entry point supporting stdio and SSE transports
-- **`config.py`**: Loads configuration from `.env` file (BASE_URL defaults to `http://localhost:7070`)
+- **`config.py`**: Loads configuration from `mcp/.env` or the environment: `BASE_URL` (default `http://localhost:7070`), `SCHEMATIC_SERVICE_URL` (default `http://localhost:7080`), `STARLARK_SERVICE_URL` (default `http://localhost:7090`), `DEBUG`
 
 #### API Client
 - **`client/minecraft_api.py`**: `MinecraftAPIClient` - Async HTTP client using httpx for all Minecraft REST endpoints
 - **`client/schematic_service.py`**: `SchematicServiceClient` - Async HTTP client for the optional schematic catalog service
+- **`client/starlark_service.py`**: Async HTTP client for the optional Starlark build service
+- `MinecraftAPIClient.with_area_lock(lock_id)` returns a client that sends `X-Area-Lock-Id` on writes
 
 #### Tool System
 - **`handlers/`**: Tool handler functions organized by domain:
@@ -226,17 +245,24 @@ DB_PASSWORD=your_password
   - `blocks.py` - Block manipulation tools
   - `messages.py` - Messaging tools
   - `prefabs.py` - Prefab placement tools
-  - `builds.py` - Build task management tools (create builds, add tasks, execute, audit, undo, query by location, get status, rail planning)
-  - `system.py` - System tools
-  - `schematics.py` - Optional schematic search, metadata lookup, and NBT placement orchestration
+  - `builds.py` - Build task management tools (create builds, add tasks, execute, replay, audit, undo/redo, clone, translate, preview, query by location, get status, rail planning)
+  - `system.py` - System tools (connection test, teleport, coordinate conventions)
+  - `effects.py` - One-shot area effects (`rain_fire`)
+  - `area_locks.py` - `acquire_area_lock`, `update_area_lock`, `release_area_lock`, `list_area_locks`
+  - `survey.py` - `survey_site`
+  - `schematics.py` - Optional schematic search, tags, metadata lookup, preview images, and NBT placement orchestration
+  - `starlark.py` - Optional Starlark build/preview/place, docs, examples, and script library tools
 
 - **`tools/`**: Tool definitions and registry:
   - `registry.py` - Maps tool names to handler functions
   - `schemas.py` - Defines tool schemas for MCP discovery
+  - `area_locks.py` - Lock tool schemas, `LOCK_WRITE_TOOLS` (tools that accept a top-level `lock_id`) and the shared `lock_id` schema
 
 - **`utils/`**: Shared utilities:
   - `formatting.py` - Response formatting helpers
   - `helpers.py` - General helper utilities
+  - `starlark_diagnostics.py`, `starlark_models.py` - Starlark diagnostic formatting and structured result/placement models
+  - `survey_models.py` - Structured output model for `survey_site`
 
 ### Optional Schematic Service Architecture
 
@@ -251,12 +277,13 @@ This service is intentionally separate from the Minecraft mod. The Minecraft ser
 - `schematic-images/{schematic_id}/{iso,top,north,south,east,west}.png` - pre-rendered previews. This folder is raw render-tool output: about half of it (including renders up to 500+ MP) is for schematics that failed NBT conversion and are not in the catalog, so images are only ever served for catalogued, placeable ids. Orientation (verified against NBT): `top` has north up/east right; side views are elevations seen from that side (`south` = +Z face at rotation NONE); `iso` is viewed from the south-east.
 
 **Service modules:**
-- `app.py` - FastAPI routes for health, search, metadata, NBT download, preview images, and index rebuild
+- `app.py` - FastAPI routes for health, search, tags, metadata, NBT download, preview images, and index rebuild (factory `create_app(config)`)
 - `images.py` - Catalog-gated preview images: downscaled single views and a labelled 3x2 contact sheet (Pillow, LRU-cached)
 - `catalog.py` - Catalog normalization and metadata enrichment; restricts which meta.json fields are exposed publicly via `PUBLIC_META_KEYS`
 - `search.py` - Elasticsearch indexing/search plus local fallback search
 - `config.py` - Environment-driven paths and Elasticsearch URL
 - `main.py` - CLI entrypoint invoked by the `schematic-service` script
+- `scripts/detect_ground_level.py` - standalone `uv run` script that detects terrain-fill bottom layers in a schematic and patches them into its `meta.json` under `placement`
 
 **Configuration via environment variables (or `.env` in `schematic-service/`):**
 ```bash
@@ -272,11 +299,13 @@ SCHEMATIC_INDEX=minecraft_schematics
 - `GET /health`
 - `POST /index/rebuild`
 - `GET /schematics/search?q=...&limit=...&structure_type=...&style=...&size_category=...&has_interior=...&placeable=true&fallback=true`
+- `GET /schematics/tags?limit=20&placeable=true&fallback=true` - most common tags
 - `GET /schematics/{schematic_id}`
 - `GET /schematics/{schematic_id}/nbt`
 - `GET /schematics/{schematic_id}/images/{view}?max_px=...` - `view` is `sheet` or one of `iso/top/north/south/east/west`; PNG downscaled to `max_px` (64-1024; default 768, or 256 per sheet tile); 404 for ids not in the catalog
 
 **MCP tools using this service:**
+- `get_schematic_tags`
 - `search_schematics`
 - `get_schematic`
 - `get_schematic_image` - preview sheet or single view as MCP image content (`search_schematics` can also attach small iso thumbnails via `include_thumbnails`)
@@ -337,7 +366,7 @@ STARLARK_PREVIEW_TIMEOUT_S=30            # wall-clock cap for rendering one arti
 - `GET /library/{name}` (meta plus computed `used_by` reverse dependencies) and `GET /library/{name}/source?version=` (version in `X-Library-Version` header)
 
 **MCP tools using this service:**
-- `build_starlark_structure` — compile source; failure text lists numbered diagnostics for the edit loop; `include_preview` attaches a small iso render (best-effort)
+- `build_starlark_structure` — compile source; failure text lists numbered diagnostics for the edit loop; `include_preview` attaches a small iso render (best-effort); an optional `placement` object compiles and places in one call
 - `get_starlark_preview` — preview sheet or single view of a compiled artifact as MCP image content; `cut_x`/`cut_y`/`cut_z` and `view="floors"` show interiors
 - `place_starlark_structure` — fetch artifact NBT, apply its `y_offset`, place via the mod's NBT placement endpoint
 - `get_starlark_docs`
@@ -357,7 +386,8 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 7. **World Resolution**: Never inline `RegistryKey.of(RegistryKeys.WORLD, ...)` — use `WorldResolver.resolveWorldKey()`
 8. **MCP Tool Design**: Each tool handler returns `CallToolResult` with formatted text content
 9. **Optional Services**: Schematic service, Elasticsearch, and the Starlark build service must fail gracefully from MCP and must not affect Minecraft startup
-10. **Starlark Build Loop**: `build_starlark_structure` failures return HTTP 200 with structured diagnostics (not exceptions) so the MCP user can edit and resubmit; untrusted script execution stays in the service's sandboxed subprocess
+10. **Area Locks**: New write paths must compute conservative bounds (`PlacementBounds`) and go through `AreaLockService` (e.g. `GuardedPlacement`) on the server thread; new MCP write tools must be added to `LOCK_WRITE_TOOLS`
+11. **Starlark Build Loop**: `build_starlark_structure` failures return HTTP 200 with structured diagnostics (not exceptions) so the MCP user can edit and resubmit; untrusted script execution stays in the service's sandboxed subprocess
 
 ### Dependencies
 
@@ -367,11 +397,11 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - PostgreSQL JDBC 42.7.4 - Database driver
 - HikariCP 5.1.0 - Connection pooling
 - Fabric API 0.128.1+1.21.7 - Minecraft mod framework
-- Minecraft 1.21.7 with Yarn mappings
+- Minecraft 1.21.7 with Yarn mappings 1.21.7+build.8, Fabric Loader 0.16.14
 - JUnit 5, Mockito, AssertJ - Testing libraries
 
-**Python (pyproject.toml):**
-- mcp >= 1.11.0 - Model Context Protocol SDK
+**Python (`mcp/pyproject.toml`):** requires Python >= 3.12
+- mcp >= 1.20, < 2 - Model Context Protocol SDK
 - httpx >= 0.25.0 - Async HTTP client
 - python-dotenv >= 0.9.9 - Environment configuration
 - starlette >= 0.27.0 - ASGI framework for SSE
@@ -379,7 +409,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - debugpy >= 1.8.19 - Debugging support
 - requests >= 2.32.5 - Synchronous HTTP (used in some utilities)
 
-**Schematic Service (`schematic-service/pyproject.toml`):**
+**Schematic Service (`schematic-service/pyproject.toml`):** requires Python >= 3.12
 - fastapi >= 0.115.0 - HTTP API
 - httpx >= 0.27.0 - Elasticsearch HTTP client
 - pillow >= 10.1 - Preview image downscaling and contact sheets
@@ -408,12 +438,14 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 
 **Test Categories:**
 - Database layer tests: `DatabaseManagerTest`, `DatabaseConfigTest`, `DatabaseIntegrationTest` (integration gated behind `DB_TEST` env var)
-- Endpoint tests: `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `RailRenderInspectionServiceTest`, `EndpointRefactoringTest`
-- Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `TaskDataValidatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`
+- Endpoint tests: `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `RailRenderInspectionServiceTest`, `EndpointRefactoringTest`, `PlacementBoundsTest`, `GuardedPlacementTest`, `StructurePlacementEffectTest`
+- Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `BuildTaskTest`, `BoundingBoxTest`, `TaskDataValidatorTest`, `TaskDataTranslatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`
+- Area lock tests: `AreaLockServiceTest`, `AreaLockEndpointTest`
+- Site survey tests: `SiteSurveyTest`, `SiteSurveyEndpointTest`, `SurveyOccupancyTest`
 - Preview tests: `BlockGridTest`, `IsoRendererTest`, `PaletteTest`, `TerrainHeightmapGridAdapterTest`, `TerrainMapRendererTest`, `SurfaceCategoryTest`
-- Snapshot tests: `SnapshotStoreTest`, `OverwriteTallyTest`, `BuildUndoEndpointTest`
+- Snapshot tests: `SnapshotStoreTest`, `SnapshotRestorerTest`, `OverwriteTallyTest`, `BuildUndoEndpointTest`
 
-**Python Tests** (`mcp/`):
+**Python Tests** (`mcp/`, run with `uv run pytest`):
 - `test_backward_compatibility.py` - Backward compatibility tests
 - `test_stdio_transport.py` - Stdio transport tests
 - `test_debug_mode.py` - Debug mode tests
@@ -421,10 +453,16 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_schematic_tools.py` - Schematic MCP tool registration/config tests
 - `test_schematic_images.py` - `get_schematic_image` and search thumbnails
 - `test_starlark_tools.py` - Starlark MCP tool registration/config tests, `get_starlark_preview` and build thumbnails
-- `test_undo_dry_run.py` - `undo_build` and `dry_run` placement tools
+- `test_starlark_transport.py` - Structured Starlark results through MCP dispatch and real transport framing
+- `test_undo_dry_run.py` - `undo_build`/`redo_build` and `dry_run` placement tools
+- `test_area_locks.py` - Lock tools, `lock_id` forwarding (incl. multipart), concurrent calls
+- `test_survey_site.py` - `survey_site` handler
+- `test_preview_heightmap.py` - `preview_heightmap` image output
+- `test_teleport_player.py` - `teleport_player` handler
 - `test_terrain_map.py` - `map_terrain` images, summary text and errors
 
 **Schematic Service Tests** (`schematic-service/`):
+- `test_app.py` - FastAPI routes via `create_app`
 - `test_catalog.py` - Catalog normalization and metadata sanitization
 - `test_search.py` - Local fallback search behavior
 - `test_images.py` - Preview downscaling, contact sheet, catalog gating, and path validation (run with `uv run --with pytest python -m pytest`)
@@ -458,6 +496,8 @@ Minecraft uses a right-handed 3D coordinate system:
 - Optional schematic service runs on port 7080 when started
 - Optional Starlark build service runs on port 7090 when started; its artifact cache in `starlark-service-data/` is git-ignored and safe to delete (artifacts regenerate deterministically); its script library in `starlark-library/` is durable and meant to be committed
 - Database schema auto-creates on first server start
+- Design docs and OpenAPI contracts live in `docs/` (`area-locks.md`, `site-survey.md`, `undo-and-dry-run.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
+- Mod-side environment variables beyond the DB settings: `AREA_LOCK_IDLE_SECONDS`, `BUILD_SNAPSHOT_DIR`, `BUILD_SNAPSHOT_MAX_VOLUME`
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
 - Build tasks are executed asynchronously and can be queried by location for spatial awareness
 - Run Python commands from the relevant Python project with `uv run`
