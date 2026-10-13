@@ -15,6 +15,15 @@ copy_file() {
 # Refresh image-managed binaries on every start so image updates reach the volume.
 copy_file "$DIST_DIR/fabric-server-launch.jar" "$LIVE_DIR/fabric-server-launch.jar"
 
+# Migrate versioned jars from older images to the stable image-managed filename.
+# Leave other mods alone, and only remove old jars when the replacement exists.
+if [ -f "$DIST_DIR/mods/mcpapi.jar" ]; then
+    for old_mod in "$LIVE_DIR"/mods/mcpapi-*-fat-remapped.jar; do
+        [ -f "$old_mod" ] || continue
+        rm -f "$old_mod"
+    done
+fi
+
 for mod in "$DIST_DIR"/mods/*.jar; do
     [ -e "$mod" ] || continue
     copy_file "$mod" "$LIVE_DIR/mods/$(basename "$mod")"

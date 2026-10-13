@@ -59,6 +59,74 @@ First you'll need the postgres image up and running `docker compose up -d postgr
 
 After that the gradle runServer command worked for me. Kudos to the fabric devs.
 
+## Docker builds and x64 deployment
+
+Use `./gradlew dockerCompose` to rebuild and start the local stack. It runs
+`shadowJar -> remapJar -> prepareDocker` before `docker compose up -d --build`.
+`./gradlew dockerBuild` builds just the local Minecraft image. Local builds use
+the host architecture; deployment builds use Bake and default to `linux/amd64`.
+The Dockerfile copies only `build/docker/mcpapi.jar`, staged from the current
+remapped fat jar, so old jars in `build/libs` cannot enter the image.
+On startup, the entrypoint removes legacy `mcpapi-*-fat-remapped.jar` files from
+the persistent mods directory before installing the stable `mcpapi.jar`.
+The Minecraft image also requires the Fabric launcher/API jars in `mods/`,
+`server.properties`, and an accepted `eula.txt`.
+
+For deployment, start Docker and check your builders:
+
+```bash
+docker buildx ls
+# Only if the multiarch builder does not already exist:
+docker buildx create --name multiarch --driver docker-container --use
+```
+
+For each build/push session, select and start that builder, then run Gradle:
+
+```bash
+docker buildx use multiarch
+docker buildx inspect --bootstrap multiarch
+docker login ghcr.io  # if not already authenticated
+./gradlew dockerPush
+```
+
+`dockerPush` prepares the jar and runs `docker buildx bake -f docker-bake.hcl --push`
+for Minecraft, MCP, and nginx, tagged under `ghcr.io/wmill` with `latest`.
+It pushes directly without loading the finished images into the local image store.
+`./gradlew dockerBake` builds the same targets into the builder cache without
+pushing. Optional schematic/Starlark services are not in the Bake default group.
+The explicit `-f` avoids implicitly merging Compose configuration into Bake.
+
+Overrides and the equivalent manual workflow (run preparation every time):
+
+```bash
+REGISTRY=ghcr.io/wmill TAG=release-1 ./gradlew dockerPush
+PLATFORMS=linux/amd64,linux/arm64 ./gradlew dockerPush
+
+./gradlew prepareDocker
+docker buildx bake -f docker-bake.hcl --push
+```
+
+On the x64 server, from its configured Compose directory:
+
+```bash
+docker compose pull minecraft mcp nginx
+docker compose up -d --no-build minecraft mcp nginx
+```
+
+Deleting local application images does not require recreating the builder.
+BuildKit also keeps a separate build cache; inspect and trim it when disk space
+is tight (pruning makes later builds slower):
+
+```bash
+docker system df
+docker buildx du --builder multiarch
+docker buildx prune --builder multiarch --max-used-space 5gb
+```
+
+The prune command prompts before removing cache and keeps the builder available.
+See Docker's [container builder documentation](https://docs.docker.com/build/builders/drivers/docker-container/)
+and [cache pruning options](https://docs.docker.com/reference/cli/docker/buildx/prune/).
+
 ## Postgres dev snapshots
 
 For quick local database snapshots, use the helper scripts against the Docker Compose `postgres` service:

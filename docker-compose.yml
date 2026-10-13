@@ -23,9 +23,6 @@ services:
     build:
       context: .
       dockerfile: nginx.Dockerfile
-      platforms:
-        - linux/amd64
-        - linux/arm64
     image: ghcr.io/wmill/minecraft-api-nginx:latest  # Add this
     container_name: minecraft-nginx-gateway
     environment:
@@ -59,9 +56,6 @@ services:
     build:
       context: .
       dockerfile: minecraft.Dockerfile
-      platforms:
-        - linux/amd64
-        - linux/arm64
     image: ghcr.io/wmill/minecraft-api:latest  # Add this
     container_name: minecraft-fabric-server
     ports:
@@ -99,9 +93,6 @@ services:
     build:
       context: ./mcp
       dockerfile: Dockerfile
-      platforms:
-        - linux/amd64
-        - linux/arm64
     image: ghcr.io/wmill/minecraft-mcp:latest
     container_name: minecraft-mcp-server
     ports:

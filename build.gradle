@@ -140,18 +140,23 @@ publishing {
 
 // Docker tasks using Gradle exec
 def dockerImageName = "minecraft-fabric-server"
-// def dockerImageTag = "${dockerImageName}:${project.version}"
-// def dockerImageLatest = "${dockerImageName}:latest"
 def dockerFileName = "minecraft.Dockerfile"
+
+// Stage exactly the current remapped fat jar; never glob old versions in build/libs.
+def prepareDocker = tasks.register('prepareDocker', Sync) {
+	group = 'docker'
+	description = 'Build and stage the remapped fat jar for Docker and Bake'
+	from(tasks.named('remapJar').flatMap { it.archiveFile })
+	into(layout.buildDirectory.dir('docker'))
+	rename { 'mcpapi.jar' }
+}
 
 task dockerBuild(type: Exec) {
 	group = 'docker'
 	description = 'Build Docker image'
-	dependsOn remapJar
+	dependsOn prepareDocker
 	
 	commandLine 'docker', 'build', 
-		'--build-arg', "JAR_FILE=${remapJar.archiveFileName.get()}",
-		'--build-arg', "VERSION=${project.version}",
 		'-f', dockerFileName,
 		'-t', dockerImageName,
 		'.'
@@ -163,7 +168,6 @@ task dockerBuild(type: Exec) {
 	doLast {
 		println "Docker image built successfully:"
 		println "  ${dockerImageName}"
-		// println "  ${dockerImageLatest}"
 	}
 }
 
@@ -220,30 +224,30 @@ task dockerLogs(type: Exec) {
 	commandLine 'docker', 'logs', '-f', 'minecraft-fabric-server'
 }
 
+task dockerBake(type: Exec) {
+	group = 'docker'
+	description = 'Build deployment images with Bake (linux/amd64 by default; cache only)'
+	dependsOn prepareDocker
+	commandLine 'docker', 'buildx', 'bake', '-f', 'docker-bake.hcl'
+}
+
 task dockerPush(type: Exec) {
 	group = 'docker'
-	description = 'Push Docker image to registry'
-	dependsOn dockerBuild
-	
-	commandLine 'docker', 'push', dockerImageName
-	
-	doLast {
-		exec {
-			commandLine 'docker', 'push', dockerImageName
-		}
-		println "Docker images pushed to registry"
-	}
+	description = 'Build and push deployment images with Bake (linux/amd64 by default)'
+	dependsOn prepareDocker
+	commandLine 'docker', 'buildx', 'bake', '-f', 'docker-bake.hcl', '--push'
 }
 
 task dockerCompose(type: Exec) {
 	group = 'docker'
-	description = 'Start services using docker-compose'
+	description = 'Build the current mod and local images, then start Compose services'
+	dependsOn prepareDocker
 	
-	commandLine 'docker', 'compose', 'up', '-d'
+	commandLine 'docker', 'compose', 'up', '-d', '--build'
 	
 	doLast {
 		println "Docker Compose services started"
-		println "Use 'docker-compose logs -f' to view logs"
-		println "Use 'docker-compose down' to stop services"
+		println "Use 'docker compose logs -f' to view logs"
+		println "Use 'docker compose down' to stop services"
 	}
 }

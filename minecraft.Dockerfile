@@ -16,11 +16,8 @@ RUN mkdir -p /opt/minecraft-dist/mods /minecraft/logs /minecraft/world
 # Copy the Fabric server launcher from mods directory
 COPY mods/fabric-server-launch.jar /opt/minecraft-dist/fabric-server-launch.jar
 
-# Copy your mod jar file (remapped only)
-# ARG JAR_FILE
-# RUN test -n "${JAR_FILE}" || (echo "JAR_FILE build arg is required (e.g., mcpapi-1.0.0-fat-remapped.jar)" && exit 1)
-# COPY build/libs/${JAR_FILE} /opt/minecraft-dist/mods/
-COPY build/libs/mcpapi-*-remapped.jar /opt/minecraft-dist/mods/
+# Staged by ./gradlew prepareDocker from remapJar (including shadow dependencies).
+COPY build/docker/mcpapi.jar /opt/minecraft-dist/mods/mcpapi.jar
 
 # Copy Fabric API and other mods from mods directory (excluding server launcher)
 COPY mods/fabric-api-*.jar /opt/minecraft-dist/mods/
