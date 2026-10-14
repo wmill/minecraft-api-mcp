@@ -148,6 +148,22 @@ The local data lives under `schematic-service-data/` and is intentionally ignore
 - `schematic-service-data/schematic_catalog_gemma3.json` - primary AI-generated catalog
 - `schematic-service-data/Schematics-nbt/{schematic_id}.nbt` - converted vanilla NBT files
 - `schematic-service-data/schematic-images/{schematic_id}/meta.json` - image/conversion metadata used for enrichment
+- `schematic-service-data/schematic-images/{schematic_id}/*.png` - pre-rendered previews
+
+Keep `schematic-images/` as a real directory inside the data directory so the
+whole dataset can be deployed with `rsync -a schematic-service-data/ user@host:/path/to/schematic-service-data/`.
+Compose mounts this directory without requiring the image-generation repository.
+To replace a legacy `schematic-images` symlink with verified copies, run:
+
+```bash
+cd schematic-service
+uv run python scripts/copy_schematic_images.py
+```
+
+The script copies image directories (including metadata) only for IDs with
+matching `Schematics-nbt/*.nbt` files, reports missing images, and leaves the
+source files untouched. For a new dataset without a symlink, pass
+`--source /path/to/nbt-out`. It refuses to overwrite an existing real image directory.
 
 Start the optional stack with:
 

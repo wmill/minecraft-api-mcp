@@ -274,7 +274,7 @@ This service is intentionally separate from the Minecraft mod. The Minecraft ser
 - `schematic_catalog_gemma3.json` - primary AI-generated searchable catalog
 - `Schematics-nbt/{schematic_id}.nbt` - converted vanilla NBT files that can be placed
 - `schematic-images/{schematic_id}/meta.json` - conversion/image metadata used for enrichment
-- `schematic-images/{schematic_id}/{iso,top,north,south,east,west}.png` - pre-rendered previews. This folder is raw render-tool output: about half of it (including renders up to 500+ MP) is for schematics that failed NBT conversion and are not in the catalog, so images are only ever served for catalogued, placeable ids. Orientation (verified against NBT): `top` has north up/east right; side views are elevations seen from that side (`south` = +Z face at rotation NONE); `iso` is viewed from the south-east.
+- `schematic-images/{schematic_id}/{iso,top,north,south,east,west}.png` - pre-rendered previews copied locally for IDs with matching NBT files; no external symlink or mount is required. Use `scripts/copy_schematic_images.py` from `schematic-service/` to materialize a legacy symlink or copy from `--source`. Images are only served for catalogued, placeable IDs. Orientation (verified against NBT): `top` has north up/east right; side views are elevations seen from that side (`south` = +Z face at rotation NONE); `iso` is viewed from the south-east.
 
 **Service modules:**
 - `app.py` - FastAPI routes for health, search, tags, metadata, NBT download, preview images, and index rebuild (factory `create_app(config)`)

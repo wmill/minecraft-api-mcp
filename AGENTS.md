@@ -82,7 +82,7 @@
 - Optional MCP service URLs are `SCHEMATIC_SERVICE_URL` (default `http://localhost:7080`) and `STARLARK_SERVICE_URL` (default `http://localhost:7090`).
 - The schematic service uses `SCHEMATIC_DATA_DIR` and `ELASTICSEARCH_URL`; the Starlark service uses `STARLARK_TOOL_DIR`, `STARLARK_CACHE_DIR`, and `STARLARK_LIBRARY_DIR`, with resource-limit settings prefixed `STARLARK_`.
 - `AREA_LOCK_IDLE_SECONDS` defaults to 900. `BUILD_SNAPSHOT_DIR` defaults to `build-snapshots` under the server run directory; `BUILD_SNAPSHOT_MAX_VOLUME` defaults to 2,000,000 voxels.
-- Compose mounts `starlark-library/` read/write separately from the artifact cache. Its schematic profile also expects `../tools/nbt-image-classification/nbt-out` for image metadata; check that local data is present before relying on catalog results.
+- Compose mounts `starlark-library/` read/write separately from the artifact cache. Its schematic profile mounts the self-contained `schematic-service-data/` directory, including copied images and metadata in `schematic-images/` for IDs with matching NBT files.
 - Accept the Minecraft EULA before running a server (`cp eula.txt.example eula.txt`, then set `eula=true`).
 - Use `server.properties.example` as a baseline for local server configuration.
 
