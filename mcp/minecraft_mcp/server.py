@@ -28,10 +28,13 @@ from mcp.types import (
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 
 from .client.minecraft_api import MinecraftAPIClient
+from .config import load_config
 from .tools.schemas import TOOL_SCHEMAS
 from .tools.area_locks import LOCK_WRITE_TOOLS
 from .tools.registry import get_handler
 from .utils.helpers import safe_url, coordinate_info_blurb
+
+RAIL_TOOLS = frozenset({"plan_rail_route", "get_rail_plan_status"})
 
 
 class MinecraftMCPServer:
@@ -49,6 +52,12 @@ class MinecraftMCPServer:
             api_base: Base URL for the Minecraft API
         """
         self.api_base = api_base
+        enable_rail_tools = load_config().enable_rail_tools
+        self.tool_schemas = [
+            tool for tool in TOOL_SCHEMAS
+            if enable_rail_tools or tool.name not in RAIL_TOOLS
+        ]
+        self.enabled_tool_names = {tool.name for tool in self.tool_schemas}
         self.server = Server("minecraft-api")
         self.api_client = MinecraftAPIClient(api_base)
         print(f"Initialized server with API base: {safe_url(api_base)}", file=sys.stderr)
@@ -66,7 +75,7 @@ class MinecraftMCPServer:
         async def list_tools():
             """List available tools for Minecraft API interaction."""
             print("list_tools called", file=sys.stderr)
-            return TOOL_SCHEMAS
+            return self.tool_schemas
         
         @self.server.call_tool()
         async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
@@ -87,7 +96,7 @@ class MinecraftMCPServer:
             
             try:
                 # Get the handler for this tool
-                handler = get_handler(name)
+                handler = get_handler(name) if name in self.enabled_tool_names else None
                 
                 if handler is None:
                     raise ValueError(f"Unknown tool: {name}")

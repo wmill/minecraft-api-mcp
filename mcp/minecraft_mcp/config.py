@@ -18,6 +18,7 @@ class ServerConfig:
     starlark_service_url: str
     debug: bool
     script_dir: str
+    enable_rail_tools: bool = False
 
 
 def load_config() -> ServerConfig:
@@ -59,7 +60,9 @@ def load_config() -> ServerConfig:
         schematic_service_url=schematic_service_url,
         starlark_service_url=starlark_service_url,
         debug=debug,
-        script_dir=script_dir
+        script_dir=script_dir,
+        enable_rail_tools=(config.get("ENABLE_RAIL_TOOLS") or "").strip().lower()
+        in {"true", "1", "yes", "on"},
     )
 
 

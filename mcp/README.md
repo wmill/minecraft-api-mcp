@@ -98,6 +98,14 @@ uv sync
 BASE_URL=http://localhost:7070
 ```
 
+Rail tools (`plan_rail_route` and `get_rail_plan_status`) are disabled by default.
+Set `ENABLE_RAIL_TOOLS=true` in the process environment or `mcp/.env` and restart
+the MCP server to enable them. Values `1`, `yes`, and `on` also enable the flag
+(case-insensitive); all other values disable it. Process environment variables
+override `mcp/.env`. Disabled tools are hidden from tool discovery and reject calls.
+For Docker Compose, set `ENABLE_RAIL_TOOLS=true` in the shell or root `.env` and
+recreate the MCP service. This flag only controls MCP tools, not the REST API.
+
 ## Transport Modes
 
 The MCP server supports two transport protocols:

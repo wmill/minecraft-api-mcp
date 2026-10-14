@@ -99,6 +99,7 @@ services:
       - "3737:3737"
     environment:
       - BASE_URL=http://minecraft:7070
+      - ENABLE_RAIL_TOOLS=${ENABLE_RAIL_TOOLS:-false}
       - STARLARK_SERVICE_URL=http://starlark-service:7090
     depends_on:
       - minecraft
