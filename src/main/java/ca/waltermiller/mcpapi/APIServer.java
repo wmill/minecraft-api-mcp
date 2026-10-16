@@ -20,6 +20,7 @@ import ca.waltermiller.mcpapi.endpoints.PlayersEndpoint;
 import ca.waltermiller.mcpapi.endpoints.PrefabEndpoint;
 import ca.waltermiller.mcpapi.endpoints.RainFireEndpoint;
 import ca.waltermiller.mcpapi.endpoints.TaskExecutor;
+import ca.waltermiller.mcpapi.endpoints.TerrainSmoothEndpoint;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import ca.waltermiller.mcpapi.endpoints.AreaLockEndpoint;
 import ca.waltermiller.mcpapi.snapshot.SnapshotStore;
@@ -74,10 +75,11 @@ public class APIServer {
         NBTStructureEndpoint nbtEndpoint = new NBTStructureEndpoint(app, server, logger, locks, surveyOccupancy, snapshots);
         new PrefabEndpoint(app, server, logger, locks);
         new RainFireEndpoint(app, server, logger, locks);
+        TerrainSmoothEndpoint terrainEndpoint = new TerrainSmoothEndpoint(app, server, logger, locks, surveyOccupancy, snapshots);
 
         // Initialize build task management system
         try {
-            initializeBuildTaskSystem(app, server, logger, nbtEndpoint, locks, surveyOccupancy, snapshots);
+            initializeBuildTaskSystem(app, server, logger, nbtEndpoint, terrainEndpoint, locks, surveyOccupancy, snapshots);
         } catch (SQLException | RuntimeException e) {
             logger.error("Failed to initialize build task system", e);
             // Continue without build task system if database is not available
@@ -86,7 +88,8 @@ public class APIServer {
     }
     
     private static void initializeBuildTaskSystem(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
-                                                   NBTStructureEndpoint nbtEndpoint, AreaLockService locks,
+                                                   NBTStructureEndpoint nbtEndpoint, TerrainSmoothEndpoint terrainEndpoint,
+                                                   AreaLockService locks,
                                                    ca.waltermiller.mcpapi.survey.SurveyOccupancy surveyOccupancy,
                                                    SnapshotStore snapshots) throws SQLException {
         logger.info("Initializing build task management system...");
@@ -111,6 +114,7 @@ public class APIServer {
         
         // Wire build service into NBT endpoint for spatial record-keeping
         nbtEndpoint.setBuildService(buildService);
+        terrainEndpoint.setBuildService(buildService);
         surveyOccupancy.setBuildRepository(buildRepository);
 
         // Create and register build task endpoint

@@ -41,7 +41,7 @@ public class TaskDataValidator {
             case PREFAB_SIGN -> validateSignData(taskData);
             case PREFAB_LADDER -> validateLadderData(taskData);
             case RAIL_SURFACE_SEGMENT, RAIL_BRIDGE_SEGMENT, RAIL_TUNNEL_SEGMENT -> validateRailSegmentData(taskData);
-            case NBT_STRUCTURE -> ValidationResult.success();
+            case NBT_STRUCTURE, TERRAIN_SMOOTH -> ValidationResult.success();
             default -> ValidationResult.failure("Unknown task type: " + taskType);
         };
     }

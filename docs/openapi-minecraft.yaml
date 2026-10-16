@@ -692,6 +692,58 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
+  /api/world/terrain/smooth:
+    parameters:
+      - $ref: "#/components/parameters/AreaLockHeader"
+    post:
+      tags: [blocks]
+      summary: Smooth or pad a region's natural ground
+      operationId: smoothTerrain
+      description: >-
+        Reshapes ground (below vegetation) with a gaussian, median or bilateral filter, or a
+        flat pad that eases into the surroundings. Clears vegetation in the region. Buildings,
+        paths, farmland, water, lava and ice are masked and kept, together with their 8
+        neighbours. Inclusive corners, maximum 10000 columns, chunks must be loaded. With
+        dry_run nothing is written and before/after relief maps plus a change map are
+        returned as base64 PNGs. A write re-checks the sampled ground inside the area lock,
+        snapshots the write bounds and records a TERRAIN_SMOOTH build that undo/redo accept.
+        See docs/terrain-smoothing.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TerrainSmoothRequest"
+      responses:
+        "200":
+          description: Plan (dry run) or applied result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerrainSmoothResponse"
+        "400":
+          description: Invalid request, unknown world, or unloaded chunks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerrainSmoothError"
+        "409":
+          description: >-
+            Area lock conflict (AreaLockError codes), or terrain_changed when the ground
+            changed between planning and writing; nothing is written in either case
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AreaLockError"
+                  - $ref: "#/components/schemas/TerrainSmoothError"
+        "504":
+          description: Timed out waiting for the server thread
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerrainSmoothError"
+
   # ── Builds ───────────────────────────────────────────────────────────────────
 
   /api/builds:
@@ -1230,6 +1282,115 @@ components:
               x: {type: integer}
               z: {type: integer}
 
+    TerrainSmoothRequest:
+      type: object
+      additionalProperties: false
+      required: [x1, z1, x2, z2, method]
+      properties:
+        world: {type: string, default: "minecraft:overworld"}
+        x1: {type: integer}
+        z1: {type: integer}
+        x2: {type: integer}
+        z2: {type: integer}
+        method: {type: string, enum: [gaussian, median, bilateral, pad]}
+        sigma: {type: number, minimum: 0.5, maximum: 5, default: 2, description: "gaussian/bilateral spatial spread (blocks)"}
+        sigma_range: {type: number, minimum: 0.25, maximum: 32, default: 2, description: "bilateral height tolerance (blocks)"}
+        radius: {type: integer, minimum: 1, maximum: 8, default: 2, description: "median window radius"}
+        iterations: {type: integer, minimum: 1, maximum: 5, default: 1, description: "filter passes"}
+        pad:
+          type: object
+          description: Required with method=pad; footprint must lie inside the region
+          additionalProperties: false
+          required: [y, x1, z1, x2, z2]
+          properties:
+            y: {type: integer, minimum: -63, maximum: 320, description: "standing Y (first air above the new ground)"}
+            x1: {type: integer}
+            z1: {type: integer}
+            x2: {type: integer}
+            z2: {type: integer}
+            blend: {type: integer, minimum: 0, maximum: 32, default: 6}
+        strength: {type: number, exclusiveMinimum: 0, maximum: 1, default: 1}
+        feather: {type: integer, minimum: 0, maximum: 32, description: "edge fade in blocks; default 3, or 0 for pad"}
+        max_change: {type: integer, minimum: 1, maximum: 64, default: 16}
+        dry_run: {type: boolean, default: false}
+        px_per_block: {type: integer, minimum: 1, maximum: 16}
+        contour_interval: {type: integer, minimum: 1, maximum: 100}
+
+    TerrainSmoothResponse:
+      type: object
+      required: [success, world, region, size, method, parameters, write_bounds, summary]
+      properties:
+        success: {const: true}
+        dry_run: {type: boolean}
+        world: {type: string}
+        region:
+          type: object
+          properties:
+            min_x: {type: integer}
+            min_z: {type: integer}
+            max_x: {type: integer}
+            max_z: {type: integer}
+        size:
+          type: object
+          properties:
+            x: {type: integer}
+            z: {type: integer}
+        method: {type: string}
+        parameters: {type: object, description: "Request smoothing parameters as recorded on the build"}
+        write_bounds: {$ref: "#/components/schemas/AreaBounds"}
+        summary:
+          type: object
+          properties:
+            columns: {type: integer}
+            changed_columns: {type: integer}
+            masked_columns: {type: integer}
+            masked_by_kind: {type: object, additionalProperties: {type: integer}, description: "built / fluid"}
+            protected_columns: {type: integer, description: "unchanged because next to a masked column"}
+            clamped_columns: {type: integer, description: "stopped short at max_change"}
+            cut_blocks: {type: integer}
+            fill_blocks: {type: integer}
+            max_lowered: {type: integer}
+            max_raised: {type: integer}
+            vegetation_columns: {type: integer}
+            pad_columns: {type: integer}
+            pad_columns_at_target: {type: integer}
+        ground_y:
+          type: object
+          description: Min/max standing Y of unmasked columns before and after
+        lock_check: {type: object, description: "dry run: {ok: true} or the AreaLockError fields with ok false"}
+        reservations: {$ref: "#/components/schemas/SurveyOverlaps"}
+        builds: {$ref: "#/components/schemas/SurveyOverlaps"}
+        undo_snapshot: {type: boolean, description: "dry run: whether applying would be undoable"}
+        px_per_block: {type: integer}
+        contour_interval: {type: integer}
+        grid_step: {type: integer}
+        labels: {type: boolean}
+        before_png: {type: string, contentEncoding: base64}
+        after_png: {type: string, contentEncoding: base64}
+        change_png: {type: string, contentEncoding: base64}
+        vegetation_blocks_cleared: {type: integer}
+        build_id: {type: string, format: uuid}
+        undo_available: {type: boolean}
+        undo_unavailable_reason:
+          type: string
+          enum: [snapshots_disabled, snapshot_unavailable, snapshot_too_large, build_not_recorded, snapshot_write_failed]
+
+    TerrainSmoothError:
+      type: object
+      required: [success, error]
+      properties:
+        success: {const: false}
+        code: {type: string, enum: [invalid_request, unloaded_chunks, terrain_changed, timeout]}
+        error: {type: string}
+        missing_chunks:
+          type: array
+          items:
+            type: object
+            required: [x, z]
+            properties:
+              x: {type: integer}
+              z: {type: integer}
+
     SurveyCoverage:
       type: object
       required: [columns, fraction]
@@ -1462,6 +1623,8 @@ components:
         - RAIL_SURFACE_SEGMENT
         - RAIL_BRIDGE_SEGMENT
         - RAIL_TUNNEL_SEGMENT
+        - NBT_STRUCTURE
+        - TERRAIN_SMOOTH
 
     HeightmapType:
       type: string

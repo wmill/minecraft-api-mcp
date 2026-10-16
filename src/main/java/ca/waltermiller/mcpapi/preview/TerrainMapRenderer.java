@@ -73,8 +73,17 @@ public final class TerrainMapRenderer {
 
     private TerrainMapRenderer() {}
 
-    /** Null fields pick automatic values; at least one layer should be requested. */
-    public record Options(Integer pxPerBlock, Integer contourInterval, boolean relief, boolean surface) {}
+    /**
+     * Null fields pick automatic values; at least one layer should be requested. A
+     * {@code rangeMinY}/{@code rangeMaxY} pair fixes the grey ramp and auto contour interval
+     * (widened to the data) so several maps of the same area compare directly.
+     */
+    public record Options(Integer pxPerBlock, Integer contourInterval, boolean relief, boolean surface,
+                          Integer rangeMinY, Integer rangeMaxY, String reliefTitle) {
+        public Options(Integer pxPerBlock, Integer contourInterval, boolean relief, boolean surface) {
+            this(pxPerBlock, contourInterval, relief, surface, null, null, null);
+        }
+    }
 
     /** Coverage maps category label to fraction of columns, largest first; empty without surface blocks. */
     public record Meta(int pxPerBlock, int contourInterval, int gridStep, int minY, int medianY, int maxY,
@@ -107,9 +116,12 @@ public final class TerrainMapRenderer {
         int maxY = sorted[sorted.length - 1];
         int medianY = sorted[sorted.length / 2];
 
+        int rampMin = options.rangeMinY() != null ? Math.min(minY, options.rangeMinY()) : minY;
+        int rampMax = options.rangeMaxY() != null ? Math.max(maxY, options.rangeMaxY()) : maxY;
+
         int px = options.pxPerBlock() != null ? options.pxPerBlock() : autoPxPerBlock(sizeX, sizeZ);
         int interval = options.contourInterval() != null
-            ? options.contourInterval() : autoContourInterval(minY, maxY);
+            ? options.contourInterval() : autoContourInterval(rampMin, rampMax);
         Layout layout = new Layout(originX, originZ, sizeX, sizeZ, px, gridStep(px));
         double[][] shade = hillshade(heights);
 
@@ -119,7 +131,9 @@ public final class TerrainMapRenderer {
         if (options.relief()) {
             Canvas canvas = new Canvas(layout);
             labels = canvas.textOk;
-            drawRelief(canvas, heights, categories, shade, minY, maxY, interval);
+            String title = options.reliefTitle() != null
+                ? options.reliefTitle() : "Relief: contours + spot heights (standing Y)";
+            drawRelief(canvas, heights, categories, shade, rampMin, rampMax, interval, title);
             relief = canvas.toPng();
         }
         Map<SurfaceCategory, Integer> counts = categories == null ? Map.of() : countCategories(categories);
@@ -289,7 +303,7 @@ public final class TerrainMapRenderer {
     // ---- relief layer ----
 
     private static void drawRelief(Canvas c, int[][] h, SurfaceCategory[][] categories, double[][] shade,
-                                   int minY, int maxY, int interval) {
+                                   int minY, int maxY, int interval, String title) {
         Layout l = c.layout;
         Graphics2D g = c.g;
         boolean anyWater = false;
@@ -331,8 +345,108 @@ public final class TerrainMapRenderer {
         drawGrid(c);
         List<Rectangle> occupied = drawSpotHeights(c, h);
         placeContourLabels(c, index, minor, occupied);
-        drawFrame(c, "Relief: contours + spot heights (standing Y)");
+        drawFrame(c, title);
         drawReliefKey(c, minY, maxY, interval, anyWater);
+    }
+
+    // ---- change layer ----
+
+    private static final int CUT_RGB = 0xC62828;
+    private static final int FILL_RGB = 0x1565C0;
+    private static final int UNCHANGED_RGB = 0xECECEA;
+    private static final int MASKED_RGB = 0x9E9E9E;
+
+    /** Change PNG plus the numbers a reader needs alongside it. */
+    public record DeltaResult(byte[] png, int maxLowered, int maxRaised, boolean labels) {}
+
+    /**
+     * Top-down map of a height change (new minus old): red where ground is lowered, blue
+     * where it is raised, deeper colour for bigger changes, with signed spot labels at
+     * grid-cell centres. Masked (never changed) columns are drawn grey and labelled "x".
+     *
+     * @param delta  delta[x][z] relative to the origin, rectangular
+     * @param masked same shape, or null
+     */
+    public static DeltaResult renderDelta(int[][] delta, boolean[][] masked, int originX, int originZ,
+                                          Integer pxPerBlock) throws IOException {
+        if (delta == null || delta.length == 0 || delta[0] == null || delta[0].length == 0) {
+            throw new IllegalArgumentException("Change map needs at least one column");
+        }
+        int sizeX = delta.length;
+        int sizeZ = delta[0].length;
+        int lowered = 0, raised = 0;
+        for (int[] column : delta) {
+            if (column == null || column.length != sizeZ) {
+                throw new IllegalArgumentException("Change map deltas must be rectangular");
+            }
+            for (int d : column) {
+                lowered = Math.max(lowered, -d);
+                raised = Math.max(raised, d);
+            }
+        }
+        int scaleMax = Math.max(1, Math.max(lowered, raised));
+        int px = pxPerBlock != null ? pxPerBlock : autoPxPerBlock(sizeX, sizeZ);
+        Canvas c = new Canvas(new Layout(originX, originZ, sizeX, sizeZ, px, gridStep(px)));
+        Layout l = c.layout;
+        Graphics2D g = c.g;
+        boolean anyMasked = false;
+        for (int x = 0; x < sizeX; x++) {
+            for (int z = 0; z < sizeZ; z++) {
+                boolean isMasked = masked != null && masked[x][z];
+                anyMasked |= isMasked;
+                g.setColor(new Color(isMasked ? MASKED_RGB : deltaRgb(delta[x][z], scaleMax)));
+                g.fillRect(l.mapX(x), l.mapY(z), l.px, l.px);
+            }
+        }
+        drawGrid(c);
+
+        int s = l.gridStep;
+        for (int wx = Math.floorDiv(l.originX, s) * s + s / 2; wx < l.originX + l.sizeX; wx += s) {
+            if (wx < l.originX) continue;
+            for (int wz = Math.floorDiv(l.originZ, s) * s + s / 2; wz < l.originZ + l.sizeZ; wz += s) {
+                if (wz < l.originZ) continue;
+                int x = wx - l.originX;
+                int z = wz - l.originZ;
+                int d = delta[x][z];
+                String text = masked != null && masked[x][z] ? "x" : d > 0 ? "+" + d : Integer.toString(d);
+                c.haloText(text, LABEL_FONT, l.mapX(x) + l.px / 2 - 4, l.mapY(z) + l.px / 2 + 4);
+            }
+        }
+        drawFrame(c, "Change: new minus old ground Y");
+
+        int x = l.panelX();
+        int y = drawNorthArrow(c, x, l.mapY(0)) + 18;
+        c.text("Change (blocks)", AXIS_FONT, x, y - 6);
+        int barH = KEY_BAR_HEIGHT;
+        for (int i = 0; i < barH; i++) {
+            double level = scaleMax - 2.0 * scaleMax * (i / (double) (barH - 1));
+            g.setColor(new Color(deltaRgb((int) Math.round(level), scaleMax)));
+            g.drawLine(x, y + i, x + 14, y + i);
+        }
+        g.setColor(INK);
+        g.setStroke(new BasicStroke(1f));
+        g.drawRect(x, y, 14, barH - 1);
+        c.text("+" + scaleMax, AXIS_FONT, x + 21, y + 8);
+        c.text("0", AXIS_FONT, x + 21, y + barH / 2 + 4);
+        c.text("-" + scaleMax, AXIS_FONT, x + 21, y + barH);
+        int ty = y + barH + 20;
+        c.text("blue = raised (fill)", LABEL_FONT, x, ty);
+        c.text("red = lowered (cut)", LABEL_FONT, x, ty += 14);
+        c.text("labels = change at dot", LABEL_FONT, x, ty += 14);
+        if (anyMasked) {
+            ty += 10;
+            g.setColor(new Color(MASKED_RGB));
+            g.fillRect(x, ty, 12, 12);
+            c.text("masked (x): kept", LABEL_FONT, x + 18, ty + 10);
+        }
+        return new DeltaResult(c.toPng(), lowered, raised, c.textOk);
+    }
+
+    static int deltaRgb(int d, int scaleMax) {
+        if (d == 0) return UNCHANGED_RGB;
+        // Even a 1-block change must stand out from unchanged ground.
+        double t = 0.3 + 0.7 * Math.min(1.0, Math.abs(d) / (double) scaleMax);
+        return blend(UNCHANGED_RGB, d < 0 ? CUT_RGB : FILL_RGB, t);
     }
 
     private static void contourEdge(Graphics2D g, int a, int b, int interval, int indexStep,

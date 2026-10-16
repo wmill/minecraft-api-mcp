@@ -8,7 +8,7 @@ registry for tool discovery and routing.
 from typing import Callable, Optional
 from mcp.types import CallToolResult
 
-from ..handlers import area_locks, world, blocks, messages, prefabs, builds, system, effects, schematics, starlark, survey
+from ..handlers import area_locks, world, blocks, messages, prefabs, builds, system, effects, schematics, starlark, survey, terrain
 
 
 # Tool handler type
@@ -37,6 +37,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "summarize_heightmap": blocks.handle_summarize_heightmap,
     "preview_heightmap": blocks.handle_preview_heightmap,
     "map_terrain": blocks.handle_map_terrain,
+    "smooth_terrain": terrain.handle_smooth_terrain,
     
     # Message tools
     "broadcast_message": messages.handle_broadcast_message,

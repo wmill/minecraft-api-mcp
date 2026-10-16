@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** A bounded, single construction burst. Call on the server thread after placement. */
-final class StructurePlacementEffect {
+public final class StructurePlacementEffect {
     private static final int MAX_POINTS = 32;
     private static final double EDGE_OFFSET = 0.15;
 
@@ -18,7 +18,7 @@ final class StructurePlacementEffect {
 
     record Point(double x, double y, double z) {}
 
-    static void emit(ServerWorld world, AreaBounds bounds) {
+    public static void emit(ServerWorld world, AreaBounds bounds) {
         for (Point point : particlePoints(bounds)) {
             world.spawnParticles(ParticleTypes.SMOKE, point.x(), point.y(), point.z(),
                 3, 0.1, 0.1, 0.1, 0.01);

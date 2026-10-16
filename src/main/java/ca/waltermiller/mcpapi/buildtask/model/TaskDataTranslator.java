@@ -55,6 +55,7 @@ public final class TaskDataTranslator {
                 return translateRailSegment(copy, dx, dy, dz);
 
             case NBT_STRUCTURE:
+            case TERRAIN_SMOOTH:
                 // Unreachable via BuildService.translateBuild today: recordNbtPlacement always
                 // marks the build COMPLETED. Kept for switch-exhaustiveness with BoundingBox.fromTaskData.
                 return shiftPoint(copy, "x", "y", "z", dx, dy, dz);

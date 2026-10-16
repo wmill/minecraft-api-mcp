@@ -105,6 +105,8 @@ public class TaskExecutor {
                 case RAIL_TUNNEL_SEGMENT -> executeRailSegmentTask(task, "tunnel", lockId);
                 case NBT_STRUCTURE -> CompletableFuture.completedFuture(
                     new TaskExecutionResult(false, "NBT_STRUCTURE tasks cannot be replayed — NBT data is not stored", null));
+                case TERRAIN_SMOOTH -> CompletableFuture.completedFuture(
+                    new TaskExecutionResult(false, "TERRAIN_SMOOTH tasks cannot be replayed — run smooth_terrain again", null));
                 default -> CompletableFuture.completedFuture(
                     new TaskExecutionResult(false, "Unknown task type: " + task.getTaskType(), null));
             };
@@ -176,6 +178,8 @@ public class TaskExecutor {
                 case RAIL_TUNNEL_SEGMENT -> dispatchRailSegmentInto(task, sink, "tunnel");
                 case NBT_STRUCTURE ->
                     new TaskExecutionResult(false, "NBT_STRUCTURE tasks cannot be replayed — NBT data is not stored", null);
+                case TERRAIN_SMOOTH ->
+                    new TaskExecutionResult(false, "TERRAIN_SMOOTH tasks cannot be replayed — run smooth_terrain again", null);
                 default -> new TaskExecutionResult(false, "Unknown task type: " + task.getTaskType(), null);
             };
         } catch (Exception e) {

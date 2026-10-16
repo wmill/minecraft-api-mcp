@@ -246,4 +246,43 @@ class TerrainMapRendererTest {
         assertThat(TerrainMapRenderer.hillshade(risingEast)[1][1]).isGreaterThan(1.0);
         assertThat(TerrainMapRenderer.hillshade(risingWest)[1][1]).isLessThan(1.0);
     }
+
+    @Test
+    void sharedRangeMakesBeforeAndAfterUseTheSameContourInterval() throws Exception {
+        int[][] gentle = cone(20, 64);
+        var alone = TerrainMapRenderer.render(gentle, null, 0, 0, new TerrainMapRenderer.Options(4, null, true, false));
+        var shared = TerrainMapRenderer.render(gentle, null, 0, 0,
+            new TerrainMapRenderer.Options(4, null, true, false, 40, 120, "After"));
+        assertThat(alone.meta().contourInterval()).isEqualTo(1);
+        assertThat(shared.meta().contourInterval()).isEqualTo(10);
+        assertThat(shared.meta().minY()).isEqualTo(alone.meta().minY());
+    }
+
+    @Test
+    void deltaMapColoursCutRedFillBlueAndMaskedGrey() throws Exception {
+        int[][] delta = new int[12][12];
+        boolean[][] masked = new boolean[12][12];
+        delta[1][1] = -4;
+        delta[10][10] = 3;
+        masked[5][5] = true;
+        var result = TerrainMapRenderer.renderDelta(delta, masked, 200, 300, 8);
+        assertThat(result.maxLowered()).isEqualTo(4);
+        assertThat(result.maxRaised()).isEqualTo(3);
+
+        BufferedImage img = decode(result.png());
+        java.util.function.BiFunction<Integer, Integer, Integer> at = (x, z) -> img.getRGB(
+            TerrainMapRenderer.MARGIN_LEFT + x * 8 + 1, TerrainMapRenderer.MARGIN_TOP + z * 8 + 1) & 0xFFFFFF;
+        int cut = at.apply(1, 1), fill = at.apply(10, 10), kept = at.apply(5, 5);
+        assertThat((cut >> 16) & 0xFF).isGreaterThan(cut & 0xFF);
+        assertThat(fill & 0xFF).isGreaterThan((fill >> 16) & 0xFF);
+        assertThat(kept).isEqualTo(0x9E9E9E);
+        assertThat(TerrainMapRenderer.deltaRgb(0, 4)).isEqualTo(0xECECEA);
+        assertThat(TerrainMapRenderer.deltaRgb(-1, 10)).isNotEqualTo(TerrainMapRenderer.deltaRgb(0, 10));
+    }
+
+    @Test
+    void deltaMapRejectsRaggedInput() {
+        assertThatThrownBy(() -> TerrainMapRenderer.renderDelta(new int[][] {{1, 2}, {3}}, null, 0, 0, null))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
 }

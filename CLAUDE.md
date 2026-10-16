@@ -143,6 +143,7 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 - `NBTStructureEndpoint` - Place NBT data structures; snapshots the target cuboid before writing (undo) and supports `dry_run` overwrite reports
 - `RainFireEndpoint` - Rain fire effect over a radius
 - `AreaLockEndpoint` - Acquire/renew/resize/release/list area reservations (`/api/area-locks`)
+- `TerrainSmoothEndpoint` - Ground smoothing (`POST /api/world/terrain/smooth`, MCP `smooth_terrain`): gaussian/median/bilateral filters or a flat pad, vegetation cleared, built/fluid columns masked; `dry_run` returns before/after relief and change maps; writes are lock-checked, snapshotted and recorded as an undoable `TERRAIN_SMOOTH` build (logic in `terrain/`)
 - `SiteSurveyEndpoint` - Read-only footprint assessment (`POST /api/world/blocks/survey`): walking-plane heights, slope, water/lava/vegetation coverage, cut/fill grading suggestion, overlapping reservations and builds (logic in `survey/`)
 - `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, undo/redo, clone, translate, preview, rail planning, and location query routes
 - `TaskExecutor` - Executes queued build tasks on the Minecraft server thread; generic `executeAsync`/`dispatch` helpers parse task data and route it to the endpoint cores
@@ -154,6 +155,11 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 Isometric PNG preview of builds and terrain: `BlockSink` abstraction (`WorldBlockSink` writes to the world, `RecordingBlockSink` records for dry runs), `BlockGrid` sparse voxel container, `IsoRenderer` (scale bounds `MIN_SCALE`/`MAX_SCALE`), `Palette`, `TerrainHeightmapGridAdapter`.
 
 Top-down terrain maps for LLM site reading (`POST /api/world/blocks/heightmap/map`, MCP `map_terrain`): `TerrainMapRenderer` draws a greyscale relief map (lighter = higher, half-strength NW hillshade, labelled contours with auto interval, spot heights at grid-cell centres, water tinted) and a surface-material map, both north up with world-coordinate grid labels; `SurfaceCategory` buckets top-block ids into ~10 fixed colours (anything not recognisably natural is `BUILT`; the renderer's `splitBuilt` relabels built columns within 1 block of the median nearby natural ground as `PAVING`, so plazas and roads read apart from buildings). Heights are read from text labels rather than brightness because vision models can't judge absolute grey levels. Text needs fonts in the JVM (the Docker image installs `fontconfig fonts-dejavu-core`); without them the maps render unlabelled and the response sets `labels: false`.
+
+#### Terrain Smoothing
+**Location**: `src/main/java/ca/waltermiller/mcpapi/terrain/`
+
+`HeightFilter` (sealed: `Gaussian`, `Median`, `Bilateral`; masked cells excluded from neighbourhoods), `TerrainSmoother` (pure planner: margin context, edge feather, strength, `max_change` clamp, pad target, mask/anchor protection), `TerrainRewriter` (column cut/fill and write bounds over a `TerrainAccess`), `WorldTerrainAccess` (server-thread ground sampling below vegetation, block writes, snapshot capture), `GroundColumn` (`GROUND`/`FLUID`/`BUILT`/`UNLOADED`). `TerrainMapRenderer.renderDelta` draws the cut/fill change map; `Options.rangeMinY/rangeMaxY` keep before/after maps on one grey ramp. See `docs/terrain-smoothing.md`.
 
 #### Placement Snapshots (Undo / Dry Run)
 **Location**: `src/main/java/ca/waltermiller/mcpapi/snapshot/`
@@ -197,6 +203,7 @@ A comprehensive system for queuing, persisting, and executing complex build oper
 - `RAIL_SURFACE_SEGMENT` - Rail corridor segment on the surface
 - `RAIL_BRIDGE_SEGMENT` - Rail corridor segment over a gap (bridge)
 - `RAIL_TUNNEL_SEGMENT` - Rail corridor segment underground (tunnel)
+- `NBT_STRUCTURE` / `TERRAIN_SMOOTH` - Auto-recorded direct writes (NBT placement, terrain smoothing); snapshot-restorable via undo/redo, never executed, replayed or cloned
 
 **Database Schema:**
 - `builds` table: Build metadata (id, name, description, world, status, timestamps)
@@ -250,6 +257,7 @@ DB_PASSWORD=your_password
   - `effects.py` - One-shot area effects (`rain_fire`)
   - `area_locks.py` - `acquire_area_lock`, `update_area_lock`, `release_area_lock`, `list_area_locks`
   - `survey.py` - `survey_site`
+  - `terrain.py` - `smooth_terrain` (dry-run before/after/change images plus summary)
   - `schematics.py` - Optional schematic search, tags, metadata lookup, preview images, and NBT placement orchestration
   - `starlark.py` - Optional Starlark build/preview/place, docs, examples, and script library tools
 
@@ -442,6 +450,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `BuildTaskTest`, `BoundingBoxTest`, `TaskDataValidatorTest`, `TaskDataTranslatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`
 - Area lock tests: `AreaLockServiceTest`, `AreaLockEndpointTest`
 - Site survey tests: `SiteSurveyTest`, `SiteSurveyEndpointTest`, `SurveyOccupancyTest`
+- Terrain smoothing tests: `TerrainSmootherTest`, `TerrainRewriterTest`, `TerrainSmoothEndpointTest`
 - Preview tests: `BlockGridTest`, `IsoRendererTest`, `PaletteTest`, `TerrainHeightmapGridAdapterTest`, `TerrainMapRendererTest`, `SurfaceCategoryTest`
 - Snapshot tests: `SnapshotStoreTest`, `SnapshotRestorerTest`, `OverwriteTallyTest`, `BuildUndoEndpointTest`
 
@@ -460,6 +469,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_preview_heightmap.py` - `preview_heightmap` image output
 - `test_teleport_player.py` - `teleport_player` handler
 - `test_terrain_map.py` - `map_terrain` images, summary text and errors
+- `test_smooth_terrain.py` - `smooth_terrain` registration, dry-run images/summary, apply summary, errors
 
 **Schematic Service Tests** (`schematic-service/`):
 - `test_app.py` - FastAPI routes via `create_app`
@@ -496,7 +506,7 @@ Minecraft uses a right-handed 3D coordinate system:
 - Optional schematic service runs on port 7080 when started
 - Optional Starlark build service runs on port 7090 when started; its artifact cache in `starlark-service-data/` is git-ignored and safe to delete (artifacts regenerate deterministically); its script library in `starlark-library/` is durable and meant to be committed
 - Database schema auto-creates on first server start
-- Design docs and OpenAPI contracts live in `docs/` (`area-locks.md`, `site-survey.md`, `undo-and-dry-run.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
+- Design docs and OpenAPI contracts live in `docs/` (`area-locks.md`, `site-survey.md`, `terrain-smoothing.md`, `undo-and-dry-run.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
 - Mod-side environment variables beyond the DB settings: `AREA_LOCK_IDLE_SECONDS`, `BUILD_SNAPSHOT_DIR`, `BUILD_SNAPSHOT_MAX_VOLUME`
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
 - Build tasks are executed asynchronously and can be queried by location for spatial awareness

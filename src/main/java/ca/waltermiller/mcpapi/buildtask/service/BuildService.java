@@ -85,11 +85,44 @@ public class BuildService {
         return savedBuild;
     }
 
+    /**
+     * Records a completed terrain smoothing as a one-task build over the cuboid it may have
+     * written, in the same task-data shape as an NBT placement so undo/redo reuse its bounds.
+     */
+    public Build recordTerrainSmooth(String world, int x, int y, int z, int sizeX, int sizeY, int sizeZ,
+                                     String method, JsonNode parameters) throws SQLException {
+        Build build = new Build("Terrain: " + method, "Auto-recorded terrain smoothing", world);
+        Build savedBuild = buildRepository.create(build);
+
+        ObjectNode taskData = Json.MAPPER.createObjectNode()
+            .put("x", x).put("y", y).put("z", z)
+            .put("size_x", sizeX).put("size_y", sizeY).put("size_z", sizeZ)
+            .put("rotation", "NONE").put("method", method);
+        taskData.set("parameters", parameters);
+
+        BuildTask task = new BuildTask(savedBuild.getId(), 0, TaskType.TERRAIN_SMOOTH, taskData,
+            "Terrain smoothing (" + method + ")");
+        task.markCompleted();
+        taskRepository.create(task);
+
+        savedBuild.setStatus(BuildStatus.COMPLETED);
+        buildRepository.update(savedBuild);
+
+        LOGGER.info("Recorded terrain smoothing '{}' at ({},{},{}) size {}x{}x{} as build {}",
+            method, x, y, z, sizeX, sizeY, sizeZ, savedBuild.getId());
+        return savedBuild;
+    }
+
+    /** Task types recorded after a direct write; restorable from snapshots but never executed. */
+    static boolean isSnapshotOnly(TaskType type) {
+        return type == TaskType.NBT_STRUCTURE || type == TaskType.TERRAIN_SMOOTH;
+    }
+
     /** Where a recorded NBT placement was written, as needed to rebuild its bounds. */
     public record NbtPlacement(Build build, int x, int y, int z, int sizeX, int sizeY, int sizeZ, String rotation) {}
 
     /**
-     * Loads the single NBT_STRUCTURE task of an auto-recorded placement. Empty when the build does not exist;
+     * Loads the single NBT_STRUCTURE or TERRAIN_SMOOTH task of an auto-recorded placement. Empty when the build does not exist;
      * IllegalArgumentException when it is not an NBT placement, IllegalStateException when already reverted.
      */
     public Optional<NbtPlacement> getNbtPlacement(UUID buildId) throws SQLException {
@@ -107,8 +140,8 @@ public class BuildService {
             throw new IllegalStateException("Only reverted builds can be redone");
         }
         List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
-        if (tasks.size() != 1 || tasks.get(0).getTaskType() != TaskType.NBT_STRUCTURE) {
-            throw new IllegalArgumentException("Only NBT structure placements can be undone");
+        if (tasks.size() != 1 || !isSnapshotOnly(tasks.get(0).getTaskType())) {
+            throw new IllegalArgumentException("Only NBT structure placements and terrain smoothing can be undone");
         }
         JsonNode data = tasks.get(0).getTaskData();
         for (String field : new String[] {"x", "y", "z", "size_x", "size_y", "size_z"}) {
@@ -154,8 +187,8 @@ public class BuildService {
 
     private void validateTaskExecution(Build build, List<BuildTask> tasks, boolean replay) {
         if (build.getStatus() == BuildStatus.REVERTED
-            || tasks.stream().anyMatch(task -> task.getTaskType() == TaskType.NBT_STRUCTURE)) {
-            throw new IllegalStateException("NBT placements cannot be executed or replayed; use redo_build after undo_build");
+            || tasks.stream().anyMatch(task -> isSnapshotOnly(task.getTaskType()))) {
+            throw new IllegalStateException("NBT placements and terrain smoothing cannot be executed or replayed; use redo_build after undo_build");
         }
         if (replay && build.getStatus() == BuildStatus.IN_PROGRESS) {
             throw new IllegalStateException("Cannot replay a build while it is executing");
@@ -448,7 +481,7 @@ public class BuildService {
         List<BuildTask> sourceTasks = taskRepository.findByBuildIdOrdered(sourceId);
         int clonedCount = 0;
         for (BuildTask task : sourceTasks) {
-            if (task.getTaskType() == TaskType.NBT_STRUCTURE) {
+            if (isSnapshotOnly(task.getTaskType())) {
                 continue;
             }
             BuildTask cloned = new BuildTask(savedBuild.getId(), task.getTaskOrder(),

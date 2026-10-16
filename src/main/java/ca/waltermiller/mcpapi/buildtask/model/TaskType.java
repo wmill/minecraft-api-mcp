@@ -16,5 +16,6 @@ public enum TaskType {
     RAIL_SURFACE_SEGMENT,
     RAIL_BRIDGE_SEGMENT,
     RAIL_TUNNEL_SEGMENT,
-    NBT_STRUCTURE
+    NBT_STRUCTURE,
+    TERRAIN_SMOOTH  // Auto-recorded by TerrainSmoothEndpoint; undoable, not replayable
 }

@@ -371,6 +371,7 @@ public class BoundingBox {
             case RAIL_TUNNEL_SEGMENT:
                 return fromRailSegmentRequest(taskData);
             case NBT_STRUCTURE:
+            case TERRAIN_SMOOTH:
                 return fromNbtStructureRequest(taskData);
             default:
                 return null;

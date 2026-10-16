@@ -480,6 +480,24 @@ class MinecraftAPIClient:
             body["status_code"] = response.status_code
             return body
 
+    async def smooth_terrain(self, payload: Dict[str, Any]) -> dict:
+        """
+        Smooth or pad a region's ground (POST /api/world/terrain/smooth).
+
+        Returns:
+            dict: the JSON body plus ``status_code``; errors carry ``error`` and usually ``code``.
+        """
+        async with self._http_client(timeout=75.0) as client:
+            response = await client.post(f"{self.base_url}/api/world/terrain/smooth", json=payload)
+            try:
+                body = response.json()
+            except Exception:
+                body = {"error": response.text or f"HTTP {response.status_code}"}
+            if not isinstance(body, dict):
+                body = {"error": str(body)}
+            body["status_code"] = response.status_code
+            return body
+
     async def broadcast_message(
         self,
         message: str,

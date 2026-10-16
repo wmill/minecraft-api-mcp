@@ -434,6 +434,72 @@ TOOL_MAP_TERRAIN = Tool(
     }
 )
 
+TOOL_SMOOTH_TERRAIN = Tool(
+    name="smooth_terrain",
+    description=(
+        "Reshape a region's natural ground for a build site instead of flattening it with fill_box. "
+        "Always call with dry_run=true first: it writes nothing and returns before/after relief maps "
+        "plus a change map (blue raised, red lowered) and cut/fill numbers. Then repeat without dry_run "
+        "to apply. Methods: 'bilateral' smooths bumps but keeps cliffs and terraces (good default); "
+        "'gaussian' gives soft rolling ground; 'median' removes spikes, pillars and pits while keeping "
+        "ridge lines; 'pad' makes a flat footprint at pad.y and eases the surroundings into it over "
+        "pad.blend blocks (the region must include that blend zone). "
+        "All vegetation (trees, plants, snow layers) in the region is cleared. Buildings, paths, "
+        "farmland, water, lava and ice are masked: they and their neighbouring columns are never "
+        "changed. Edges are feathered so the result joins the terrain outside. Writes are snapshotted: "
+        "the response's build_id works with undo_build/redo_build. Maximum 10000 columns; chunks must "
+        "be loaded. Heights are standing Y (first air above the ground), as in survey_site."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "x1": {"type": "integer", "description": "First corner X of the region (inclusive)"},
+            "z1": {"type": "integer", "description": "First corner Z of the region (inclusive)"},
+            "x2": {"type": "integer", "description": "Second corner X of the region (inclusive)"},
+            "z2": {"type": "integer", "description": "Second corner Z of the region (inclusive)"},
+            "method": {"type": "string", "enum": ["bilateral", "gaussian", "median", "pad"]},
+            "world": {"type": "string", "description": "World name (default minecraft:overworld)"},
+            "sigma": {"type": "number", "minimum": 0.5, "maximum": 5,
+                      "description": "gaussian/bilateral: spatial spread in blocks (default 2). Larger = broader smoothing."},
+            "sigma_range": {"type": "number", "minimum": 0.25, "maximum": 32,
+                            "description": "bilateral: height difference in blocks that still counts as the same surface "
+                                           "(default 2). Steps much bigger than this are kept."},
+            "radius": {"type": "integer", "minimum": 1, "maximum": 8,
+                       "description": "median: window radius in blocks (default 2)"},
+            "iterations": {"type": "integer", "minimum": 1, "maximum": 5,
+                           "description": "gaussian/bilateral/median: passes (default 1)"},
+            "pad": {
+                "type": "object",
+                "description": "pad method only: flat footprint (inclusive world corners) inside the region",
+                "properties": {
+                    "y": {"type": "integer", "description": "Standing Y of the pad (first air above the new ground)"},
+                    "x1": {"type": "integer"}, "z1": {"type": "integer"},
+                    "x2": {"type": "integer"}, "z2": {"type": "integer"},
+                    "blend": {"type": "integer", "minimum": 0, "maximum": 32,
+                              "description": "Blocks over which the surroundings ease into the pad (default 6)"}
+                },
+                "required": ["y", "x1", "z1", "x2", "z2"],
+                "additionalProperties": False
+            },
+            "strength": {"type": "number", "exclusiveMinimum": 0, "maximum": 1,
+                         "description": "Fraction of the change to apply (default 1). Pad footprints always reach full strength."},
+            "feather": {"type": "integer", "minimum": 0, "maximum": 32,
+                        "description": "Blocks over which the effect fades in from the region edge (default 3, pad 0)"},
+            "max_change": {"type": "integer", "minimum": 1, "maximum": 64,
+                           "description": "Largest cut or fill per column in blocks (default 16)"},
+            "dry_run": {"type": "boolean", "default": False,
+                        "description": "Plan and return preview images without writing"},
+            "px_per_block": {"type": "integer", "minimum": 1, "maximum": 16,
+                             "description": "Dry-run map scale (default fits about 768 px)"},
+            "contour_interval": {"type": "integer", "minimum": 1, "maximum": 100,
+                                 "description": "Dry-run contour spacing (default automatic)"}
+        },
+        "required": ["x1", "z1", "x2", "z2", "method"],
+        "additionalProperties": False
+    }
+)
+
 # Message Tools
 TOOL_BROADCAST_MESSAGE = Tool(
     name="broadcast_message",
@@ -2279,6 +2345,7 @@ TOOL_SCHEMAS = [
     TOOL_SUMMARIZE_HEIGHTMAP,
     TOOL_PREVIEW_HEIGHTMAP,
     TOOL_MAP_TERRAIN,
+    TOOL_SMOOTH_TERRAIN,
     # Message tools
     TOOL_BROADCAST_MESSAGE,
     TOOL_SEND_MESSAGE_TO_PLAYER,
