@@ -1,6 +1,6 @@
 ---
 name: minecraft-http-gateway
-description: Use this skill when an LLM client needs to inspect or modify this Minecraft server through the repo's HTTP API and bundled helper scripts, without relying on MCP tools. Covers world reads, site surveys, area locks, queued builds with undo/redo, NBT placement with dry runs, Starlark build scripts, and the schematic catalog.
+description: Use this skill when an LLM client needs to inspect or modify this Minecraft server through the repo's HTTP API and bundled helper scripts, without relying on MCP tools. Covers world reads, site surveys, terrain smoothing, area locks, queued builds with undo/redo, NBT placement with dry runs, Starlark build scripts, and the schematic catalog.
 ---
 
 # Minecraft HTTP Gateway
@@ -22,13 +22,13 @@ Direct world writes are acceptable for small, simple actions after inspection.
 
 ## Commands
 
-Run helpers from the repository root:
+Run helpers from the repository root using the MCP project environment (run `uv sync` from `mcp/` first if needed):
 
 ```bash
-uv run python skills/minecraft-http-gateway/scripts/<script>.py ...
+uv run --project mcp python skills/minecraft-http-gateway/scripts/<script>.py ...
 ```
 
-Use `--base-url` or `MINECRAFT_API_BASE_URL` when the API is not on `http://localhost:7070`. The service scripts read `STARLARK_SERVICE_URL` and `SCHEMATIC_SERVICE_URL`. Write commands read an area lock token from `--lock-id` or `MINECRAFT_AREA_LOCK_ID`.
+For subcommand helpers, put global options before the subcommand: `world_query.py --base-url http://localhost:7071 players`. Use `--base-url` or `MINECRAFT_API_BASE_URL` when the API is not on `http://localhost:7070`. The service scripts read `STARLARK_SERVICE_URL` and `SCHEMATIC_SERVICE_URL`. Write commands read an area lock token from `--lock-id` or `MINECRAFT_AREA_LOCK_ID`.
 
 ## Scripts
 
@@ -64,10 +64,11 @@ Use `--base-url` or `MINECRAFT_API_BASE_URL` when the API is not on `http://loca
 
 - For endpoint conventions, defaults, locks and error codes, read `references/core.md`.
 - For inspection, survey and direct write flows, read `references/world-and-blocks.md`.
+- For terrain smoothing and blended build pads, read `references/terrain.md`.
 - For build queue, undo/redo and rail planning flows, read `references/builds.md`.
 - For Starlark scripts and schematics, read `references/structures.md`.
 - For raw fallback payload examples, read `references/payload-patterns.md`.
-- Full contracts: `docs/openapi-minecraft.yaml`, `docs/openapi-starlark.yaml`, `docs/openapi-schematics.yaml`; feature notes in `docs/area-locks.md`, `docs/site-survey.md`, `docs/undo-and-dry-run.md`.
+- Full contracts: `docs/openapi-minecraft.yaml`, `docs/openapi-starlark.yaml`, `docs/openapi-schematics.yaml`; feature notes in `docs/area-locks.md`, `docs/site-survey.md`, `docs/terrain-smoothing.md`, `docs/undo-and-dry-run.md`.
 
 ## Notes
 

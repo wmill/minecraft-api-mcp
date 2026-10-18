@@ -5,7 +5,7 @@ Use scripts first. Use `call_api.py` only when a helper does not cover the endpo
 ## Raw API Call
 
 ```bash
-uv run python skills/minecraft-http-gateway/scripts/call_api.py \
+uv run --project mcp python skills/minecraft-http-gateway/scripts/call_api.py \
   post \
   /api/world/blocks/fill \
   --data '{"x1":0,"y1":64,"z1":0,"x2":4,"y2":64,"z2":4,"block_type":"minecraft:stone"}'

@@ -1,0 +1,60 @@
+{
+  "author": null,
+  "created_at": "2026-10-16T21:22:21Z",
+  "description": "25x38x25 pale quartz twin tower court, asymmetric teal prismarine steep roofs, gold and end rod tips, blue glass slit windows, internal ladders and small landings, raised flower beds and a lit fountain. Faces south. ground_level=1. Tower(h) is 9 x (h+11) x 9.",
+  "latest": 1,
+  "name": "high_elf_spire_court",
+  "tags": [
+    "high_elf",
+    "tower",
+    "quartz",
+    "garden",
+    "fantasy"
+  ],
+  "title": "High Elf Twin Spire Court",
+  "updated_at": "2026-10-16T21:22:21Z",
+  "versions": [
+    {
+      "artifact_id": "slk_60ee3b07db64ad88",
+      "author": null,
+      "block_count": 1818,
+      "created_at": "2026-10-16T21:22:21Z",
+      "entry": "build",
+      "exports": [
+        "Tower"
+      ],
+      "ground_level": 1,
+      "loads": [
+        "lib/shapes.star:Cylinder,Disc,ring_cells,fill_cells",
+        "lib/roofs.star:ConeRoof",
+        "lib/openings.star:SingleDoor"
+      ],
+      "notes": null,
+      "palette_top": [
+        "minecraft:quartz_bricks",
+        "minecraft:smooth_quartz",
+        "minecraft:prismarine_stairs",
+        "minecraft:dark_prismarine",
+        "minecraft:grass_block",
+        "minecraft:birch_planks",
+        "minecraft:light_blue_stained_glass",
+        "minecraft:ladder"
+      ],
+      "params": [],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "b74f40b5f786893a56a1c6c24fd8b2324dab2893cf82277c4b00e0f055ba3aa3",
+      "signatures": {
+        "Tower": "Tower(h)"
+      },
+      "size": [
+        25,
+        38,
+        25
+      ],
+      "version": 1,
+      "y_offset": -1
+    }
+  ]
+}
