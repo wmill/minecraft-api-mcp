@@ -32,7 +32,7 @@ FLOORS = "floors"
 CUT_VIEWS = (SHEET, "iso", SECTION)
 AXES = ("x", "y", "z")
 # Bumped when base renders change; older preview directories are re-rendered on next request.
-PREVIEW_VERSION = 2
+PREVIEW_VERSION = 3
 MIN_PX, MAX_PX = 64, 1024
 DEFAULT_VIEW_PX = 768
 DEFAULT_TILE_PX = 256

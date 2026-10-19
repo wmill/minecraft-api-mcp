@@ -115,7 +115,9 @@ def render_iso(structure: Structure, grid: np.ndarray, scale: int = 6, crop: boo
                 edges[(name, edge_axis, edge_step)] = visible[name] & ~same
 
     xs, ys, zs = np.nonzero(drawn)
-    order = np.lexsort((xs, -zs, ys))  # painter's order: y ascending, then z descending, then x ascending
+    # The camera is on the +X/+Y/+Z side. Paint from low to high on
+    # every axis so nearer cubes cover farther ones, including within a layer.
+    order = np.lexsort((xs, zs, ys))
     for i in order:
         x, y, z = int(xs[i]), int(ys[i]), int(zs[i])
         r, g, b = (int(v) for v in rgb[grid[x, y, z]])

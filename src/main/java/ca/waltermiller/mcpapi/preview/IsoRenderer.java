@@ -12,8 +12,8 @@ import java.io.IOException;
  * 2:1 isometric voxel renderer ported from nbt-image-gen's render_isometric.
  * +X goes right-and-down on screen; +Z goes left-and-down; +Y goes up. Visible
  * faces per cube: top (+Y), left (+Z), right (+X). Painter's order iterates y
- * ascending so higher voxels paint over lower ones; within a layer the 2:1
- * projection guarantees no overlap.
+ * ascending, then z ascending, then x ascending to paint back to front on all
+ * three axes, including overlapping faces within a horizontal layer.
  *
  * Non-south views are handled by rotating the BlockGrid around Y before rendering,
  * so the projection always treats the grid as if viewed from the south.
@@ -59,7 +59,7 @@ public final class IsoRenderer {
             }
 
             for (int y = 0; y < h; y++) {
-                for (int z = d - 1; z >= 0; z--) {
+                for (int z = 0; z < d; z++) {
                     for (int x = 0; x < w; x++) {
                         String id = grid.blockAt(grid.minX() + x, grid.minY() + y, grid.minZ() + z);
                         if (id == null) continue;

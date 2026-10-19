@@ -14,6 +14,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IsoRendererTest {
 
     @Test
+    void nearerCubeOccludesFartherCubeInEveryView() throws Exception {
+        for (PreviewViewDirection direction : PreviewViewDirection.values()) {
+            // Arrange each world view to produce the same two diagonal cubes
+            // in camera space: red at (0,0,0), blue at (1,0,1).
+            BlockPos far;
+            BlockPos near;
+            switch (direction) {
+                case SOUTH -> { far = new BlockPos(0, 0, 0); near = new BlockPos(1, 0, 1); }
+                case WEST -> { far = new BlockPos(1, 0, 0); near = new BlockPos(0, 0, 1); }
+                case NORTH -> { far = new BlockPos(1, 0, 1); near = new BlockPos(0, 0, 0); }
+                case EAST -> { far = new BlockPos(0, 0, 1); near = new BlockPos(1, 0, 0); }
+                default -> throw new AssertionError(direction);
+            }
+            BlockGrid grid = new BlockGrid(Map.of(far, "minecraft:red_wool", near, "minecraft:blue_wool"),
+                    0, 0, 0, 1, 0, 1);
+            int scale = 12;
+            BufferedImage img = ImageIO.read(new ByteArrayInputStream(IsoRenderer.renderPng(grid, scale, direction)));
+            int[] blue = Palette.colorFor("minecraft:blue_wool");
+            int expected = new java.awt.Color(blue[0], blue[1], blue[2]).getRGB();
+            assertThat(img.getRGB(42, 33)).as("near cube top in %s view", direction).isEqualTo(expected);
+        }
+    }
+
+    @Test
     void rendersNonEmptyPngForSmallGrid() throws Exception {
         Map<BlockPos, String> cells = new HashMap<>();
         for (int x = 0; x < 3; x++) {

@@ -7,10 +7,32 @@ import numpy as np
 from fastapi.testclient import TestClient
 from nbt_image_gen.loader import AIR
 from PIL import Image
+import pytest
+from nbt_image_gen.loader import Structure
+from nbt_image_gen.renderer import render_isometric
 
 from conftest import SIMPLE_SOURCE, make_config
 from starlark_service import cache, previews, render
 from starlark_service.app import create_app
+
+
+@pytest.mark.parametrize("renderer", ["service", "library"])
+def test_iso_nearer_south_block_occludes_north_block(renderer):
+    # Two separated cubes on the same layer overlap in projection. The south
+    # cube's top must cover the north cube's south face (not vice versa).
+    grid = np.full((2, 1, 2), AIR, dtype=np.int16)
+    grid[0, 0, 0] = 0
+    grid[1, 0, 1] = 1
+    structure = Structure(grid.shape, ["minecraft:red_wool", "minecraft:blue_wool"], grid)
+    scale = 12
+    if renderer == "service":
+        img = render.render_iso(structure, grid, scale=scale, crop=False)
+    else:
+        img = render_isometric(structure, scale=scale)
+    # World point (1.25, 1, 1.5), inside the nearer cube's top face.
+    pixel = img.getpixel((int(3.5 * scale), int(2.75 * scale)))
+    expected = tuple(int(v) for v in render.palette_rgb(structure)[1]) + (255,)
+    assert pixel == expected
 
 # A stone block with one red marker jutting out of its north (-Z) face.
 TOWER_SOURCE = (
