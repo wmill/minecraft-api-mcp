@@ -18,6 +18,73 @@ in the MCP container's environment; Compose currently configures only the Starla
 
 # Basics and setup
 
+## Running locally
+
+For local development, run Fabric directly with Gradle and let your MCP client
+launch the Python MCP server over stdio. The `certbot`, `nginx`, `minecraft`, and
+`mcp` Compose services do not need to be running. You'll need Java 21, uv,
+Python 3.12+, and Docker for PostgreSQL.
+
+From the repository root, start the database and Fabric server:
+
+```bash
+docker compose up -d postgres
+./gradlew runServer
+```
+
+`runServer` is the Fabric Loom Gradle task (shown under Fabric in IDE Gradle
+panels). On first launch, accept the Minecraft EULA in `run/eula.txt`, then run
+the task again. Leave the server running; the REST API is available at
+`http://localhost:7070` and Minecraft at `localhost:25565`. The default database
+settings match the Compose PostgreSQL service on `localhost:5432`.
+
+Install the MCP dependencies from a second terminal:
+
+```bash
+cd mcp
+uv sync
+```
+
+Configure your MCP client to launch the following stdio server, replacing the
+project path with your checkout's absolute path (and using the absolute path to
+`uv` if your client requires it):
+
+```json
+{
+  "mcpServers": {
+    "minecraft-api": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/absolute/path/to/minecraft-mcp-api/mcp",
+        "minecraft-mcp",
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}
+```
+
+The equivalent command from `mcp/` is `uv run minecraft-mcp --transport stdio`.
+Your MCP client starts and manages this process; no MCP HTTP port is needed.
+MCP uses `http://localhost:7070` by default. If you previously changed `BASE_URL`
+in `mcp/.env`, point it back to that local API.
+
+Optional services can still run in Docker alongside this setup:
+
+```bash
+# Schematic search (see the indexing instructions below)
+docker compose --profile schematics up -d elasticsearch schematic-service
+# Starlark compilation, previews, and saved scripts
+docker compose --profile starlark up -d starlark-service
+```
+
+The local MCP defaults already target their published localhost ports, 7080 and
+7090. Starlark image builds require the submodules to be initialized first with
+`git submodule update --init --recursive`.
+
 There are MCP clients like Claude Desktop or Goose which connect to the LLM and run MCP commands with the server.
 
 Next there is the MCP server, which for this project runs locally from the `mcp` directory.
