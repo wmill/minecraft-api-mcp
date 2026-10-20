@@ -6,6 +6,16 @@ Multiple MCP clients can use [area reservations](docs/area-locks.md) to keep the
 
 NBT placements (raw NBT, schematics, Starlark artifacts) can be [dry-run and undone](docs/undo-and-dry-run.md): `dry_run` reports what a placement would overwrite, and `undo_build` restores the blocks saved just before it was placed.
 
+## Docker architecture
+
+![Docker Compose services, network connections, and persistent storage](docs/docker-architecture.svg)
+
+The diagram follows [docker-compose.yml](docker-compose.yml) and [nginx.conf](nginx.conf).
+The purple services run only when their Compose profiles are enabled. MCP fetches
+NBT artifacts from the optional services and sends placements to the Minecraft API.
+For the `schematics` profile, also set `SCHEMATIC_SERVICE_URL=http://schematic-service:7080`
+in the MCP container's environment; Compose currently configures only the Starlark URL.
+
 # Basics and setup
 
 There are MCP clients like Claude Desktop or Goose which connect to the LLM and run MCP commands with the server.
