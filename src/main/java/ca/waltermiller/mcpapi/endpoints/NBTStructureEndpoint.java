@@ -203,6 +203,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
                     if (success) {
                         try {
                             StructurePlacementEffect.emit(world, bounds);
+                            StructureReveal.start(world, bounds);
                         } catch (Exception e) {
                             LOGGER.warn("Failed to emit NBT placement effect", e);
                         }

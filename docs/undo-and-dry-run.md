@@ -109,3 +109,24 @@ inventory, edits before undo, repeated and concurrent calls, locks, forced overl
 restores, replay rejection, and restart persistence. It leaves its result in
 `verification.json` alongside the disposable world's snapshot directory. It does
 not connect to the main server on port 7070.
+
+### NBT placement reveal
+
+Successful uploads to `/api/world/structure/place` retain the placement sound and smoke
+and now show a cosmetic construction reveal to players within 96 blocks of the
+placement center. Light blue stained glass placeholders cover non-air blocks in
+the placed region, then reveal the current world blocks from bottom to top over
+40 server ticks (about two seconds). The overlay starts after a short packet
+settling delay; clients may briefly see the finished placement first.
+
+Placeholders are client-only block updates. The real structure, collisions,
+entities, response, and undo snapshot are complete immediately. Dry runs never
+start the effect. Block entity update packets are resent as blocks are revealed.
+Any intervening world edits are read at reveal time rather than overwritten.
+An additional placement in the same dimension finishes its previous reveal first.
+
+To bound scanning and network traffic, regions over 131,072 blocks or containing
+more than 8,192 non-air blocks use only the existing sound and smoke effect.
+The overlay includes existing non-air blocks inside the placement bounds. Players
+arriving later see the completed structure. Terrain operations and undo/redo retain
+their existing sound and smoke without starting a reveal.

@@ -14,6 +14,7 @@ public class McpApiMod implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		ca.waltermiller.mcpapi.endpoints.StructureReveal.initialize();
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			LOGGER.info("Starting web server...");
 			APIServer.start(server, LOGGER);
