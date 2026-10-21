@@ -32,6 +32,81 @@ tags:
 
 paths:
 
+  /api/world/markers:
+    post:
+      tags: [effects]
+      summary: Temporarily mark an inclusive cuboid without changing terrain
+      operationId: markArea
+      description: >-
+        Colored particle outline and a column up to 24 blocks above the cuboid,
+        plus an optional floating label. Vanilla clients supported. No chunk
+        loading, saved entities, or reservation changes. Maximum 16 active
+        markers, each at most 128 blocks per dimension. Visible to eligible
+        players in the same world within 128 blocks of the center. Expires on
+        server ticks using wall-clock time; markers do not survive restart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bounds]
+              properties:
+                bounds:
+                  $ref: '#/components/schemas/AreaBounds'
+                label: {type: string, maxLength: 120, default: ''}
+                color:
+                  type: string
+                  enum: [yellow, red, green, blue, cyan, purple, white]
+                  default: yellow
+                duration_seconds: {type: integer, minimum: 1, maximum: 300, default: 60}
+                world: {type: string, default: 'minecraft:overworld'}
+                player:
+                  type: string
+                  description: Optional player name; must be online in the requested world. Omit for all nearby players.
+      responses:
+        '200':
+          description: Marker created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, marker_id, world, bounds, label, color, duration_seconds, expires_at]
+                properties:
+                  success: {type: boolean, const: true}
+                  marker_id: {type: string, format: uuid}
+                  world: {type: string}
+                  bounds: {$ref: '#/components/schemas/AreaBounds'}
+                  label: {type: string}
+                  color: {type: string}
+                  duration_seconds: {type: integer}
+                  expires_at: {type: string, format: date-time}
+        '400':
+          description: Invalid options, world, height limits, target player, or marker capacity exceeded
+
+  /api/world/markers/{marker_id}:
+    delete:
+      tags: [effects]
+      summary: Remove a temporary marker; safe to repeat
+      operationId: removeAreaMarker
+      parameters:
+        - name: marker_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Label removed and particle emission stopped; existing particles fade naturally
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, marker_id, removed]
+                properties:
+                  success: {type: boolean, const: true}
+                  marker_id: {type: string}
+                  removed: {type: boolean, description: False if already removed or expired}
+
   /api/area-locks:
     post:
       tags: [area-locks]

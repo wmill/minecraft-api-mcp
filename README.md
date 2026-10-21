@@ -6,6 +6,11 @@ Multiple MCP clients can use [area reservations](docs/area-locks.md) to keep the
 
 NBT placements (raw NBT, schematics, Starlark artifacts) can be [dry-run and undone](docs/undo-and-dry-run.md): `dry_run` reports what a placement would overwrite, and `undo_build` restores the blocks saved just before it was placed.
 
+MCP can [temporarily mark an area](docs/area-markers.md) with a colored particle
+outline, vertical particle column, and floating label using `mark_area`. Vanilla
+clients work without a client mod, and markers expire automatically without
+changing terrain.
+
 ## Docker architecture
 
 ![Docker Compose services, network connections, and persistent storage](docs/docker-architecture.svg)

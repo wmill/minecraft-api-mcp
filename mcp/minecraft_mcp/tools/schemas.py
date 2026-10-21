@@ -9,6 +9,7 @@ from mcp.types import Tool, ToolAnnotations
 from ..utils.starlark_models import Placement, StarlarkResult
 from ..utils.survey_models import SurveyResult
 from .area_locks import AREA_LOCK_TOOLS, LOCK_ID_SCHEMA, LOCK_WRITE_TOOLS
+from .markers import MARKER_TOOLS
 
 
 # World Tools
@@ -2412,3 +2413,5 @@ for tool in TOOL_SCHEMAS:
     if tool.name in LOCK_WRITE_TOOLS:
         tool.inputSchema["properties"]["lock_id"] = dict(LOCK_ID_SCHEMA)
 TOOL_SCHEMAS.extend(AREA_LOCK_TOOLS)
+
+TOOL_SCHEMAS.extend(MARKER_TOOLS)

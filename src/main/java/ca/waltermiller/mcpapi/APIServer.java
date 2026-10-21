@@ -36,6 +36,7 @@ public class APIServer {
     public static Javalin app;
     public static MinecraftServer minecraftServer;
     public static org.slf4j.Logger logger;
+    public static ca.waltermiller.mcpapi.marker.AreaMarkerService markers;
 
     public static void start(MinecraftServer server, org.slf4j.Logger logger) {
         minecraftServer = server;
@@ -57,6 +58,8 @@ public class APIServer {
         app.get("/api/test", ctx -> ctx.result("Server is running"));
 
         new AreaLockEndpoint(app, server, locks);
+        markers = new ca.waltermiller.mcpapi.marker.AreaMarkerService();
+        new ca.waltermiller.mcpapi.endpoints.AreaMarkerEndpoint(app, server, markers);
 
         // Initialize existing endpoints
         new EntitiesEndpoint(app, server, logger);

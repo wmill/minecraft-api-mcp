@@ -77,6 +77,23 @@ class MinecraftAPIClient:
             response = await client.get(f"{self.base_url}/api/world/players")
             response.raise_for_status()
             return response.json()
+
+    async def mark_area(self, bounds, label="", color="yellow", duration_seconds=60,
+                        world="minecraft:overworld", player=None) -> dict:
+        payload = dict(bounds=bounds, label=label, color=color,
+                       duration_seconds=duration_seconds, world=world)
+        if player is not None:
+            payload["player"] = player
+        async with self._http_client() as client:
+            response = await client.post(f"{self.base_url}/api/world/markers", json=payload)
+            response.raise_for_status()
+            return response.json()
+
+    async def remove_area_marker(self, marker_id) -> dict:
+        async with self._http_client() as client:
+            response = await client.delete(f"{self.base_url}/api/world/markers/{quote(marker_id, safe='')}")
+            response.raise_for_status()
+            return response.json()
     
     async def get_entities(self) -> dict:
         """

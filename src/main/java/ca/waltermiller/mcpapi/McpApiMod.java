@@ -15,12 +15,16 @@ public class McpApiMod implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		ca.waltermiller.mcpapi.endpoints.StructureReveal.initialize();
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> {
+			if (APIServer.markers != null) APIServer.markers.tick(server);
+		});
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			LOGGER.info("Starting web server...");
 			APIServer.start(server, LOGGER);
 		});
 
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+			if (APIServer.markers != null) { APIServer.markers.clear(); APIServer.markers = null; }
 			LOGGER.info("Shutting down database...");
 			DatabaseManager.getInstance().shutdown();
 		});

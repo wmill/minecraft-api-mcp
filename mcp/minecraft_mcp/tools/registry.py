@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from mcp.types import CallToolResult
 
 from ..handlers import area_locks, world, blocks, messages, prefabs, builds, system, effects, schematics, starlark, survey, terrain
+from ..handlers import markers
 
 
 # Tool handler type
@@ -17,6 +18,8 @@ ToolHandler = Callable[..., CallToolResult]
 
 # Map tool names to handler functions
 TOOL_HANDLERS: dict[str, ToolHandler] = {
+    "mark_area": markers.handle_mark_area,
+    "remove_area_marker": markers.handle_remove_area_marker,
     "acquire_area_lock": area_locks.handle_acquire_area_lock,
     "update_area_lock": area_locks.handle_update_area_lock,
     "release_area_lock": area_locks.handle_release_area_lock,
