@@ -93,10 +93,10 @@ Done:
 - [x] Artifact previews: `GET /artifacts/{id}/images/{view}` (iso/top/side views, labelled `sheet`, cutaways/sections via `cut_x|cut_y|cut_z`, `floors` plans) rendered with the nbt-image-gen submodule; MCP `get_starlark_preview` plus `include_preview` thumbnails on `build_starlark_structure`
 - [x] Build and place in one call: optional `placement` object on `build_starlark_structure` (instead of a separate `build_and_place` tool)
 - [x] Script library: `POST /library`, `GET /library/search`, `GET /library/{name}`, `GET /library/{name}/source` with immutable `v<N>.star` versions in `starlark-library/`; MCP `save_starlark_script`, `search_starlark_library`, `get_starlark_script`
+- [x] Add an opt-in `starlark-service` target to `docker-bake.hcl`, sharing registry/tag/platform overrides with the default targets
+- [x] Python CI: `.github/workflows/python-tests.yml` runs pytest for `mcp/`, `schematic-service/`, and `starlark-service/`, with submodules checked out for the latter
 
 Open:
 
 - [ ] Rate limiting / auth if exposed beyond localhost
 - [ ] Build metrics; warm worker pool if subprocess cold-start latency matters
-- [ ] Add a `starlark-service` target to `docker-bake.hcl` (currently nginx, minecraft, mcp only)
-- [ ] Python CI: `.github/workflows/build.yml` only runs the Gradle build; add `uv run pytest` for `mcp/`, `schematic-service/` and `starlark-service/` (the last needs submodules checked out)

@@ -27,3 +27,10 @@ target "mcp" {
   platforms  = split(",", PLATFORMS)
   tags       = ["${REGISTRY}/minecraft-mcp:${TAG}"]
 }
+
+target "starlark-service" {
+  context    = "./starlark-service"
+  dockerfile = "Dockerfile"
+  platforms  = split(",", PLATFORMS)
+  tags       = ["${REGISTRY}/minecraft-starlark-service:${TAG}"]
+}
