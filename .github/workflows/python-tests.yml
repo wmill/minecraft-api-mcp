@@ -1,0 +1,45 @@
+# Run the Python test suites for the MCP server and the optional services on
+# every push and pull request. The Gradle build and Java tests live in build.yml.
+
+name: python-tests
+on: [pull_request, push]
+
+jobs:
+  pytest:
+    name: pytest (${{ matrix.project }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: mcp
+            python: '3.12'
+            submodules: false
+            pytest: uv run --locked pytest
+          - project: schematic-service
+            python: '3.12'
+            submodules: false
+            # pytest is not a declared dependency of this project
+            pytest: uv run --locked --with pytest python -m pytest
+          - project: starlark-service
+            # starlark-pyo3 wheels need Python >= 3.13
+            python: '3.13'
+            # starlark-to-nbt and nbt-image-gen are vendored as submodules
+            submodules: true
+            pytest: uv run --locked pytest
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: ${{ matrix.submodules }}
+      - name: setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: ${{ matrix.project }}/uv.lock
+      - name: run tests
+        run: ${{ matrix.pytest }} -v
