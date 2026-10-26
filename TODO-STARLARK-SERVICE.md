@@ -14,7 +14,8 @@ Minecraft world.
   output caps of its own) with a confined `load()` loader (upstream change)
 - **No Java/mod changes** — placement reuses the mod's existing
   `POST /api/world/structure/place` (accepts gzipped NBT, returns `build_id`)
-- Visual preview deferred (Phase 6)
+- Visual previews, build-and-place in one call, and the script library landed after the
+  original phases (see Phase 6)
 
 ```
 MCP LLM → build_starlark_structure ──POST /build──▶ starlark-service ──subprocess──▶ runner (starlark_to_nbt)
@@ -49,12 +50,12 @@ MCP LLM → build_starlark_structure ──POST /build──▶ starlark-service
 
 ## Phase 2 — Sandbox & limits
 
-- [x] `starlark_service/runner.py` — subprocess worker: stdin JSON → `resource.setrlimit(RLIMIT_AS)` (no-op warn on macOS) → `build_source` → result JSON on stdout; tmp file + atomic rename into cache
+- [x] `starlark_service/runner.py` — subprocess worker: stdin JSON → `resource.setrlimit(RLIMIT_DATA)` (originally `RLIMIT_AS`, see Phase 4) (no-op warn on macOS) → `build_source` → result JSON on stdout; tmp file + atomic rename into cache
 - [x] `starlark_service/sandbox.py` — concurrency counter (`429` when full); wall-clock timeout → SIGKILL → `error_kind: timeout`; non-zero exit/garbled stdout → `crash`
 - [x] Enforce `STARLARK_MAX_ROOT_VOLUME` pre-serialize and `STARLARK_MAX_NBT_BYTES` post-serialize → `error_kind: resource_limit`
 - [x] `POST /build` runs through the sandbox from the start (no in-process interim step was needed)
 - [x] `test_sandbox.py` — runaway loop → timeout kill; root volume / NBT byte caps → resource_limit; queue-full 429; failed builds leave no artifacts
-- [x] Defaults documented in config: timeout 15s, memory 512MB, source 256KiB, root volume 2M voxels, NBT 16MiB, concurrency 2, cache 1GiB
+- [x] Defaults documented in config: timeout 15s, memory 2048MB (raised from 512MB, see Phase 4), source 256KiB, root volume 2M voxels, NBT 16MiB, concurrency 2, cache 1GiB
 
 ## Phase 3 — MCP integration
 
@@ -85,11 +86,17 @@ MCP LLM → build_starlark_structure ──POST /build──▶ starlark-service
 - [x] `CLAUDE.md` — architecture section, env vars, HTTP API list, MCP tools list, deps, test inventory, compose services, key patterns
 - [x] `README.md` — service section + submodule clone note
 
-## Phase 6 — Deferred
+## Phase 6 — Follow-ups
 
-- [ ] Isometric PNG preview (`GET /artifacts/{id}/preview.png`) + MCP preview tool
-- [ ] Combined `build_and_place` convenience tool
-- [ ] Named script persistence / user script library
+Done:
+
+- [x] Artifact previews: `GET /artifacts/{id}/images/{view}` (iso/top/side views, labelled `sheet`, cutaways/sections via `cut_x|cut_y|cut_z`, `floors` plans) rendered with the nbt-image-gen submodule; MCP `get_starlark_preview` plus `include_preview` thumbnails on `build_starlark_structure`
+- [x] Build and place in one call: optional `placement` object on `build_starlark_structure` (instead of a separate `build_and_place` tool)
+- [x] Script library: `POST /library`, `GET /library/search`, `GET /library/{name}`, `GET /library/{name}/source` with immutable `v<N>.star` versions in `starlark-library/`; MCP `save_starlark_script`, `search_starlark_library`, `get_starlark_script`
+
+Open:
+
 - [ ] Rate limiting / auth if exposed beyond localhost
 - [ ] Build metrics; warm worker pool if subprocess cold-start latency matters
-- [ ] Revisit docker-bake.hcl inclusion + Python CI
+- [ ] Add a `starlark-service` target to `docker-bake.hcl` (currently nginx, minecraft, mcp only)
+- [ ] Python CI: `.github/workflows/build.yml` only runs the Gradle build; add `uv run pytest` for `mcp/`, `schematic-service/` and `starlark-service/` (the last needs submodules checked out)
