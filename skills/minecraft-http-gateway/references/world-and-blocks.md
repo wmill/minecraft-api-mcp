@@ -31,6 +31,28 @@ uv run --project mcp python skills/minecraft-http-gateway/scripts/world_query.py
   --output /tmp/heightmap.png
 ```
 
+For reading a site's shape, prefer the top-down maps from `terrain.py map` (read-only). The relief map is north up with world-coordinate grid labels, contours and spot heights printed as text (read heights from the labels, not the grey levels); the surface map buckets top blocks into material colours, with built columns near ground level shown as paving:
+
+```bash
+uv run --project mcp python skills/minecraft-http-gateway/scripts/terrain.py map \
+  --x1 100 --z1 200 --x2 163 --z2 263 --output-prefix /tmp/site_
+```
+
+This writes `/tmp/site_relief.png` and `/tmp/site_surface.png` and prints the stats (`y.min/median/max`, `contour_interval`, `grid_step`, `coverage`). Repeat `--layer relief` or `--layer surface` to render only one. `labels: false` means the server has no fonts and the maps are unlabelled. Without `--output-prefix` the images are dropped from the output.
+
+## Area Markers
+
+Show other players where you plan to build with a temporary particle outline and floating label. Markers change no blocks, load no chunks and do not reserve the area (use `area_lock.py` for that):
+
+```bash
+uv run --project mcp python skills/minecraft-http-gateway/scripts/world_ops.py mark-area \
+  --min-x 100 --min-y 64 --min-z 200 --max-x 139 --max-y 80 --max-z 239 \
+  --label "Town hall site" --color green --duration-seconds 120
+uv run --project mcp python skills/minecraft-http-gateway/scripts/world_ops.py remove-marker --marker-id <marker_id>
+```
+
+Colors are `yellow` (default), `red`, `green`, `blue`, `cyan`, `purple` and `white`; duration is 1-300 seconds (default 60). `--player` shows the marker to one online player only. At most 16 markers can be active, each up to 128 blocks per side, visible within 128 blocks of the centre. Markers expire on their own and do not survive a restart; removing one twice is safe.
+
 ## Direct Writes
 
 Use direct writes for small, clear actions after inspection:
@@ -57,6 +79,7 @@ Direct fills are capped at 100,000 blocks. Add `--lock-id <token>` (or set `MINE
 - `broadcast`, `message-player`
 - `teleport`
 - `rain-fire`
+- `mark-area`, `remove-marker`
 - `place-nbt`
 
 Example:

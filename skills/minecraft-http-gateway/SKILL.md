@@ -1,6 +1,6 @@
 ---
 name: minecraft-http-gateway
-description: Use this skill when an LLM client needs to inspect or modify this Minecraft server through the repo's HTTP API and bundled helper scripts, without relying on MCP tools. Covers world reads, site surveys, terrain smoothing, area locks, queued builds with undo/redo, NBT placement with dry runs, Starlark build scripts, and the schematic catalog.
+description: Use this skill when an LLM client needs to inspect or modify this Minecraft server through the repo's HTTP API and bundled helper scripts, without relying on MCP tools. Covers world reads, site surveys, terrain maps and smoothing, area locks and markers, queued builds with undo/redo, NBT placement with dry runs, Starlark build scripts, and the schematic catalog.
 ---
 
 # Minecraft HTTP Gateway
@@ -34,14 +34,16 @@ For subcommand helpers, put global options before the subcommand: `world_query.p
 
 - `scripts/world_query.py`
   Use for read-only inspection: API health, players, entities, blocks, heightmaps, heightmap PNG previews, block chunks, and `survey` (ground level, slope, water, cut/fill and existing builds/locks for a footprint).
+- `scripts/terrain.py`
+  Use for top-down relief/surface `map` PNGs of a site (read-only) and `smooth` (ground smoothing or a blended build pad, dry-run first).
 - `scripts/area_lock.py`
   Use to reserve a cuboid before building: `acquire`, `list`, `renew` (optionally resize), `release`.
 - `scripts/build_flow.py`
   Use for build-system workflows: create/status/tasks, add common task types, reorder/update/delete, preview, audit, execute, replay, clone, translate, undo/redo, query-location, and rail planning.
 - `scripts/world_ops.py`
-  Use for small direct operations: block fill/set, prefab placement, entity spawn, messages, teleport, rain-fire, and NBT structure placement (with `--dry-run`).
+  Use for small direct operations: block fill/set, prefab placement, entity spawn, messages, teleport, rain-fire, temporary area markers (`mark-area`, `remove-marker`), and NBT structure placement (with `--dry-run`).
 - `scripts/starlark.py`
-  Use to write builds as Starlark scripts: docs, examples, build (compile to NBT), preview images, the shared script library (search/get/source/save), and place.
+  Use to write builds as Starlark scripts: docs, examples, build (compile to NBT), preview images (including cutaways, sections and floor plans), the shared script library (search/get/source/save), and place.
 - `scripts/schematics.py`
   Use to find and place pre-made schematics: search, tags, get, preview images, NBT download, and place.
 - `scripts/call_api.py`
@@ -57,7 +59,8 @@ For subcommand helpers, put global options before the subcommand: `world_query.p
 - Run `build_flow.py audit` before executing non-trivial queued builds.
 - Dry-run NBT placements (`--dry-run` on `place-nbt`, `starlark.py place`, `schematics.py place`) and check `overwrite.air_carved` / `replaced`: NBT placement writes air cells too.
 - NBT placements are recorded as builds and can be reverted with `build_flow.py undo` (and re-applied with `redo`).
-- Use preview output (`build_flow.py preview`, `world_query.py heightmap-preview`, `starlark.py image`, `schematics.py image`) when spatial layout matters.
+- Use preview output (`build_flow.py preview`, `terrain.py map`, `world_query.py heightmap-preview`, `starlark.py image`, `schematics.py image`) when spatial layout matters.
+- Dry-run `terrain.py smooth` and look at the change map before applying it; smoothing also clears vegetation.
 - Verify direct writes with `world_query.py chunk` or another relevant read call.
 
 ## References
