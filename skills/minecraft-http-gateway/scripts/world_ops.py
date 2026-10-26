@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -224,6 +225,18 @@ def main() -> int:
     add_world(nbt)
     add_lock(nbt)
 
+    mark = subparsers.add_parser("mark-area", help="Temporary particle outline and label; does not change blocks")
+    for field in ("min-x", "min-y", "min-z", "max-x", "max-y", "max-z"):
+        mark.add_argument(f"--{field}", type=int, required=True)
+    mark.add_argument("--label", default="")
+    mark.add_argument("--color", default="yellow", choices=["yellow", "red", "green", "blue", "cyan", "purple", "white"])
+    mark.add_argument("--duration-seconds", type=int, default=60, help="1-300")
+    mark.add_argument("--player", help="Show only to this online player")
+    add_world(mark)
+
+    unmark = subparsers.add_parser("remove-marker")
+    unmark.add_argument("--marker-id", required=True)
+
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
     locked = lock_headers(getattr(args, "lock_id", None))
@@ -296,6 +309,23 @@ def main() -> int:
             payload = {key: value for key, value in payload.items() if value is not None}
             endpoint = "window-pane" if args.command == "window" else args.command
             result = request_json("POST", f"{base_url}/api/world/prefabs/{endpoint}", payload, locked)
+        elif args.command == "mark-area":
+            payload = {
+                "bounds": {
+                    "min_x": args.min_x, "min_y": args.min_y, "min_z": args.min_z,
+                    "max_x": args.max_x, "max_y": args.max_y, "max_z": args.max_z,
+                },
+                "label": args.label,
+                "color": args.color,
+                "duration_seconds": args.duration_seconds,
+            }
+            if args.player:
+                payload["player"] = args.player
+            maybe_world(payload, args.world)
+            result = request_json("POST", f"{base_url}/api/world/markers", payload)
+        elif args.command == "remove-marker":
+            marker_id = urllib.parse.quote(args.marker_id, safe="")
+            result = request_json("DELETE", f"{base_url}/api/world/markers/{marker_id}")
         else:
             file_path = Path(args.file)
             fields = {

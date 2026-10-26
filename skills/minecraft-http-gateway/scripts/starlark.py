@@ -12,7 +12,7 @@ from pathlib import Path
 DEFAULT_SERVICE_URL = "http://localhost:7090"
 DEFAULT_MINECRAFT_URL = "http://localhost:7070"
 LOCK_HEADER = "X-Area-Lock-Id"
-VIEWS = ("sheet", "iso", "top", "north", "south", "east", "west")
+VIEWS = ("sheet", "iso", "top", "north", "south", "east", "west", "section", "floors")
 
 
 def request(method: str, url: str, payload: dict | None = None) -> tuple[bytes, str, dict]:
@@ -108,6 +108,9 @@ def main() -> int:
     image.add_argument("--artifact-id", required=True)
     image.add_argument("--view", choices=VIEWS, default="sheet")
     image.add_argument("--max-px", type=int, help="64-1024; a sheet tile size when view is sheet")
+    for axis in ("x", "y", "z"):
+        image.add_argument(f"--cut-{axis}", type=int, dest=f"cut_{axis}",
+                           help=f"Cut plane at local {axis}; at most one cut, with view sheet, iso or section")
     image.add_argument("--output", required=True)
 
     docs = subparsers.add_parser("docs", help="Script API reference (markdown)")
@@ -175,11 +178,18 @@ def main() -> int:
             raw, _, _ = request("GET", f"{base_url}/artifacts/{args.artifact_id}/nbt")
             result = write_bytes(args.output, raw)
         elif args.command == "image":
-            query = f"?max_px={args.max_px}" if args.max_px else ""
-            raw, content_type, _ = request("GET", f"{base_url}/artifacts/{args.artifact_id}/images/{args.view}{query}")
+            params = {k: v for k, v in {
+                "max_px": args.max_px, "cut_x": args.cut_x, "cut_y": args.cut_y, "cut_z": args.cut_z,
+            }.items() if v is not None}
+            query = f"?{urllib.parse.urlencode(params)}" if params else ""
+            raw, content_type, headers = request("GET", f"{base_url}/artifacts/{args.artifact_id}/images/{args.view}{query}")
             if content_type != "image/png":
                 raise ValueError(f"Expected image/png response, got {content_type}")
             result = write_bytes(args.output, raw)
+            for header, key in (("X-Artifact-Size", "artifact_size"), ("X-Preview-Floors", "floors")):
+                value = headers.get(header) or headers.get(header.lower())
+                if value:
+                    result[key] = value
         elif args.command == "docs":
             query = {"component": args.component} if args.component else {"topic": args.topic}
             raw, _, _ = request("GET", f"{base_url}/docs/catalog?{urllib.parse.urlencode(query)}")
