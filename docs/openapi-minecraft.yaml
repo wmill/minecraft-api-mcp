@@ -498,8 +498,40 @@ paths:
               schema:
                 type: string
                 format: binary
-        "204":
-          description: No blocks in region
+        "400":
+          description: Invalid options, or the area produced no renderable terrain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/world/blocks/heightmap/map:
+    post:
+      tags: [blocks]
+      summary: Render top-down relief and surface-material maps
+      description: |
+        Samples the heightmap and the top block of each column, then draws
+        north-up PNG maps with world-coordinate grid labels. The relief map is
+        greyscale (lighter = higher) with NW hillshade, labelled contours, spot
+        heights at grid-cell centres and water tinted; the surface map buckets
+        top blocks into fixed colour categories. Images are base64 encoded in
+        the JSON body. Read only.
+      operationId: mapTerrain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TerrainMapRequest"
+      responses:
+        "200":
+          description: Terrain maps and the numbers behind them
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerrainMapResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500":
@@ -1138,6 +1170,76 @@ paths:
           description: Snapshots are not configured
         "504":
           description: Timed out waiting for the server thread; inspect build status and the world before retrying
+
+  /api/builds/{id}/clone:
+    post:
+      tags: [builds]
+      summary: Copy a build and its tasks under a new ID
+      description: >-
+        The source build is unchanged. Tasks are copied as pending; snapshot-only
+        NBT_STRUCTURE and TERRAIN_SMOOTH records are skipped.
+      operationId: cloneBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: Build cloned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloneBuildResponse"
+        "400":
+          description: Malformed or unknown build ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Source build is currently executing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/builds/{id}/translate:
+    post:
+      tags: [builds]
+      summary: Shift every task in a build by (dx, dy, dz)
+      description: >-
+        Rewrites task_data coordinates in place. Only allowed before any task has
+        started executing.
+      operationId: translateBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranslateBuildRequest"
+      responses:
+        "200":
+          description: Build translated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslateBuildResponse"
+        "400":
+          description: Malformed or unknown build ID, or invalid task data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Build is completed or reverted, or a task has already executed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /api/builds/{id}/preview:
     get:
@@ -2072,6 +2174,85 @@ components:
             view_direction:
               $ref: "#/components/schemas/ViewDirection"
 
+    TerrainMapRequest:
+      allOf:
+        - $ref: "#/components/schemas/HeightmapRequest"
+        - type: object
+          properties:
+            px_per_block:
+              type: integer
+              minimum: 1
+              maximum: 16
+              description: Pixels per block. Defaults to fitting the longer side to about 768 px.
+            contour_interval:
+              type: integer
+              minimum: 1
+              maximum: 100
+              description: Blocks between contour lines. Defaults to the smallest round interval giving at most 15 lines.
+            layers:
+              type: array
+              description: Maps to render. Empty or omitted renders both.
+              items:
+                type: string
+                enum: [relief, surface]
+
+    TerrainMapResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        world:
+          type: string
+        area_bounds:
+          type: object
+          description: Inclusive min/max corners, each with x and z.
+        size:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+        heightmap_type:
+          type: string
+        px_per_block:
+          type: integer
+          description: Scale actually used.
+        contour_interval:
+          type: integer
+          description: Contour interval actually used, in blocks.
+        grid_step:
+          type: integer
+          description: Spacing in blocks of the labelled coordinate grid and spot heights.
+        y:
+          type: object
+          properties:
+            min:
+              type: integer
+            median:
+              type: integer
+            max:
+              type: integer
+        coverage:
+          type: object
+          description: >-
+            Fraction of columns per surface category, largest first. Keys are
+            water, lava, snow/ice, sand/gravel, grass/dirt, trees, stone, farm,
+            path, building, paving and void.
+          additionalProperties:
+            type: number
+        labels:
+          type: boolean
+          description: False when the server has no fonts and the maps were drawn without text.
+        relief_png:
+          type: string
+          format: byte
+          description: Base64 PNG. Present when the relief layer was requested.
+        surface_png:
+          type: string
+          format: byte
+          description: Base64 PNG. Present when the surface layer was requested.
+
     # ── Messages ──────────────────────────────────────────────────────────────
 
     BroadcastRequest:
@@ -2721,6 +2902,52 @@ components:
         status:
           type: string
           example: accepted
+
+    CloneBuildResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        source_build_id:
+          type: string
+          format: uuid
+        new_build_id:
+          type: string
+          format: uuid
+        tasks_cloned:
+          type: integer
+
+    TranslateBuildRequest:
+      type: object
+      properties:
+        dx:
+          type: integer
+          default: 0
+        dy:
+          type: integer
+          default: 0
+        dz:
+          type: integer
+          default: 0
+
+    TranslateBuildResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        build_id:
+          type: string
+          format: uuid
+        dx:
+          type: integer
+        dy:
+          type: integer
+        dz:
+          type: integer
+        task_count:
+          type: integer
+        message:
+          type: string
 
     AuditResponse:
       type: object
