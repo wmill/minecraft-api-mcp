@@ -175,16 +175,20 @@ docker login ghcr.io  # if not already authenticated
 for Minecraft, MCP, and nginx, tagged under `ghcr.io/wmill` with `latest`.
 It pushes directly without loading the finished images into the local image store.
 `./gradlew dockerBake` builds the same targets into the builder cache without
-pushing. Optional schematic/Starlark services are not in the Bake default group.
-Build or push the optional Starlark image explicitly (initialize both submodules first):
+pushing. Optional schematic/Starlark services are not in the Bake default group;
+they are in the `optional` group. Build or push them explicitly (the Starlark image
+needs both submodules initialized first, or its build fails):
 
 ```bash
 git submodule update --init --recursive
-docker buildx bake -f docker-bake.hcl starlark-service --push
+docker buildx bake -f docker-bake.hcl optional --push            # both
+docker buildx bake -f docker-bake.hcl starlark-service --push    # or one
+docker buildx bake -f docker-bake.hcl schematic-service --push
 ```
 
-The Starlark target uses the same `REGISTRY`, `TAG`, and `PLATFORMS` overrides
-and defaults to `ghcr.io/wmill/minecraft-starlark-service:latest`.
+These targets use the same `REGISTRY`, `TAG`, and `PLATFORMS` overrides and default
+to `ghcr.io/wmill/minecraft-schematic-service:latest` and
+`ghcr.io/wmill/minecraft-starlark-service:latest`, matching the Compose `image:` names.
 The explicit `-f` avoids implicitly merging Compose configuration into Bake.
 
 Overrides and the equivalent manual workflow (run preparation every time):

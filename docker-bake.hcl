@@ -2,6 +2,11 @@ group "default" {
   targets = ["nginx", "minecraft", "mcp"]
 }
 
+# Opt-in services (compose profiles "schematics" and "starlark")
+group "optional" {
+  targets = ["schematic-service", "starlark-service"]
+}
+
 # Optional knobs you can override from the CLI
 variable "REGISTRY" { default = "ghcr.io/wmill" }
 variable "TAG"      { default = "latest" }
@@ -26,6 +31,13 @@ target "mcp" {
   dockerfile = "Dockerfile"
   platforms  = split(",", PLATFORMS)
   tags       = ["${REGISTRY}/minecraft-mcp:${TAG}"]
+}
+
+target "schematic-service" {
+  context    = "./schematic-service"
+  dockerfile = "Dockerfile"
+  platforms  = split(",", PLATFORMS)
+  tags       = ["${REGISTRY}/minecraft-schematic-service:${TAG}"]
 }
 
 target "starlark-service" {
