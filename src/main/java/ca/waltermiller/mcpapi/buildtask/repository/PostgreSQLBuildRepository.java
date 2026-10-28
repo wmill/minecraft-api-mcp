@@ -27,6 +27,15 @@ public class PostgreSQLBuildRepository implements BuildRepository {
     public PostgreSQLBuildRepository(DatabaseConfig databaseConfig) {
         this.databaseConfig = databaseConfig;
     }
+    private Connection transactionConnection;
+    PostgreSQLBuildRepository(DatabaseConfig config, Connection connection) {
+        this(config);
+        this.transactionConnection = connection;
+    }
+    public DatabaseConfig databaseConfig() { return databaseConfig; }
+    private Connection connection() throws SQLException {
+        return transactionConnection == null ? databaseConfig.getConnection() : BuildTransaction.lease(transactionConnection);
+    }
     
     @Override
     public Build create(Build build) throws SQLException {
@@ -35,7 +44,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """;
         
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setObject(1, build.getId());
@@ -61,7 +70,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
     public Optional<Build> findById(UUID id) throws SQLException {
         String sql = "SELECT " + BUILD_COLUMNS + " FROM builds WHERE id = ?";
         
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setObject(1, id);
@@ -83,7 +92,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
             WHERE id = ?
             """;
         
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, build.getName());
@@ -108,7 +117,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
     public boolean deleteById(UUID id) throws SQLException {
         String sql = "DELETE FROM builds WHERE id = ?";
         
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setObject(1, id);
@@ -137,7 +146,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
             ORDER BY b.created_at ASC
             """;
         
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, world);

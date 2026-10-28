@@ -14,12 +14,12 @@ final class GuardedPlacement {
     static <T> void submit(Executor executor, AreaLockService locks, String world, String token,
                            Supplier<AreaBounds> bounds, Supplier<T> operation, Predicate<T> success,
                            CompletableFuture<T> future) {
-        executor.execute(() -> {
+        ca.waltermiller.mcpapi.operation.OperationHttp.dispatch(executor, () -> {
             try {
                 future.complete(locks.execute(world, bounds.get(), token, operation, success));
             } catch (Exception e) {
                 future.completeExceptionally(e);
             }
-        });
+        }, future);
     }
 }

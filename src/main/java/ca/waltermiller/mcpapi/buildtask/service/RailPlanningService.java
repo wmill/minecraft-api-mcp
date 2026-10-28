@@ -135,6 +135,7 @@ public class RailPlanningService {
     }
 
     private void appendTasks(UUID buildId, String world, List<SegmentPlan> segments, StartRailPlanningRequest request) throws SQLException {
+        List<BuildService.AddTaskRequest> requests = new ArrayList<>();
         for (SegmentPlan segment : segments) {
             ObjectNode taskData = objectMapper.createObjectNode();
             ArrayNode pathNode = taskData.putArray("path");
@@ -159,8 +160,15 @@ public class RailPlanningService {
                 case TUNNEL -> TaskType.RAIL_TUNNEL_SEGMENT;
             };
             String description = "Rail " + segment.type().name().toLowerCase() + " segment with " + segment.points().size() + " points";
-            buildService.addTask(buildId, new BuildService.AddTaskRequest(taskType, taskData, description));
+            requests.add(new BuildService.AddTaskRequest(taskType, taskData, description));
         }
+        buildService.addTasks(buildId, requests);
+    }
+
+    public void shutdown() { executorService.shutdownNow(); }
+
+    public boolean awaitTermination(long deadline) throws InterruptedException {
+        return executorService.awaitTermination(Math.max(0, deadline - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
     }
 
     private int countSegments(List<SegmentPlan> segments, SegmentType type) {

@@ -4,6 +4,12 @@ Applies to every NBT placement: `place_nbt_structure`, `place_schematic`, and
 `place_starlark_structure` / `build_starlark_structure` with `placement`. All of
 them go through `POST /api/world/structure/place`.
 
+Mutating placement and restore requests use [pollable operations](operations-and-queues.md).
+An HTTP wait expiring returns 202 with an operation ID, without failing or cancelling
+the edit. Poll through snapshot persistence and the restore status commit before
+interpreting the outcome. Missing records after restart have an unknown outcome;
+do not automatically resubmit. Dry runs retain their read-only timeout behavior.
+
 ## Dry run
 
 Pass `dry_run=true` (MCP) or the `dry_run=true` form field (HTTP). Nothing is written,
@@ -81,8 +87,10 @@ cannot be undone. Keep both files to preserve repeatable undo/redo.
 
 Before restoration, the reverse snapshot is written atomically and a
 `{build_id}.pending` marker records the action. The marker is removed only after
-world restoration and database status persistence succeed. A timeout is an unknown
-outcome: inspect build status and the world before retrying. An unresolved marker
+world restoration and database status persistence succeed. An expired HTTP wait
+returns a pollable operation; wait for its terminal outcome before retrying. A lost
+record after restart has an unknown outcome: inspect build status and the world.
+An unresolved marker
 blocks both operations, including after restart, and preserves both snapshots.
 
 Recovery is an administrator operation: stop the server, back up the two snapshots

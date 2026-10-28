@@ -35,7 +35,8 @@ public class BuildTaskEndpointIntegrationTest {
                 
                 // Clean up
                 if (APIServer.app != null) {
-                    APIServer.app.stop();
+                    APIServer.stop();
+                    APIServer.stopped().get(12, java.util.concurrent.TimeUnit.SECONDS);
                 }
             } finally {
                 System.clearProperty("api.port");

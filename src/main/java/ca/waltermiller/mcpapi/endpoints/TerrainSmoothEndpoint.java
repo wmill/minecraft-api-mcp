@@ -1,5 +1,8 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.operation.OperationHttp;
+import ca.waltermiller.mcpapi.operation.OperationRegistry;
+
 import ca.waltermiller.mcpapi.arealock.AreaBounds;
 import ca.waltermiller.mcpapi.arealock.AreaLockException;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
@@ -153,6 +156,17 @@ public final class TerrainSmoothEndpoint {
         try {
             Request req = parse(Json.MAPPER.readTree(ctx.body()));
             String lockId = ctx.header(AreaLockService.HEADER);
+            if (OperationHttp.tracked(ctx)) {
+                var future = OperationHttp.background(ctx, () -> {
+                    try { return applyTracked(req, lockId); }
+                    catch (RequestException invalid) { return new OperationRegistry.Response(400, invalid.payload()); }
+                    catch (TerrainChangedException conflict) {
+                        return new OperationRegistry.Response(409, Map.of("success", false, "code", "terrain_changed", "error", conflict.getMessage()));
+                    }
+                });
+                OperationHttp.respond(ctx, future, TIMEOUT_SECONDS, result -> result);
+                return;
+            }
             Sample sample = onServer(() -> sample(req));
             GroundColumn[][] region = sample.region(req);
             TerrainSmoother.Plan plan = plan(sample, req);
@@ -182,18 +196,29 @@ public final class TerrainSmoothEndpoint {
         }
     }
 
+    private OperationRegistry.Response applyTracked(Request req, String lockId) throws Exception {
+        Sample sample = onServer(() -> sample(req));
+        GroundColumn[][] region = sample.region(req);
+        TerrainSmoother.Plan plan = plan(sample, req);
+        AreaBounds bounds = TerrainRewriter.bounds(req.minX(), req.minZ(), region, plan.heights());
+        String world = sample.target().world();
+        Applied applied = onServer(() -> locks.execute(world, bounds, lockId,
+            () -> write(sample.target().access(), req, region, plan, bounds), ignored -> true));
+        return new OperationRegistry.Response(200, appliedBody(req, world, region, plan, bounds, applied));
+    }
+
     private <T> T onServer(Callable<T> work) throws Exception {
         CompletableFuture<T> future = new CompletableFuture<>();
-        serverThread.execute(() -> {
+        OperationHttp.dispatch(serverThread, () -> {
             if (future.isCancelled()) return;
             try {
                 future.complete(work.call());
             } catch (Throwable e) {
                 future.completeExceptionally(e);
             }
-        });
+        }, future);
         try {
-            return future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            return OperationHttp.active() ? future.get() : future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             future.cancel(false);
             throw e;

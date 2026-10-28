@@ -4,6 +4,8 @@ System-related tool handlers for the Minecraft MCP server.
 Handles tools for player teleportation and server connection testing.
 """
 
+from ..client.operations import PendingOperation, pending_result
+
 from typing import Optional
 from mcp.types import CallToolResult, TextContent
 import httpx
@@ -61,6 +63,8 @@ async def handle_teleport_player(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to teleport player: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "teleporting player")
 
@@ -111,6 +115,8 @@ async def handle_test_server_connection(
                 text="❌ Connection to Minecraft server timed out"
             )]
         )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "testing server connection")
 

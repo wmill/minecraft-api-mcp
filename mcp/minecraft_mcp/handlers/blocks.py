@@ -4,6 +4,8 @@ Block-related tool handlers for the Minecraft MCP server.
 Handles tools for block manipulation, querying, and heightmaps.
 """
 
+from ..client.operations import PendingOperation, pending_result
+
 import base64
 import json
 from typing import Any, Dict, List, Optional
@@ -38,6 +40,8 @@ async def handle_get_blocks(api_client: MinecraftAPIClient, **arguments) -> Call
         response_text += format_list_with_limit(result, limit=20, item_formatter=format_entity_info)
         
         return format_success_response(response_text)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "getting blocks")
 
@@ -76,6 +80,8 @@ async def handle_set_blocks(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to set blocks: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "setting blocks")
 
@@ -133,6 +139,8 @@ async def handle_get_blocks_chunk(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to get blocks: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "getting block chunk")
 
@@ -180,6 +188,8 @@ async def handle_fill_box(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to fill box: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "filling box")
 
@@ -221,6 +231,8 @@ async def handle_get_heightmap(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to get heightmap: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "getting heightmap")
 
@@ -280,6 +292,8 @@ async def handle_summarize_heightmap(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to summarize heightmap: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "summarizing heightmap")
 
@@ -333,6 +347,8 @@ async def handle_preview_heightmap(
                 TextContent(type="text", text=HEIGHTMAP_PREVIEW_ADVISORY),
             ]
         )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "rendering heightmap preview")
 
@@ -380,6 +396,8 @@ async def handle_map_terrain(
                 content.append(ImageContent(type="image", mimeType="image/png", data=result[key]))
         content.append(TextContent(type="text", text=format_terrain_map_summary(result)))
         return CallToolResult(content=content)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "rendering terrain map")
 

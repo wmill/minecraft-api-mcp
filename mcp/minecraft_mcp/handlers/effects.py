@@ -5,6 +5,8 @@ Handles one-shot world effects that aren't single-block prefabs, such as
 raining down fires across a circular area.
 """
 
+from ..client.operations import PendingOperation, pending_result
+
 from typing import Optional
 from mcp.types import CallToolResult
 
@@ -65,5 +67,7 @@ async def handle_rain_fire(
             return format_success_response(text)
         else:
             return format_api_error(result, "rain fire")
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "raining fire")

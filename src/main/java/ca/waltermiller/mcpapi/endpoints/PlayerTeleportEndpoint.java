@@ -1,5 +1,8 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.operation.OperationHttp;
+import ca.waltermiller.mcpapi.operation.OperationRegistry;
+
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import net.minecraft.server.MinecraftServer;
@@ -28,7 +31,7 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
 
             CompletableFuture<TeleportResult> future = new CompletableFuture<>();
 
-            server.execute(() -> {
+            OperationHttp.dispatch(server::execute, () -> {
                 try {
                     // Find the player by name
                     ServerPlayerEntity player = server.getPlayerManager().getPlayer(request.player_name());
@@ -70,7 +73,12 @@ public class PlayerTeleportEndpoint extends APIEndpoint {
                     LOGGER.error("Error teleporting player: ", e);
                     future.complete(new TeleportResult(500, new ErrorResponse("Failed to teleport player: " + e.getMessage())));
                 }
-            });
+            }, future);
+
+            if (OperationHttp.tracked(ctx)) {
+                OperationHttp.respond(ctx, future, 10, result -> new OperationRegistry.Response(result.statusCode(), result.body()));
+                return;
+            }
 
             try {
                 TeleportResult result = future.get(10, TimeUnit.SECONDS);

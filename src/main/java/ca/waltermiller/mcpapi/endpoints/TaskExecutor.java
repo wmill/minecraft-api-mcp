@@ -70,8 +70,12 @@ public class TaskExecutor {
     }
 
     public TaskExecutionResult executeTask(BuildTask task, String lockId) {
+        return executeTaskAsync(task, lockId).join();
+    }
+
+    public CompletableFuture<TaskExecutionResult> executeTaskAsync(BuildTask task, String lockId) {
         if (task == null) {
-            return new TaskExecutionResult(false, "Task cannot be null", null);
+            return CompletableFuture.completedFuture(new TaskExecutionResult(false, "Task cannot be null", null));
         }
 
         LOGGER.info("Executing task {} of type {} for build {}", 
@@ -83,13 +87,14 @@ public class TaskExecutor {
             String errorMessage = "Task data validation failed: " + validationResult.getErrorMessage();
             task.markFailed(errorMessage);
             LOGGER.error("Task {} validation failed: {}", task.getId(), validationResult.getErrorMessage());
-            return new TaskExecutionResult(false, errorMessage, null);
+            return CompletableFuture.completedFuture(new TaskExecutionResult(false, errorMessage, null));
         }
 
         // Mark task as executing
         task.markExecuting();
 
         try {
+            validateDimensions(task);
             // Execute based on task type
             CompletableFuture<TaskExecutionResult> future = switch (task.getTaskType()) {
                 case BLOCK_SET -> executeAsync(task, BlockSetRequest.class, req -> blocksCore.setBlocks(req, lockId), TaskExecutor::blockSetMessage);
@@ -111,32 +116,32 @@ public class TaskExecutor {
                     new TaskExecutionResult(false, "Unknown task type: " + task.getTaskType(), null));
             };
 
-            // Wait for completion with timeout
-            TaskExecutionResult result = future.get(EXECUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            return future.handle((result, failure) -> {
+                if (failure != null) {
+                    AreaLockException conflict = AreaLockException.find(failure);
+                    if (conflict != null) {
+                        String error = objectMapper.valueToTree(conflict.payload()).toString();
+                        task.markFailed(error);
+                        return new TaskExecutionResult(false, error, null, conflict.payload());
+                    }
+                    task.markFailed("Exception during task execution: " + failure.getMessage());
+                    return new TaskExecutionResult(false, task.getErrorMessage(), null);
+                }
+                if (result.success()) task.markCompleted();
+                else task.markFailed(result.errorMessage());
+                return result;
+            });
+        } catch (Exception failure) {
+            task.markFailed("Exception during task execution: " + failure.getMessage());
+            return CompletableFuture.completedFuture(new TaskExecutionResult(false, task.getErrorMessage(), null));
+        }
+    }
 
-            // Update task status based on result
-            if (result.success()) {
-                task.markCompleted();
-                LOGGER.info("Task {} completed successfully", task.getId());
-            } else {
-                task.markFailed(result.errorMessage());
-                LOGGER.error("Task {} failed: {}", task.getId(), result.errorMessage());
-            }
-
-            return result;
-
-        } catch (Exception e) {
-            AreaLockException conflict = AreaLockException.find(e);
-            if (conflict != null) {
-                // Keep conflict metadata in the existing persisted error column, without the token.
-                String error = objectMapper.valueToTree(conflict.payload()).toString();
-                task.markFailed(error);
-                return new TaskExecutionResult(false, error, null, conflict.payload());
-            }
-            String errorMessage = "Exception during task execution: " + e.getMessage();
-            task.markFailed(errorMessage);
-            LOGGER.error("Task {} failed with exception", task.getId(), e);
-            return new TaskExecutionResult(false, errorMessage, null);
+    /** Pure validation shared by execution and preview admission. */
+    public void validateDimensions(BuildTask task) {
+        if (task.getTaskType() == ca.waltermiller.mcpapi.buildtask.model.TaskType.BLOCK_FILL) {
+            FillBoxRequest request = objectMapper.convertValue(task.getTaskData(), FillBoxRequest.class);
+            CheckedDimensions.fill(request.x1, request.y1, request.z1, request.x2, request.y2, request.z2);
         }
     }
 
@@ -190,11 +195,11 @@ public class TaskExecutor {
     public void validateLockToken(String lockId) throws Exception {
         if (lockId == null) return;
         CompletableFuture<Void> future = new CompletableFuture<>();
-        server.execute(() -> {
+        ca.waltermiller.mcpapi.operation.OperationHttp.dispatch(server::execute, () -> {
             try { locks.validateToken(lockId); future.complete(null); }
             catch (Exception e) { future.completeExceptionally(e); }
-        });
-        try { future.get(EXECUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS); }
+        }, future);
+        try { future.get(); }
         catch (java.util.concurrent.ExecutionException e) {
             if (e.getCause() instanceof AreaLockException conflict) throw conflict;
             throw e;
@@ -256,7 +261,7 @@ public class TaskExecutor {
         int maxY = Math.max(request.y1, request.y2);
         int minZ = Math.min(request.z1, request.z2);
         int maxZ = Math.max(request.z1, request.z2);
-        int totalBlocks = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+        int totalBlocks = CheckedDimensions.fill(minX, minY, minZ, maxX, maxY, maxZ);
         return blocksCore.fillBoxInto(sink, request, resolveWorldKey(request.world),
             minX, minY, minZ, maxX, maxY, maxZ, totalBlocks);
     }
@@ -310,7 +315,7 @@ public class TaskExecutor {
 
     private CompletableFuture<TaskExecutionResult> executeRailSegmentTask(BuildTask task, String mode, String lockId) {
         CompletableFuture<TaskExecutionResult> future = new CompletableFuture<>();
-        server.execute(() -> {
+        ca.waltermiller.mcpapi.operation.OperationHttp.dispatch(server::execute, () -> {
             try {
                 RailSegmentDefinition segment = parseRailSegment(task);
                 if (segment.path().size() < 2) {
@@ -331,7 +336,7 @@ public class TaskExecutor {
             } catch (Exception e) {
                 future.completeExceptionally(e);
             }
-        });
+        }, future);
         return future;
     }
 

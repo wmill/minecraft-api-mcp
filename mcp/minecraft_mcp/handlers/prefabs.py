@@ -4,6 +4,8 @@ Prefab-related tool handlers for the Minecraft MCP server.
 Handles tools for placing prefabricated structures like doors, stairs, windows, torches, and signs.
 """
 
+from ..client.operations import PendingOperation, pending_result
+
 from typing import List, Optional
 from mcp.types import CallToolResult, TextContent
 
@@ -73,6 +75,8 @@ async def handle_place_nbt_structure(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to place NBT structure: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "placing NBT structure")
 
@@ -124,6 +128,8 @@ async def handle_place_door_line(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to place doors: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "placing doors")
 
@@ -179,6 +185,8 @@ async def handle_place_stairs(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to place stairs: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "placing stairs")
 
@@ -229,6 +237,8 @@ async def handle_place_window_pane_wall(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to place window panes: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "placing window panes")
 
@@ -269,6 +279,8 @@ async def handle_place_torch(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to place torch: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "placing torch")
 
@@ -323,6 +335,8 @@ async def handle_place_sign(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to place sign: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "placing sign")
 
@@ -378,5 +392,7 @@ async def handle_place_ladder(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to place ladder: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "placing ladder")

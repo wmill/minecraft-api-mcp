@@ -2516,3 +2516,23 @@ for tool in TOOL_SCHEMAS:
 TOOL_SCHEMAS.extend(AREA_LOCK_TOOLS)
 
 TOOL_SCHEMAS.extend(MARKER_TOOLS)
+
+TOOL_SCHEMAS.append(Tool(
+    name="get_operation",
+    description="Poll a world edit operation. Unknown or expired IDs have unknown outcomes; do not automatically resubmit.",
+    inputSchema={"type": "object", "properties": {"operation_id": {"type": "string"}}, "required": ["operation_id"]},
+))
+
+# Placement may remain active beyond the client's polling deadline.
+PENDING_OPERATION_SCHEMA = {
+    "type": "object",
+    "properties": {"status": {"const": "pending"}, "operation_id": {"type": "string"},
+                   "status_url": {"type": "string"}, "instructions": {"type": "string"}},
+    "required": ["status", "operation_id", "status_url", "instructions"],
+}
+for tool in TOOL_SCHEMAS:
+    if tool.name in {"build_starlark_structure", "place_starlark_structure"}:
+        completed_schema = dict(tool.outputSchema)
+        definitions = completed_schema.pop("$defs", {})
+        tool.outputSchema = {"type": "object", "$defs": definitions,
+                             "anyOf": [completed_schema, PENDING_OPERATION_SCHEMA]}

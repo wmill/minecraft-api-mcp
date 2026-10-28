@@ -50,6 +50,9 @@ class BuildServiceTest {
     void setUp() {
         buildService = new BuildService(buildRepository, taskRepository, taskExecutor);
         objectMapper = new ObjectMapper();
+        org.mockito.Mockito.lenient().when(taskExecutor.executeTaskAsync(any(BuildTask.class), org.mockito.ArgumentMatchers.nullable(String.class)))
+            .thenAnswer(call -> java.util.concurrent.CompletableFuture.completedFuture(call.getArgument(1) == null
+                ? taskExecutor.executeTask(call.getArgument(0)) : taskExecutor.executeTask(call.getArgument(0), (String) call.getArgument(1))));
     }
 
     @AfterEach
@@ -146,7 +149,7 @@ class BuildServiceTest {
         assertThat(result.tasksFailed).isZero();
         assertThat(task.getStatus()).isEqualTo(TaskStatus.COMPLETED);
         assertThat(build.getStatus()).isEqualTo(BuildStatus.COMPLETED);
-        verify(taskRepository).update(task);
+        verify(taskRepository, org.mockito.Mockito.times(2)).update(task);
     }
 
     @Test
@@ -205,8 +208,8 @@ class BuildServiceTest {
         when(taskRepository.findByBuildIdOrdered(id)).thenReturn(List.of(task));
         assertThrows(IllegalStateException.class, () -> buildService.validateTaskExecution(id, true));
         assertThrows(IllegalStateException.class, () -> buildService.validateTaskExecution(id, false));
-        assertThrows(java.util.concurrent.ExecutionException.class, () -> buildService.replayBuild(id).get(5, TimeUnit.SECONDS));
-        assertThat(buildService.executeBuild(id).get(5, TimeUnit.SECONDS).success).isFalse();
+        assertThrows(IllegalStateException.class, () -> buildService.replayBuild(id));
+        assertThrows(IllegalStateException.class, () -> buildService.executeBuild(id));
         assertThat(build.getStatus()).isEqualTo(BuildStatus.REVERTED);
         assertThat(task.getStatus()).isEqualTo(TaskStatus.COMPLETED);
         verify(buildRepository, never()).update(any());
@@ -258,10 +261,12 @@ class BuildServiceTest {
         assertThat(blocked.getStatus()).isEqualTo(TaskStatus.FAILED);
         assertThat(pending.getStatus()).isEqualTo(TaskStatus.QUEUED);
         assertThat(build.getStatus()).isEqualTo(BuildStatus.FAILED);
-        verify(taskRepository).update(blocked);
+        verify(taskRepository, org.mockito.Mockito.times(2)).update(blocked);
         if (token == null) verify(taskExecutor).executeTask(blocked);
         else verify(taskExecutor).executeTask(blocked, token);
-        org.mockito.Mockito.verifyNoMoreInteractions(taskExecutor);
+        verify(taskExecutor).executeTaskAsync(blocked, token);
+        verify(taskExecutor, never()).executeTaskAsync(done, token);
+        verify(taskExecutor, never()).executeTaskAsync(pending, token);
     }
 
     @Test
@@ -285,7 +290,7 @@ class BuildServiceTest {
         assertThat(data.get("y2").asInt()).isEqualTo(63);
         assertThat(data.get("z2").asInt()).isEqualTo(12);
         assertThat(translated.get(0).getCoordinates().getMinX()).isEqualTo(5);
-        verify(taskRepository).updateAll(translated);
+        verify(taskRepository).updateTaskQueue(buildId, translated);
     }
 
     @Test

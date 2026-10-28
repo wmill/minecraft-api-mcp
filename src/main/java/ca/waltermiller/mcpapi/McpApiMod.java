@@ -24,9 +24,7 @@ public class McpApiMod implements ModInitializer {
 		});
 
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-			if (APIServer.markers != null) { APIServer.markers.clear(); APIServer.markers = null; }
-			LOGGER.info("Shutting down database...");
-			DatabaseManager.getInstance().shutdown();
+			APIServer.stop();
 		});
 	}
 }

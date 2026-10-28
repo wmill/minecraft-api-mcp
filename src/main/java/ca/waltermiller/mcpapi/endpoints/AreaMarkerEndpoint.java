@@ -1,5 +1,8 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.operation.OperationHttp;
+import ca.waltermiller.mcpapi.operation.OperationRegistry;
+
 import ca.waltermiller.mcpapi.marker.AreaMarkerService;
 import ca.waltermiller.mcpapi.marker.MarkerSpec;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -56,10 +59,14 @@ public final class AreaMarkerEndpoint {
 
     private static void respond(Context ctx, MinecraftServer server, Supplier<Object> operation) throws Exception {
         CompletableFuture<Object> future = new CompletableFuture<>();
-        server.execute(() -> {
+        OperationHttp.dispatch(server::execute, () -> {
             try { future.complete(operation.get()); }
             catch (Exception e) { future.completeExceptionally(e); }
-        });
+        }, future);
+        if (OperationHttp.tracked(ctx)) {
+            OperationHttp.respond(ctx, future, 5, result -> new OperationRegistry.Response(200, result));
+            return;
+        }
         try { ctx.json(future.get(5, TimeUnit.SECONDS)); }
         catch (java.util.concurrent.ExecutionException e) {
             if (e.getCause() instanceof IllegalArgumentException invalid) {

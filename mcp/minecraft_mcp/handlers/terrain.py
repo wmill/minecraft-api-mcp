@@ -2,6 +2,8 @@
 Terrain shaping tool handlers: smooth_terrain.
 """
 
+from ..client.operations import PendingOperation, pending_result
+
 from typing import Any, Dict, List, Optional
 
 from mcp.types import CallToolResult, ImageContent, TextContent
@@ -32,6 +34,8 @@ async def handle_smooth_terrain(
             payload[key] = arguments[key]
     try:
         result = await api_client.smooth_terrain(payload)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "smoothing terrain")
 

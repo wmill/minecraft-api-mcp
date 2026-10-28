@@ -1,5 +1,8 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.operation.OperationHttp;
+import ca.waltermiller.mcpapi.operation.OperationRegistry;
+
 import ca.waltermiller.mcpapi.arealock.AreaBounds;
 import ca.waltermiller.mcpapi.arealock.AreaLockException;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
@@ -23,21 +26,31 @@ public final class AreaLockEndpoint {
     }
 
     AreaLockEndpoint(Javalin app, Executor executor, Function<String, String> resolveWorld, AreaLockService locks) {
-        app.post("/api/area-locks", ctx -> respond(ctx, executor, () -> {
-            JsonNode body = body(ctx);
-            AreaBounds bounds = bounds(body.get("bounds"));
-            if (bounds == null) throw new IllegalArgumentException("bounds is required");
-            return locks.acquire(resolveWorld.apply(body.path("world").asText(null)), bounds, body.path("label").asText(""));
-        }));
-        app.patch("/api/area-locks/{lock_id}", ctx -> respond(ctx, executor, () -> {
-            JsonNode body = body(ctx);
-            if (body.has("world")) throw new IllegalArgumentException("A reservation's world cannot be changed");
-            return locks.update(ctx.pathParam("lock_id"), bounds(body.get("bounds")));
-        }));
-        app.delete("/api/area-locks/{lock_id}", ctx -> respond(ctx, executor, () -> {
-            locks.release(ctx.pathParam("lock_id"));
-            return Map.of("success", true);
-        }));
+        app.post("/api/area-locks", ctx -> {
+            String payload = ctx.body();
+            respond(ctx, executor, () -> {
+                JsonNode body = body(payload);
+                AreaBounds bounds = bounds(body.get("bounds"));
+                if (bounds == null) throw new IllegalArgumentException("bounds is required");
+                return locks.acquire(resolveWorld.apply(body.path("world").asText(null)), bounds, body.path("label").asText(""));
+            });
+        });
+        app.patch("/api/area-locks/{lock_id}", ctx -> {
+            String payload = ctx.body();
+            String id = ctx.pathParam("lock_id");
+            respond(ctx, executor, () -> {
+                JsonNode body = body(payload);
+                if (body.has("world")) throw new IllegalArgumentException("A reservation's world cannot be changed");
+                return locks.update(id, bounds(body.get("bounds")));
+            });
+        });
+        app.delete("/api/area-locks/{lock_id}", ctx -> {
+            String id = ctx.pathParam("lock_id");
+            respond(ctx, executor, () -> {
+                locks.release(id);
+                return Map.of("success", true);
+            });
+        });
         app.get("/api/area-locks", ctx -> respond(ctx, executor, () -> {
             String filter = ctx.queryParam("world");
             int[] coordinates = new int[6];
@@ -53,8 +66,10 @@ public final class AreaLockEndpoint {
         }));
     }
 
-    private static JsonNode body(Context ctx) {
-        JsonNode body = ctx.bodyAsClass(JsonNode.class);
+    private static JsonNode body(String payload) {
+        JsonNode body;
+        try { body = ca.waltermiller.mcpapi.buildtask.Json.MAPPER.readTree(payload); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { throw new IllegalArgumentException("Invalid JSON body"); }
         if (body == null || !body.isObject()) throw new IllegalArgumentException("Expected a JSON object");
         return body;
     }
@@ -78,10 +93,14 @@ public final class AreaLockEndpoint {
 
     private static void respond(Context ctx, Executor executor, Supplier<Object> operation) throws Exception {
         CompletableFuture<Object> future = new CompletableFuture<>();
-        executor.execute(() -> {
+        OperationHttp.dispatch(executor, () -> {
             try { future.complete(operation.get()); }
             catch (Exception e) { future.completeExceptionally(e); }
-        });
+        }, future);
+        if (OperationHttp.tracked(ctx)) {
+            OperationHttp.respond(ctx, future, 30, result -> new OperationRegistry.Response(200, result));
+            return;
+        }
         try {
             ctx.json(future.get(30, TimeUnit.SECONDS));
         } catch (java.util.concurrent.ExecutionException e) {
