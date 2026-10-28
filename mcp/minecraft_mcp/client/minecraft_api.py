@@ -12,6 +12,21 @@ import httpx
 from typing import Any, Dict, List, Optional
 
 
+def _spawn_options_payload(options: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert MCP spawn options to the REST shape: passengers use 'type' instead of 'entity_type'."""
+    payload = dict(options)
+    passengers = payload.get("passengers")
+    if passengers:
+        converted = []
+        for passenger in passengers:
+            entry = {"type": passenger.get("entity_type", passenger.get("type"))}
+            if passenger.get("options"):
+                entry["options"] = _spawn_options_payload(passenger["options"])
+            converted.append(entry)
+        payload["passengers"] = converted
+    return payload
+
+
 class MinecraftAPIClient:
     """HTTP client for the Minecraft Fabric mod REST API."""
     
@@ -116,7 +131,10 @@ class MinecraftAPIClient:
         x: float,
         y: float,
         z: float,
-        world: Optional[str] = None
+        world: Optional[str] = None,
+        count: Optional[int] = None,
+        spread: Optional[float] = None,
+        options: Optional[Dict[str, Any]] = None
     ) -> dict:
         """
         Spawn an entity at specified coordinates.
@@ -127,6 +145,9 @@ class MinecraftAPIClient:
             y: Y coordinate
             z: Z coordinate
             world: World name (optional, defaults to minecraft:overworld)
+            count: Number of entities to spawn (optional)
+            spread: Scatter radius for extra entities (optional)
+            options: Customisation options; passengers use 'entity_type' (optional)
             
         Returns:
             dict: Response containing spawn result with entity UUID and position
@@ -142,6 +163,12 @@ class MinecraftAPIClient:
         }
         if world:
             payload["world"] = world
+        if count is not None:
+            payload["count"] = count
+        if spread is not None:
+            payload["spread"] = spread
+        if options:
+            payload["options"] = _spawn_options_payload(options)
         
         async with self._http_client() as client:
             response = await client.post(

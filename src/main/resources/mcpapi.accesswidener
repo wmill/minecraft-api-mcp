@@ -1,0 +1,4 @@
+accessWidener v2 named
+
+# spawn_entity "charged" option: CreeperEntity has no public setter for its powered flag
+accessible field net/minecraft/entity/mob/CreeperEntity CHARGED Lnet/minecraft/entity/data/TrackedData;

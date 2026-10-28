@@ -1952,6 +1952,10 @@ components:
 
     EntitySpawnRequest:
       type: object
+      description: >
+        All fields beyond type/world/x/y/z are optional. Validation failures (bounds, unknown item,
+        effect, profession or variant, offline tamed_by player) return 400 with an "Invalid ..." error
+        and nothing is spawned.
       properties:
         type:
           type: string
@@ -1964,7 +1968,99 @@ components:
           type: number
         z:
           type: number
+        count:
+          type: integer
+          minimum: 1
+          maximum: 32
+          default: 1
+          description: Number of root entities; extras are scattered in a disc of radius `spread`. At most 64 entities in total including passengers.
+        spread:
+          type: number
+          minimum: 0
+          maximum: 16
+          default: 2
+        options:
+          $ref: "#/components/schemas/EntitySpawnOptions"
       required: [type, x, y, z]
+
+    EntitySpawnOptions:
+      type: object
+      description: >
+        Applied after the mob's own initialization, so it overrides random variants and gear.
+        Options that do not apply to an entity type are skipped and listed in the response's `ignored`.
+      properties:
+        custom_name: {type: string, maxLength: 64}
+        name_visible: {type: boolean, description: Defaults to true when custom_name is set}
+        glowing: {type: boolean}
+        silent: {type: boolean}
+        no_gravity: {type: boolean}
+        invulnerable: {type: boolean}
+        no_ai: {type: boolean, description: Mobs only}
+        persistent: {type: boolean, description: Mobs only}
+        baby: {type: boolean}
+        fire_seconds: {type: integer, minimum: 0, maximum: 600}
+        yaw: {type: number}
+        pitch: {type: number, minimum: -90, maximum: 90}
+        velocity:
+          type: object
+          description: Blocks per tick, each component within +/-10
+          properties:
+            x: {type: number}
+            y: {type: number}
+            z: {type: number}
+        max_health: {type: number, minimum: 1, maximum: 1024}
+        health: {type: number, minimum: 1, maximum: 1024, description: Defaults to max health when max_health is set}
+        equipment:
+          type: object
+          description: Item id per slot (mainhand, offhand, head, chest, legs, feet, body, saddle)
+          additionalProperties: {type: string}
+          example: {mainhand: "minecraft:diamond_sword", head: "minecraft:carved_pumpkin"}
+        drop_equipment: {type: boolean, default: false, description: Drop chance for given gear is 0 unless true}
+        effects:
+          type: array
+          maxItems: 16
+          items:
+            type: object
+            properties:
+              id: {type: string, example: "minecraft:speed"}
+              duration_seconds: {type: integer, minimum: 1, maximum: 3600, default: 30}
+              amplifier: {type: integer, minimum: 0, maximum: 9, default: 0}
+              particles: {type: boolean, default: true}
+            required: [id]
+        variant:
+          type: string
+          description: Decoded with the entity's variant component codec (cat, wolf, frog, pig, cow, chicken, fox, parrot, rabbit, axolotl, llama, horse, mooshroom, salmon size, tropical fish pattern, villager type)
+          example: minecraft:black
+        color:
+          type: string
+          description: Dye color for sheep wool, wolf/cat collar or tropical fish base color
+        profession: {type: string, description: Villager or zombie villager profession id}
+        villager_level: {type: integer, minimum: 1, maximum: 5}
+        size: {type: integer, minimum: 1, maximum: 16, description: Slime or magma cube}
+        charged: {type: boolean, description: Creeper}
+        tamed_by: {type: string, description: Online player name; tameables and horses}
+        passengers:
+          type: array
+          description: Riders, each with its own options (max stack depth 8)
+          items:
+            type: object
+            properties:
+              type: {type: string}
+              options:
+                $ref: "#/components/schemas/EntitySpawnOptions"
+            required: [type]
+
+    SpawnedEntity:
+      type: object
+      properties:
+        type: {type: string}
+        uuid: {type: string, format: uuid}
+        position:
+          $ref: "#/components/schemas/Position3D"
+        passengers:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpawnedEntity"
 
     EntitySpawnResponse:
       type: object
@@ -1976,8 +2072,17 @@ components:
         uuid:
           type: string
           format: uuid
+          description: First root entity
         position:
           $ref: "#/components/schemas/Position3D"
+        entities:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpawnedEntity"
+        ignored:
+          type: array
+          items: {type: string}
+          description: Options skipped because they do not apply, e.g. "baby (minecraft:skeleton)"
 
     # ── Blocks ────────────────────────────────────────────────────────────────
 

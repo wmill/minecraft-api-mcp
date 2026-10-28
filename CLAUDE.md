@@ -136,7 +136,7 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 **Key Endpoints:**
 - `PlayersEndpoint` - Query online players with positions/rotations
 - `BlocksEndpoint` - Read/write block data, handle chunks, heightmap queries, isometric heightmap preview and top-down terrain maps (core logic in `BlocksEndpointCore`)
-- `EntitiesEndpoint` - List entity types, spawn entities
+- `EntitiesEndpoint` - List entity types, spawn entities; spawn accepts `count`/`spread` and typed `options` (name, glow, no_ai, gear, effects, variant/color, profession, size, charged creeper, tamed_by, nested passengers) applied via the `EntityType.create` afterConsumer (`EntityCustomizer`, validation in `EntitySpawnSpec`); inapplicable options come back as `ignored`. Creeper `charged` needs the access widener `src/main/resources/mcpapi.accesswidener`
 - `MessageEndpoint` - Send messages to players (broadcast or targeted)
 - `PlayerTeleportEndpoint` - Teleport players to coordinates
 - `PrefabEndpoint` - Place prefab structures: doors, stairs, windows, torches, signs, ladders (core logic in `PrefabEndpointCore`)
@@ -436,7 +436,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 **Mod Metadata**: `src/main/resources/fabric.mod.json`
 - Mod ID: "mcpapi"
 - Version: 0.0.1
-- Entrypoint: Main (`ca.waltermiller.mcpapi.McpApiMod`); no client entrypoint or mixins
+- Entrypoint: Main (`ca.waltermiller.mcpapi.McpApiMod`); no client entrypoint or mixins; one access widener (`mcpapi.accesswidener`)
 - Requires: FabricLoader >=0.16.14, Minecraft ~1.21.7, Java >=21
 
 ## Testing
@@ -446,7 +446,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 
 **Test Categories:**
 - Database layer tests: `DatabaseManagerTest`, `DatabaseConfigTest`, `DatabaseIntegrationTest` (integration gated behind `DB_TEST` env var)
-- Endpoint tests: `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `RailRenderInspectionServiceTest`, `EndpointRefactoringTest`, `PlacementBoundsTest`, `GuardedPlacementTest`, `StructurePlacementEffectTest`
+- Endpoint tests: `EntitySpawnSpecTest`, `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `RailRenderInspectionServiceTest`, `EndpointRefactoringTest`, `PlacementBoundsTest`, `GuardedPlacementTest`, `StructurePlacementEffectTest`
 - Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `BuildTaskTest`, `BoundingBoxTest`, `TaskDataValidatorTest`, `TaskDataTranslatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`
 - Area lock tests: `AreaLockServiceTest`, `AreaLockEndpointTest`
 - Site survey tests: `SiteSurveyTest`, `SiteSurveyEndpointTest`, `SurveyOccupancyTest`
@@ -468,6 +468,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_survey_site.py` - `survey_site` handler
 - `test_preview_heightmap.py` - `preview_heightmap` image output
 - `test_teleport_player.py` - `teleport_player` handler
+- `test_spawn_entity.py` - `spawn_entity` options schema, passenger payload conversion, tree summary and 400 messages
 - `test_terrain_map.py` - `map_terrain` images, summary text and errors
 - `test_smooth_terrain.py` - `smooth_terrain` registration, dry-run images/summary, apply summary, errors
 

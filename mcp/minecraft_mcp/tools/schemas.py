@@ -33,9 +33,93 @@ TOOL_GET_ENTITIES = Tool(
     }
 )
 
+_SPAWN_OPTION_PROPERTIES = {
+    "custom_name": {"type": "string", "description": "Name tag text (max 64 chars); shown above the entity unless name_visible is false"},
+    "name_visible": {"type": "boolean", "description": "Always show the name tag (default true when custom_name is set)"},
+    "glowing": {"type": "boolean", "description": "Glowing outline visible through walls"},
+    "silent": {"type": "boolean", "description": "Make no sounds"},
+    "no_gravity": {"type": "boolean", "description": "Float in place"},
+    "invulnerable": {"type": "boolean", "description": "Immune to damage (except /kill and the void)"},
+    "no_ai": {"type": "boolean", "description": "Mobs only: frozen like a statue, never moves or attacks"},
+    "persistent": {"type": "boolean", "description": "Mobs only: never despawns"},
+    "baby": {"type": "boolean", "description": "Spawn as a baby (animals, zombies, piglins, villagers...)"},
+    "fire_seconds": {"type": "integer", "minimum": 0, "maximum": 600, "description": "Set on fire for this many seconds"},
+    "yaw": {"type": "number", "description": "Facing in degrees: 0=south, 90=west, 180=north, -90=east"},
+    "pitch": {"type": "number", "minimum": -90, "maximum": 90, "description": "Head pitch in degrees (negative looks up)"},
+    "velocity": {
+        "type": "object",
+        "description": "Launch velocity in blocks/tick (each component within +/-10; y=1 is a big hop)",
+        "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}},
+    },
+    "max_health": {"type": "number", "minimum": 1, "maximum": 1024, "description": "Max health in half-hearts (spawns at full health)"},
+    "health": {"type": "number", "minimum": 1, "maximum": 1024, "description": "Current health in half-hearts"},
+    "equipment": {
+        "type": "object",
+        "description": "Item id per slot, e.g. {\"mainhand\": \"minecraft:diamond_sword\", \"head\": \"minecraft:carved_pumpkin\"}. "
+                       "Slots: mainhand, offhand, head, chest, legs, feet, body (horse/wolf armor), saddle. "
+                       "Slots the entity cannot use are reported as ignored.",
+        "propertyNames": {"enum": ["mainhand", "offhand", "head", "chest", "legs", "feet", "body", "saddle"]},
+        "additionalProperties": {"type": "string"},
+    },
+    "drop_equipment": {"type": "boolean", "description": "Let mobs drop the given gear on death (default false)"},
+    "effects": {
+        "type": "array",
+        "maxItems": 16,
+        "description": "Status effects, e.g. [{\"id\": \"minecraft:speed\", \"amplifier\": 1}]",
+        "items": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Effect id, e.g. minecraft:speed, minecraft:invisibility, minecraft:levitation, minecraft:strength"},
+                "duration_seconds": {"type": "integer", "minimum": 1, "maximum": 3600, "description": "Default 30"},
+                "amplifier": {"type": "integer", "minimum": 0, "maximum": 9, "description": "0 = level I, 1 = level II..."},
+                "particles": {"type": "boolean", "description": "Show effect particles (default true)"},
+            },
+            "required": ["id"],
+        },
+    },
+    "variant": {
+        "type": "string",
+        "description": "Mob variant. Cat: tabby, black, red, siamese, british_shorthair, calico, persian, ragdoll, white, jellie, all_black. "
+                       "Wolf: pale, woods, ashen, black, chestnut, rusty, spotted, striped, snowy. Frog: temperate, warm, cold. "
+                       "Pig/cow/chicken: temperate, warm, cold. Fox: red, snow. Parrot: red_blue, blue, green, yellow_blue, gray. "
+                       "Rabbit: brown, white, black, white_splotched, gold, salt, evil. Axolotl: lucy, wild, gold, cyan, blue. "
+                       "Llama: creamy, white, brown, gray. Horse: white, creamy, chestnut, brown, black, gray, dark_brown. "
+                       "Mooshroom: red, brown. Salmon: small, medium, large. Villager/zombie villager biome type: "
+                       "plains, desert, jungle, savanna, snow, swamp, taiga.",
+    },
+    "color": {"type": "string", "description": "Dye color (white, orange, magenta, light_blue, yellow, lime, pink, gray, light_gray, cyan, purple, blue, brown, green, red, black) "
+                                              "for sheep wool, wolf/cat collar (visible when tamed), or tropical fish body"},
+    "profession": {"type": "string", "description": "Villager / zombie villager profession: armorer, butcher, cartographer, cleric, farmer, fisherman, "
+                                                   "fletcher, leatherworker, librarian, mason, nitwit, shepherd, toolsmith, weaponsmith"},
+    "villager_level": {"type": "integer", "minimum": 1, "maximum": 5, "description": "Villager level (1 novice .. 5 master)"},
+    "size": {"type": "integer", "minimum": 1, "maximum": 16, "description": "Slime / magma cube size (vanilla max 4)"},
+    "charged": {"type": "boolean", "description": "Creeper: charged (blue aura, bigger explosion)"},
+    "tamed_by": {"type": "string", "description": "Online player name to own a wolf, cat, parrot, horse, donkey, llama..."},
+    "passengers": {
+        "type": "array",
+        "description": "Entities riding this one. Each passenger can have its own options and passengers, so stacks "
+                       "(mob towers, chicken jockeys) are possible. Max depth 8.",
+        "items": {
+            "type": "object",
+            "properties": {
+                "entity_type": {"type": "string", "description": "Passenger entity type, e.g. minecraft:zombie (use options.baby for a baby zombie)"},
+                "options": {"type": "object", "description": "Same fields as the top-level options, including nested passengers"},
+            },
+            "required": ["entity_type"],
+        },
+    },
+}
+
 TOOL_SPAWN_ENTITY = Tool(
     name="spawn_entity",
-    description="Spawn an entity at specified coordinates",
+    description=(
+        "Spawn one or more entities, optionally customised. Options can name, equip, buff, recolour, freeze, "
+        "launch or stack them. Ideas: a glowing named cat with variant 'black' and a red collar; a charged creeper "
+        "with no_ai as a statue; a zombie in diamond armor with speed II; minecraft:spider count 3 with a skeleton "
+        "passenger (spider jockeys); a chicken with a baby zombie passenger (chicken jockey); a 5-high tower of "
+        "nested passengers; a master librarian villager. Options that do not apply to an entity type are listed "
+        "as ignored rather than failing. Max 32 roots and 64 entities per call."
+    ),
     inputSchema={
         "type": "object",
         "properties": {
@@ -59,7 +143,24 @@ TOOL_SPAWN_ENTITY = Tool(
                 "type": "string",
                 "description": "World name (optional, defaults to minecraft:overworld)",
                 "default": "minecraft:overworld"
-            }
+            },
+            "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32,
+                "description": "How many to spawn (default 1); extras are scattered around the point"
+            },
+            "spread": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 16,
+                "description": "Scatter radius in blocks when count > 1 (default 2)"
+            },
+            "options": {
+                "type": "object",
+                "description": "Customisation applied to every spawned entity",
+                "properties": _SPAWN_OPTION_PROPERTIES,
+            },
         },
         "required": ["entity_type", "x", "y", "z"]
     }
