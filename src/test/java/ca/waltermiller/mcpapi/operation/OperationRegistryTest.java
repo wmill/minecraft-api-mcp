@@ -53,6 +53,10 @@ class OperationRegistryTest {
             var done = registry.register("secret-key", "secret-payload").operation();
             registry.finish(done, new OperationRegistry.Response(200, Map.of("success", true, "lock_id", "secret-token")));
             assertThat(done.view().toString()).doesNotContain("secret");
+            assertThat(done.ownedBy("other-key")).isFalse();
+            assertThat(active.ownedBy(null)).isFalse();
+            assertThat(done.ownedBy("secret-key")).isTrue();
+            assertThat(done.view(true).toString()).contains("secret-token");
             assertThatThrownBy(() -> registry.register(null, "full")).isInstanceOf(OperationRegistry.Failure.class);
             clock.now = clock.now.plus(Duration.ofHours(1));
             assertThat(registry.get(done.id)).isNull();

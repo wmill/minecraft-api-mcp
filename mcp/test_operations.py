@@ -108,3 +108,38 @@ async def test_management_handlers_preserve_pending_result(kind):
     handler = area_locks._result if kind == "reservation" else markers._result
     result = await handler(pending())
     assert result.structuredContent["status"] == "pending"
+
+
+def _token_server(requests, finished):
+    """202 on acquire; the poll result includes the token only for the submitter's key."""
+    def handler(request):
+        requests.append(request)
+        if request.method == "POST":
+            return httpx.Response(202, json={"operation_id": "lock-op"})
+        if not finished():
+            return httpx.Response(200, json={"status": "running"})
+        owner = request.headers.get("Idempotency-Key") == requests[0].headers["Idempotency-Key"]
+        result = {"lock_id": "token", "label": "x"} if owner else {"label": "x"}
+        return httpx.Response(200, json={"status": "succeeded", "result_status": 200, "result": result})
+    return handler
+
+
+async def test_delayed_lock_acquisition_recovers_token_by_polling_with_key(monkeypatch):
+    requests = []
+    http_mock(monkeypatch, _token_server(requests, lambda: True))
+    result = await MinecraftAPIClient("http://minecraft").acquire_area_lock({"min_x": 0})
+    assert result["lock_id"] == "token"
+
+
+async def test_get_operation_after_deadline_sends_remembered_key(monkeypatch):
+    requests = []
+    finished = []
+    http_mock(monkeypatch, _token_server(requests, lambda: bool(finished)))
+    monkeypatch.setattr(operations, "POLL_DEADLINE_SECONDS", 0)
+    client = MinecraftAPIClient("http://minecraft")
+    with pytest.raises(operations.PendingOperation):
+        await client.acquire_area_lock({"min_x": 0})
+    finished.append(True)
+    view = await client.get_operation("lock-op")
+    assert view["result"]["lock_id"] == "token"
+    assert operations.pending_key("lock-op") is None

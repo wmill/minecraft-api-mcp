@@ -5,7 +5,7 @@ HTTP client for communicating with the Minecraft Fabric mod REST API.
 Provides typed methods for each API endpoint with error handling.
 """
 
-from .operations import OperationClient
+from .operations import OperationClient, forget_pending_key, pending_key
 import base64
 from urllib.parse import quote
 
@@ -51,10 +51,15 @@ class MinecraftAPIClient:
         return OperationClient(httpx.AsyncClient(**kwargs), self.base_url)
 
     async def get_operation(self, operation_id: str) -> dict:
+        key = pending_key(operation_id)
         async with self._http_client() as client:
-            response = await client.get(f"{self.base_url}/api/operations/{quote(operation_id, safe='')}")
+            response = await client.get(f"{self.base_url}/api/operations/{quote(operation_id, safe='')}",
+                                        headers={"Idempotency-Key": key} if key else None)
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+        if "result_status" in result:
+            forget_pending_key(operation_id)
+        return result
 
     async def acquire_area_lock(self, bounds, world="minecraft:overworld", label="") -> dict:
         async with self._http_client() as client:

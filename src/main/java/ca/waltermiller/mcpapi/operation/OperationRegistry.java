@@ -39,7 +39,14 @@ public final class OperationRegistry implements AutoCloseable {
             finished = now;
             completion.complete(new Response(503, Map.of("error", "Operation cancelled during shutdown")));
         }
-        public synchronized Map<String, Object> view() {
+        /** True when keyDigest is this operation's Idempotency-Key digest; compared in constant time. */
+        public boolean ownedBy(String keyDigest) {
+            return key != null && keyDigest != null && java.security.MessageDigest.isEqual(
+                key.getBytes(java.nio.charset.StandardCharsets.UTF_8), keyDigest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        public Map<String, Object> view() { return view(false); }
+        /** The submitter (holder of the Idempotency-Key) sees the unredacted result, e.g. a delayed reservation token. */
+        public synchronized Map<String, Object> view(boolean owner) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("operation_id", id);
             result.put("status", status);
@@ -47,7 +54,7 @@ public final class OperationRegistry implements AutoCloseable {
             if (completion.isDone()) {
                 Response response = completion.join();
                 result.put("result_status", response.status);
-                result.put("result", publicResult(response.body));
+                result.put("result", owner ? response.body : publicResult(response.body));
             }
             return result;
         }

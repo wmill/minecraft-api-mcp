@@ -50,9 +50,17 @@ paths:
           required: true
           schema:
             type: string
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: The key the operation was submitted with; when it matches, the result is not redacted
+          schema:
+            type: string
       responses:
         "200":
-          description: Current state and original terminal HTTP status and body, with reservation tokens redacted
+          description: >-
+            Current state and original terminal HTTP status and body. Reservation tokens
+            are redacted unless the request carries the operation's Idempotency-Key.
           content:
             application/json:
               schema:

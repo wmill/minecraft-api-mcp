@@ -134,4 +134,27 @@ class AtomicQueueIntegrationTest {
             assertThat(other.awaitTermination(System.nanoTime() + TimeUnit.SECONDS.toNanos(5))).isTrue();
         }
     }
+    @Test void startupSweepUnsticksInterruptedExecution() throws Exception {
+        var done = service.insertTaskAt(id, request("done"), 0);
+        var interrupted = service.insertTaskAt(id, request("interrupted"), 1);
+        done.markCompleted();
+        tasks.update(done);
+        interrupted.markExecuting();
+        tasks.update(interrupted);
+        var build = builds.findById(id).orElseThrow();
+        build.setStatus(BuildStatus.IN_PROGRESS);
+        builds.update(build);
+        assertThatThrownBy(() -> service.addTask(id, request("blocked"))).isInstanceOf(IllegalStateException.class);
+
+        var recovered = InterruptedExecutions.fail(DatabaseManager.getInstance().getDatabaseConfig());
+
+        assertThat(recovered.builds()).isGreaterThanOrEqualTo(1);
+        assertThat(recovered.tasks()).isGreaterThanOrEqualTo(1);
+        assertThat(builds.findById(id).orElseThrow().getStatus()).isEqualTo(BuildStatus.FAILED);
+        var queue = service.getTasks(id);
+        assertThat(queue.get(0).getStatus()).isEqualTo(TaskStatus.COMPLETED);
+        assertThat(queue.get(1).getStatus()).isEqualTo(TaskStatus.FAILED);
+        assertThat(queue.get(1).getErrorMessage()).isEqualTo(InterruptedExecutions.TASK_ERROR);
+        assertThat(service.addTask(id, request("after recovery"))).isNotNull();
+    }
 }

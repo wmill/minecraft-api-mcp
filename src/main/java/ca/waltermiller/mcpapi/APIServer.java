@@ -116,7 +116,11 @@ public class APIServer {
         // Initialize database
         DatabaseManager databaseManager = DatabaseManager.getInstance();
         databaseManager.initialize();
-        
+        var recovered = ca.waltermiller.mcpapi.buildtask.repository.InterruptedExecutions.fail(databaseManager.getDatabaseConfig());
+        if (recovered.builds() > 0 || recovered.tasks() > 0) {
+            logger.warn("Marked {} interrupted build(s) and {} interrupted task(s) FAILED", recovered.builds(), recovered.tasks());
+        }
+
         // Create repositories
         BuildRepository buildRepository = new PostgreSQLBuildRepository(databaseManager.getDatabaseConfig());
         TaskRepository taskRepository = new PostgreSQLTaskRepository(databaseManager.getDatabaseConfig());

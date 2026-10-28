@@ -24,10 +24,11 @@ Optional `Idempotency-Key` headers identify a logical mutation. An identical ret
 reuses its operation. Reusing a key with a different method, path, canonical JSON
 or multipart file/form payload, or area-lock context returns 409. Request object
 field order and multipart boundary changes do not change identity. Keys must be
-nonblank and at most 256 characters. Polling never exposes keys, request bodies,
-or reservation tokens. A delayed reservation acquisition therefore cannot obtain
-its token through polling; the token is only returned by the original mutation
-response or an identical keyed retry within its lifetime.
+nonblank and at most 256 characters. Polling never exposes keys or request bodies,
+and redacts reservation tokens unless the poller sends the operation's
+`Idempotency-Key` header. A delayed reservation acquisition therefore obtains its
+token by polling with its key (or by an identical keyed retry) within the
+operation's lifetime; anyone else polling sees the redacted result.
 
 Terminal records and their keys expire after one hour. The registry holds at most
 10,000 records, never evicts active operations, and rejects new submissions with
@@ -36,8 +37,10 @@ retention window. An unknown/expired operation returns 404: its outcome is unkno
 and that response must not trigger automatic resubmission.
 
 MCP creates a key for each logical mutation, keeps it across a transport retry,
-and polls once per second for up to 120 seconds. After that it returns a distinct
-`pending` result with its operation ID and instructions to use `get_operation`.
+and polls (with that key) once per second for up to 120 seconds. After that it
+returns a distinct `pending` result with its operation ID and instructions to use
+`get_operation`, and remembers the key in process so `get_operation` can still
+retrieve a reservation token.
 Schematic and Starlark placement follow the same contract.
 
 Shutdown closes admission and cancels callbacks that have not started. Cancelled
@@ -61,6 +64,10 @@ omit, duplicate, or rewrite tasks.
 
 Execute/replay claims the queue and sets `IN_PROGRESS` before HTTP 202 is returned.
 Duplicate claims return 409. Replay resets task status in that same transaction.
+Execution state is process-local, so on startup (before any endpoint is served)
+builds still `IN_PROGRESS` and tasks still `EXECUTING` are marked `FAILED`; they
+were interrupted by a crash or a shutdown that outlived its deadline. Inspect the
+region, then execute again (completed tasks are skipped) or replay.
 World execution holds no database transaction. Each task is persisted as
 `EXECUTING` before scheduling, and its final status is persisted only after actual
 completion. HTTP deadlines do not fail executing tasks.

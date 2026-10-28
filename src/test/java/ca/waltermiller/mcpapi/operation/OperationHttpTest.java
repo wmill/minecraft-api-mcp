@@ -76,6 +76,35 @@ class OperationHttpTest {
             assertThat(callbacks).isEmpty();
         } finally { app.stop(); }
     }
+    @Test void delayedReservationTokenIsOnlyVisibleToKeyHolder() throws Exception {
+        var app = Javalin.create();
+        try (var registry = new OperationRegistry(); var client = HttpClient.newHttpClient()) {
+            OperationHttp.install(app, registry);
+            var callbacks = new LinkedBlockingQueue<Runnable>();
+            app.post("/api/area-locks", ctx -> {
+                var future = new CompletableFuture<OperationRegistry.Response>();
+                OperationHttp.dispatch(callbacks::add,
+                    () -> future.complete(new OperationRegistry.Response(200, Map.of("lock_id", "secret-token"))), future);
+                OperationHttp.respond(ctx, future, 0, result -> result);
+            });
+            app.start(0);
+            String base = "http://localhost:" + app.port();
+            var accepted = client.send(HttpRequest.newBuilder(URI.create(base + "/api/area-locks"))
+                .header("Content-Type", "application/json").header("Idempotency-Key", "owner-key")
+                .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(accepted.statusCode()).isEqualTo(202);
+            String id = Json.MAPPER.readTree(accepted.body()).path("operation_id").asText();
+            callbacks.take().run();
+            for (String key : new String[] {null, "wrong-key", "owner-key"}) {
+                var request = HttpRequest.newBuilder(URI.create(base + "/api/operations/" + id)).GET();
+                if (key != null) request.header("Idempotency-Key", key);
+                var poll = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+                var result = Json.MAPPER.readTree(poll.body()).path("result");
+                if ("owner-key".equals(key)) assertThat(result.path("lock_id").asText()).isEqualTo("secret-token");
+                else assertThat(result.has("lock_id")).as("key %s", key).isFalse();
+            }
+        } finally { app.stop(); }
+    }
     private HttpResponse<String> post(HttpClient client, String base, String body, String key, String lock) throws Exception {
         return client.send(HttpRequest.newBuilder(URI.create(base + "/api/world/blocks/set"))
             .header("Content-Type", "application/json").header("Idempotency-Key", key).header("X-Area-Lock-Id", lock)

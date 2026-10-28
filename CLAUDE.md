@@ -115,20 +115,21 @@ uv run pytest                                                          # service
 ### Core Java Components
 
 #### Mod Initialization
-- **McpApiMod** (`src/main/java/ca/waltermiller/mcpapi/McpApiMod.java`): Main mod entrypoint that starts the API server when the Minecraft server starts (database initialization is owned by the build task system inside `APIServer`)
-- **APIServer** (`src/main/java/ca/waltermiller/mcpapi/APIServer.java`): Javalin-based web server on port 7070 (override with `-Dapi.port`), orchestrates endpoint registration and initializes build system
+- **McpApiMod** (`src/main/java/ca/waltermiller/mcpapi/McpApiMod.java`): Main mod entrypoint that calls `APIServer.start` on `SERVER_STARTED` and `APIServer.stop` on `SERVER_STOPPING` (database initialization is owned by the build task system inside `APIServer`)
+- **APIServer** (`src/main/java/ca/waltermiller/mcpapi/APIServer.java`): Javalin-based web server on port 7070 (override with `-Dapi.port`), orchestrates endpoint registration and initializes build system. On startup it marks builds left `IN_PROGRESS` and tasks left `EXECUTING` as `FAILED` (`InterruptedExecutions`), since execution state doesn't survive the process. `stop()` closes operation admission, then a cleanup thread (never the server thread) waits at most 10s for workers before closing PostgreSQL; `start()` refuses to run until that cleanup finishes (`stopped()`)
 
 #### Endpoint System
 **Location**: `src/main/java/ca/waltermiller/mcpapi/endpoints/`
 
 All endpoints extend the `APIEndpoint` base class, which provides:
 - Javalin app instance, MinecraftServer reference, and logger via constructor
-- `respond(ctx, future, timeout, ...)` — shared async responder that waits on a `CompletableFuture`, maps validation failures to 400 (via the `isClientError` message-prefix heuristic) and everything else to 500
+- `respond(ctx, future, timeout, ...)` — shared async responder that waits on a `CompletableFuture`. For tracked edits it delegates to `OperationHttp.respond` and uses the result's `OperationResult.failureStatus()` (result records carry an explicit 400 for validation failures); otherwise it maps validation failures to 400 via the `isClientError` message-prefix heuristic and everything else to 500
 - Route registration happens in each endpoint's private `init()` method
 
 **Shared helpers:**
 - `WorldResolver.resolveWorldKey(String)` - single place that maps world identifier strings to registry keys (null/blank → overworld, malformed → null; callers treat null as "unknown world" and return 400)
-- `OperationResult` - common `success()`/`error()` interface implemented by all core result records, used by `TaskExecutor`'s generic dispatch helpers
+- `OperationResult` - common `success()`/`error()`/`failureStatus()` interface implemented by all core result records, used by `TaskExecutor`'s generic dispatch helpers
+- `CheckedDimensions` - overflow-safe span/volume/end checks run before world access or allocation (fill cap 100,000 blocks, heightmap 10,000 points, chunk 64 per dimension)
 - `PlacementBounds` - conservative bounds of a direct write (including stair clearance, rail supports, rotated NBT) used for area-lock checks
 - `GuardedPlacement` - submits a placement to the server thread through `AreaLockService.execute()` so the lock check and the write happen together
 - `StructurePlacementEffect` - small smoke-particle burst emitted after NBT placement/restore
@@ -148,6 +149,14 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 - `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, undo/redo, clone, translate, preview, rail planning, and location query routes
 - `TaskExecutor` - Executes queued build tasks on the Minecraft server thread; generic `executeAsync`/`dispatch` helpers parse task data and route it to the endpoint cores
 - `RailRenderInspectionService` - Dry-run rail placement inspection used by the audit route
+
+#### Edit Operations
+**Location**: `src/main/java/ca/waltermiller/mcpapi/operation/`
+
+Every world edit (blocks set/fill, prefabs, NBT placement, terrain smoothing, entity spawn, rain fire, teleport, messages, markers, area locks, undo/redo) is registered as an operation before dispatch, so the edit's lifetime is independent of the HTTP wait. Dry runs and reads are not tracked.
+- `OperationRegistry` - process-local records (`queued`/`running`/`succeeded`/`failed`/`cancelled`), max 10,000, terminal records kept 1 hour; `Idempotency-Key` digests map retries to the same operation (a different payload gives 409); `closeAdmission()` cancels callbacks that haven't started; 4 `workers` threads for background phases and persistence
+- `OperationHttp` - Javalin `beforeMatched`/`after` hooks that decide what is a mutation (`mutation()`), fingerprint the canonical JSON or multipart payload plus `X-Area-Lock-Id`, and set `X-Operation-Id`; `respond()` returns the usual status if the edit finishes in the endpoint's wait window, otherwise 202 with `Location: /api/operations/{id}`; `GET /api/operations/{id}` redacts `lock_id`/tokens unless the poller sends the operation's `Idempotency-Key`; `dispatch()` replaces `server.execute()` so shutdown can cancel unstarted callbacks; `background()` runs multi-phase edits (terrain smoothing) off the HTTP thread
+See `docs/operations-and-queues.md`.
 
 #### Preview Rendering
 **Location**: `src/main/java/ca/waltermiller/mcpapi/preview/`
@@ -187,7 +196,7 @@ Top-down terrain maps for LLM site reading (`POST /api/world/blocks/heightmap/ma
 A comprehensive system for queuing, persisting, and executing complex build operations:
 
 **Architecture Pattern**: Repository-Service-Executor
-- **Repositories** (`repository/`): PostgreSQL data access with implementations for Build, Task, and RailPlanningJob entities
+- **Repositories** (`repository/`): PostgreSQL data access with implementations for Build, Task, and RailPlanningJob entities. `BuildTransaction` locks the build row (`SELECT ... FOR UPDATE`) and hands both repositories one connection, so queue edits (append, insert, delete, reorder, update, translate, rail-plan append) and execute/replay claims are atomic. `InterruptedExecutions` is the startup sweep for builds/tasks left mid-execution
 - **Services** (`service/`): Business logic for task validation, location queries, build orchestration, and rail planning
 - **Models** (`model/`): Data classes (Build, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus incl. `REVERTED`, RailPlanningJob, RailPlanningStatus) plus `TaskDataTranslator`, which shifts task_data coordinates for `translate`
 
@@ -209,6 +218,8 @@ A comprehensive system for queuing, persisting, and executing complex build oper
 - `builds` table: Build metadata (id, name, description, world, status, timestamps)
 - `build_tasks` table: Individual tasks (id, build_id, task_order, task_type, status, task_data JSONB, description, executed_at)
 - `rail_planning_jobs` table: Async rail planning jobs (id, build_id, status, phases, timestamps)
+
+**Queue and execution rules:** `task_order` is zero-based; any queue edit normalizes it to `0..N-1` (legacy 1-based rows are left alone until then), keeping task IDs, payloads, statuses, errors and timestamps. Reorder must list every existing task ID exactly once. Execute/replay claim the build (`IN_PROGRESS`) in one transaction before returning 202, so a second claim returns 409. While a build is `IN_PROGRESS`, `COMPLETED` or `REVERTED`, queue edits are rejected. Tasks run as an async chain (each persisted `EXECUTING` before it's scheduled, and its final status after it actually finishes); the HTTP deadline never fails a running task.
 
 #### Rail Planning System
 **Location**: `src/main/java/ca/waltermiller/mcpapi/buildtask/service/RailPlanningService.java`
@@ -244,6 +255,7 @@ DB_PASSWORD=your_password
 - **`client/minecraft_api.py`**: `MinecraftAPIClient` - Async HTTP client using httpx for all Minecraft REST endpoints
 - **`client/schematic_service.py`**: `SchematicServiceClient` - Async HTTP client for the optional schematic catalog service
 - **`client/starlark_service.py`**: Async HTTP client for the optional Starlark build service
+- **`client/operations.py`**: `OperationClient` wraps every `httpx.AsyncClient` from `MinecraftAPIClient._http_client()`. For tracked edit paths (`tracked_path()`, kept in step with Java `OperationHttp.mutation()`) it adds an `Idempotency-Key`, retries once with the same key after a transport error, and on 202 polls `/api/operations/{id}` (sending the key, so reservation tokens aren't redacted) once per second for up to 120s. After that it raises `PendingOperation`; handlers return `pending_result()` and must never claim success. Keys of pending operations are remembered (bounded, in process) so `get_operation` can still recover a lock token. A 404 means the outcome is unknown: never resubmit automatically
 - `MinecraftAPIClient.with_area_lock(lock_id)` returns a client that sends `X-Area-Lock-Id` on writes
 
 #### Tool System
@@ -256,6 +268,7 @@ DB_PASSWORD=your_password
   - `system.py` - System tools (connection test, teleport, coordinate conventions)
   - `effects.py` - One-shot area effects (`rain_fire`)
   - `area_locks.py` - `acquire_area_lock`, `update_area_lock`, `release_area_lock`, `list_area_locks`
+  - `operations.py` - `get_operation` (poll an edit that came back `pending`)
   - `survey.py` - `survey_site`
   - `terrain.py` - `smooth_terrain` (dry-run before/after/change images plus summary)
   - `schematics.py` - Optional schematic search, tags, metadata lookup, preview images, and NBT placement orchestration
@@ -385,8 +398,8 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 
 ### Key Patterns
 
-1. **Endpoint Pattern**: Extend `APIEndpoint`, register routes in a private `init()` called from the constructor, use `server.execute()` for Minecraft operations
-2. **Thread Safety**: Always wrap Minecraft world modifications with `server.execute()` to run on server thread
+1. **Endpoint Pattern**: Extend `APIEndpoint`, register routes in a private `init()` called from the constructor, and send Minecraft work to the server thread with `OperationHttp.dispatch(server::execute, work, future)`
+2. **Thread Safety**: World modifications must run on the server thread. Use `OperationHttp.dispatch` rather than calling `server.execute()` directly, so shutdown can cancel callbacks that haven't started. A new write route must also be added to `OperationHttp.mutation()` and the MCP `tracked_path()`, and must respond through `respond()`/`OperationHttp.respond` so a slow edit returns 202 instead of timing out
 3. **JSON Serialization**: Use Java Records for automatic Jackson serialization of DTOs; the build task system shares one `ObjectMapper` via `buildtask.Json.MAPPER`
 4. **Database Access**: Use repository pattern with connection pooling via HikariCP; shared JDBC helpers live in `repository/JdbcSupport`; multi-statement writes use `*WithConnection` variants so they run in one transaction
 5. **Async Operations**: Use `CompletableFuture` for non-blocking build task execution; endpoints wait on futures via `APIEndpoint.respond()` with an explicit timeout
@@ -446,8 +459,9 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 
 **Test Categories:**
 - Database layer tests: `DatabaseManagerTest`, `DatabaseConfigTest`, `DatabaseIntegrationTest` (integration gated behind `DB_TEST` env var)
-- Endpoint tests: `EntitySpawnSpecTest`, `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `RailRenderInspectionServiceTest`, `EndpointRefactoringTest`, `PlacementBoundsTest`, `GuardedPlacementTest`, `StructurePlacementEffectTest`
-- Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `BuildTaskTest`, `BoundingBoxTest`, `TaskDataValidatorTest`, `TaskDataTranslatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`
+- Operation tests: `OperationRegistryTest`, `OperationHttpTest`, `APIServerLifecycleTest`
+- Endpoint tests: `CheckedDimensionsTest`, `EntitySpawnSpecTest`, `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `RailRenderInspectionServiceTest`, `EndpointRefactoringTest`, `PlacementBoundsTest`, `GuardedPlacementTest`, `StructurePlacementEffectTest`
+- Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `BuildTaskTest`, `BoundingBoxTest`, `TaskDataValidatorTest`, `TaskDataTranslatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`, `AtomicQueueIntegrationTest` (queue atomicity, execution claims and the interrupted-execution sweep; gated behind `DB_TEST` and requires a `DB_NAME` containing `test`)
 - Area lock tests: `AreaLockServiceTest`, `AreaLockEndpointTest`
 - Site survey tests: `SiteSurveyTest`, `SiteSurveyEndpointTest`, `SurveyOccupancyTest`
 - Terrain smoothing tests: `TerrainSmootherTest`, `TerrainRewriterTest`, `TerrainSmoothEndpointTest`
@@ -471,6 +485,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_spawn_entity.py` - `spawn_entity` options schema, passenger payload conversion, tree summary and 400 messages
 - `test_terrain_map.py` - `map_terrain` images, summary text and errors
 - `test_smooth_terrain.py` - `smooth_terrain` registration, dry-run images/summary, apply summary, errors
+- `test_operations.py` - Idempotency keys, 202 polling, pending results, `get_operation`, delayed lock-token recovery
 
 **Schematic Service Tests** (`schematic-service/`):
 - `test_app.py` - FastAPI routes via `create_app`
@@ -507,7 +522,7 @@ Minecraft uses a right-handed 3D coordinate system:
 - Optional schematic service runs on port 7080 when started
 - Optional Starlark build service runs on port 7090 when started; its artifact cache in `starlark-service-data/` is git-ignored and safe to delete (artifacts regenerate deterministically); its script library in `starlark-library/` is durable and meant to be committed
 - Database schema auto-creates on first server start
-- Design docs and OpenAPI contracts live in `docs/` (`area-locks.md`, `site-survey.md`, `terrain-smoothing.md`, `undo-and-dry-run.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
+- Design docs and OpenAPI contracts live in `docs/` (`area-locks.md`, `operations-and-queues.md`, `site-survey.md`, `terrain-smoothing.md`, `undo-and-dry-run.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
 - Mod-side environment variables beyond the DB settings: `AREA_LOCK_IDLE_SECONDS`, `BUILD_SNAPSHOT_DIR`, `BUILD_SNAPSHOT_MAX_VOLUME`
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
 - Build tasks are executed asynchronously and can be queried by location for spatial awareness

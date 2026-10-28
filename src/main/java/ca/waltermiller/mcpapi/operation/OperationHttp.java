@@ -56,7 +56,10 @@ public final class OperationHttp {
         app.get("/api/operations/{operation_id}", ctx -> {
             var operation = registry.get(ctx.pathParam("operation_id"));
             if (operation == null) ctx.status(404).json(Map.of("error", "Unknown or expired operation; outcome may be unknown"));
-            else ctx.json(operation.view());
+            else {
+                String key = ctx.header("Idempotency-Key");
+                ctx.json(operation.view(key != null && operation.ownedBy(digest(key))));
+            }
         });
     }
 

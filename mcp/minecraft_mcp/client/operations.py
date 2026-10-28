@@ -3,6 +3,7 @@
 import asyncio
 import time
 import uuid
+from collections import OrderedDict
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -10,6 +11,26 @@ from mcp.types import CallToolResult, TextContent
 
 POLL_SECONDS = 1.0
 POLL_DEADLINE_SECONDS = 120.0
+PENDING_KEY_LIMIT = 256
+
+# Idempotency keys of operations still pending at the polling deadline. The server returns an
+# unredacted result (e.g. a delayed reservation token) only to a poller presenting the key.
+_pending_keys: "OrderedDict[str, str]" = OrderedDict()
+
+
+def remember_pending_key(operation_id: str, key: str) -> None:
+    _pending_keys[operation_id] = key
+    _pending_keys.move_to_end(operation_id)
+    while len(_pending_keys) > PENDING_KEY_LIMIT:
+        _pending_keys.popitem(last=False)
+
+
+def pending_key(operation_id: str) -> str | None:
+    return _pending_keys.get(operation_id)
+
+
+def forget_pending_key(operation_id: str) -> None:
+    _pending_keys.pop(operation_id, None)
 
 
 class PendingOperation(Exception):
@@ -90,6 +111,7 @@ class OperationClient:
                 break
             try:
                 poll = await self.client.get(self.base_url + status_path,
+                                             headers={"Idempotency-Key": headers["Idempotency-Key"]},
                                              timeout=max(0.001, deadline - time.monotonic()))
             except httpx.TransportError:
                 continue
@@ -100,4 +122,5 @@ class OperationClient:
             if "result_status" in result:
                 return httpx.Response(result["result_status"], json=result["result"],
                                       headers={"X-Operation-Id": operation_id}, request=response.request)
+        remember_pending_key(operation_id, headers["Idempotency-Key"])
         raise PendingOperation(operation_id, status_path)
