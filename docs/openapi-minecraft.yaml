@@ -1,7 +1,14 @@
 openapi: 3.1.0
 info:
   title: Minecraft MCP API
-  description: REST API exposed by the Minecraft Fabric mod on port 7070. Wraps world manipulation, build task management, and prefab placement.
+  description: >-
+    REST API exposed by the Minecraft Fabric mod on port 7070. Mutations register
+    process-local operations before dispatch and include X-Operation-Id. If the
+    wait window expires they return 202 without claiming success; poll the
+    operation through persistence completion. Terminal records and idempotency
+    keys expire after one hour and are lost on restart. Unknown IDs have unknown
+    outcomes and must not trigger automatic resubmission. The 10,000-record cap
+    never evicts active operations; full or stopping services return 503.
   version: 0.0.1
 
 servers:
@@ -32,7 +39,38 @@ tags:
 
 paths:
 
+  /api/operations/{operation_id}:
+    get:
+      tags: [system]
+      summary: Poll an edit operation
+      operationId: getOperation
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: The key the operation was submitted with; when it matches, the result is not redacted
+          schema:
+            type: string
+      responses:
+        "200":
+          description: >-
+            Current state and original terminal HTTP status and body. Reservation tokens
+            are redacted unless the request carries the operation's Idempotency-Key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operation"
+        "404":
+          description: Unknown or expired operation; its outcome may be unknown after restart. Do not automatically resubmit.
+
   /api/world/markers:
+    parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
     post:
       tags: [effects]
       summary: Temporarily mark an inclusive cuboid without changing terrain
@@ -65,6 +103,12 @@ paths:
                   type: string
                   description: Optional player name; must be online in the requested world. Omit for all nearby players.
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
+        "409":
+          $ref: "#/components/responses/Conflict"
         '200':
           description: Marker created
           content:
@@ -85,6 +129,8 @@ paths:
           description: Invalid options, world, height limits, target player, or marker capacity exceeded
 
   /api/world/markers/{marker_id}:
+    parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
     delete:
       tags: [effects]
       summary: Remove a temporary marker; safe to repeat
@@ -95,6 +141,12 @@ paths:
           required: true
           schema: {type: string}
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
+        "409":
+          $ref: "#/components/responses/Conflict"
         '200':
           description: Label removed and particle emission stopped; existing particles fade naturally
           content:
@@ -108,6 +160,8 @@ paths:
                   removed: {type: boolean, description: False if already removed or expired}
 
   /api/area-locks:
+    parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
     post:
       tags: [area-locks]
       summary: Reserve a cuboid
@@ -127,6 +181,10 @@ paths:
                 label:
                   type: string
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "200":
           $ref: "#/components/responses/AreaLockGranted"
         "400":
@@ -190,6 +248,7 @@ paths:
 
   /api/area-locks/{lock_id}:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockPathId"
     patch:
       tags: [area-locks]
@@ -206,6 +265,10 @@ paths:
                 bounds:
                   $ref: "#/components/schemas/AreaBounds"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "200":
           $ref: "#/components/responses/AreaLockGranted"
         "400":
@@ -217,6 +280,12 @@ paths:
       summary: Release a reservation (idempotent)
       operationId: releaseAreaLock
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Reservation released or already absent
           content:
@@ -262,6 +331,8 @@ paths:
                   $ref: "#/components/schemas/PlayerInfo"
 
   /api/players/teleport:
+    parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
     post:
       tags: [players]
       summary: Teleport a player
@@ -273,6 +344,12 @@ paths:
             schema:
               $ref: "#/components/schemas/TeleportRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Teleport successful
           content:
@@ -308,6 +385,8 @@ paths:
                   $ref: "#/components/schemas/EntityInfo"
 
   /api/world/entities/spawn:
+    parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
     post:
       tags: [entities]
       summary: Spawn an entity
@@ -319,6 +398,12 @@ paths:
             schema:
               $ref: "#/components/schemas/EntitySpawnRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Entity spawned
           content:
@@ -349,6 +434,7 @@ paths:
 
   /api/world/blocks/set:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [blocks]
@@ -361,6 +447,10 @@ paths:
             schema:
               $ref: "#/components/schemas/BlockSetRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -395,6 +485,7 @@ paths:
 
   /api/world/blocks/fill:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [blocks]
@@ -407,6 +498,10 @@ paths:
             schema:
               $ref: "#/components/schemas/FillBoxRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -540,6 +635,8 @@ paths:
   # ── Messages ─────────────────────────────────────────────────────────────────
 
   /api/message/broadcast:
+    parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
     post:
       tags: [messages]
       summary: Broadcast a message to all players
@@ -551,6 +648,12 @@ paths:
             schema:
               $ref: "#/components/schemas/BroadcastRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Message sent
           content:
@@ -561,6 +664,8 @@ paths:
           $ref: "#/components/responses/ServerError"
 
   /api/message/player:
+    parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
     post:
       tags: [messages]
       summary: Send a message to a specific player
@@ -572,6 +677,12 @@ paths:
             schema:
               $ref: "#/components/schemas/PlayerMessageRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Message sent
           content:
@@ -585,6 +696,7 @@ paths:
 
   /api/world/prefabs/door:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
@@ -597,6 +709,10 @@ paths:
             schema:
               $ref: "#/components/schemas/DoorRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -610,6 +726,7 @@ paths:
 
   /api/world/prefabs/stairs:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
@@ -622,6 +739,10 @@ paths:
             schema:
               $ref: "#/components/schemas/StairsRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -635,6 +756,7 @@ paths:
 
   /api/world/prefabs/window-pane:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
@@ -647,6 +769,10 @@ paths:
             schema:
               $ref: "#/components/schemas/WindowPaneRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -660,6 +786,7 @@ paths:
 
   /api/world/prefabs/torch:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
@@ -672,6 +799,10 @@ paths:
             schema:
               $ref: "#/components/schemas/TorchRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -685,6 +816,7 @@ paths:
 
   /api/world/prefabs/sign:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
@@ -697,6 +829,10 @@ paths:
             schema:
               $ref: "#/components/schemas/SignRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -710,6 +846,7 @@ paths:
 
   /api/world/prefabs/ladder:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [prefabs]
@@ -722,6 +859,10 @@ paths:
             schema:
               $ref: "#/components/schemas/LadderRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -737,6 +878,7 @@ paths:
 
   /api/world/structure/place:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [structures]
@@ -755,6 +897,10 @@ paths:
             schema:
               $ref: "#/components/schemas/NbtStructurePlaceRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -774,6 +920,7 @@ paths:
 
   /api/world/effects/rain-fire:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [effects]
@@ -786,6 +933,10 @@ paths:
             schema:
               $ref: "#/components/schemas/RainFireRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "409":
           $ref: "#/components/responses/AreaLockConflict"
         "200":
@@ -801,6 +952,7 @@ paths:
 
   /api/world/terrain/smooth:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [blocks]
@@ -822,6 +974,10 @@ paths:
             schema:
               $ref: "#/components/schemas/TerrainSmoothRequest"
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
+        "503":
+          $ref: "#/components/responses/OperationUnavailable"
         "200":
           description: Plan (dry run) or applied result
           content:
@@ -845,7 +1001,7 @@ paths:
                   - $ref: "#/components/schemas/AreaLockError"
                   - $ref: "#/components/schemas/TerrainSmoothError"
         "504":
-          description: Timed out waiting for the server thread
+          description: Dry run timed out waiting for the server thread; mutating requests return a pollable 202 instead
           content:
             application/json:
               schema:
@@ -1085,6 +1241,7 @@ paths:
 
   /api/builds/{id}/undo:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [builds]
@@ -1108,6 +1265,8 @@ paths:
                   type: boolean
                   default: false
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
         "200":
           description: Snapshot restored
           content:
@@ -1124,11 +1283,10 @@ paths:
           $ref: "#/components/responses/ServerError"
         "503":
           description: Snapshots are not configured
-        "504":
-          description: Timed out waiting for the server thread; inspect the world before retrying
 
   /api/builds/{id}/redo:
     parameters:
+      - $ref: "#/components/parameters/IdempotencyKey"
       - $ref: "#/components/parameters/AreaLockHeader"
     post:
       tags: [builds]
@@ -1152,6 +1310,8 @@ paths:
                   type: boolean
                   default: false
       responses:
+        "202":
+          $ref: "#/components/responses/PendingOperation"
         "200":
           description: Snapshot restored; undo is available again
           content:
@@ -1168,8 +1328,6 @@ paths:
           $ref: "#/components/responses/ServerError"
         "503":
           description: Snapshots are not configured
-        "504":
-          description: Timed out waiting for the server thread; inspect build status and the world before retrying
 
   /api/builds/{id}/clone:
     post:
@@ -1360,6 +1518,15 @@ paths:
 components:
 
   parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Optional logical mutation key. Identical method, route, canonical payload and area-lock context reuse the operation; conflicting reuse returns 409. Applies only within this process and the one-hour terminal retention window. Not returned by polling.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
     AreaLockHeader:
       name: X-Area-Lock-Id
       in: header
@@ -1392,6 +1559,25 @@ components:
         format: uuid
 
   responses:
+    PendingOperation:
+      description: The edit is queued or running; no success is claimed. Poll Location for its eventual outcome.
+      headers:
+        Location:
+          schema:
+            type: string
+        X-Operation-Id:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PendingOperation"
+    OperationUnavailable:
+      description: Operation admission is closed or the registry is full. No edit was submitted.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     AreaLockGranted:
       description: Reservation including its usable token and idle expiry
       content:
@@ -1433,6 +1619,29 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    PendingOperation:
+      type: object
+      required: [operation_id, status, status_url]
+      properties:
+        operation_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed, cancelled]
+        status_url:
+          type: string
+    Operation:
+      allOf:
+        - $ref: "#/components/schemas/PendingOperation"
+        - type: object
+          properties:
+            result_status:
+              type: integer
+              description: Present only when terminal; the original mutation HTTP status
+            result:
+              type: object
+              description: Present only when terminal; the original response body with reservation tokens redacted
+              additionalProperties: true
     SiteSurveyRequest:
       type: object
       required: [x1, z1, x2, z2]
@@ -1851,6 +2060,7 @@ components:
           format: uuid
         task_order:
           type: integer
+          description: Zero-based task position; legacy stored orders normalize on queue edits
         task_type:
           $ref: "#/components/schemas/TaskType"
         status:
@@ -2947,6 +3157,7 @@ components:
           type: string
         task_order:
           type: integer
+          description: Zero-based task position; legacy stored orders normalize on queue edits
           description: Insert at this position; appended if omitted
       required: [task_type, task_data]
 

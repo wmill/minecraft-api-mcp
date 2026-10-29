@@ -1,5 +1,8 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.operation.OperationHttp;
+import ca.waltermiller.mcpapi.operation.OperationRegistry;
+
 import ca.waltermiller.mcpapi.buildtask.model.Build;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import ca.waltermiller.mcpapi.arealock.AreaBounds;
@@ -91,6 +94,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
                 ctx.status(400).json(Map.of("error", "No NBT file uploaded. Use 'nbt_file' field"));
                 return;
             }
+            String filename = nbtFile.filename();
 
             // Get placement parameters from form data
             String worldName = Objects.requireNonNullElse(ctx.formParam("world"), "minecraft:overworld");
@@ -193,7 +197,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
             // Captured inside the lock's critical section, immediately before the write it can undo.
             AtomicReference<NbtCompound> snapshot = new AtomicReference<>();
             // Execute on server thread
-            server.execute(() -> {
+            OperationHttp.dispatch(server::execute, () -> {
                 try {
                     boolean success = locks.execute(worldId, bounds, lockId, () -> {
                         if (snapshots != null && snapshots.fits(bounds)) snapshot.set(RegionSnapshot.capture(world, bounds));
@@ -211,12 +215,12 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         Vec3i size = template.getSize();
 
                         LOGGER.info("Successfully placed NBT structure '{}' ({}x{}x{}) at ({}, {}, {})",
-                            nbtFile.filename(), size.getX(), size.getY(), size.getZ(), x, y, z);
+                            filename, size.getX(), size.getY(), size.getZ(), x, y, z);
 
                         Map<String, Object> response = new HashMap<>();
                         response.put("success", true);
                         response.put("message", "Structure placed successfully");
-                        response.put("filename", nbtFile.filename());
+                        response.put("filename", filename);
                         response.put("position", Map.of("x", x, "y", y, "z", z));
                         response.put("world", worldName);
                         response.put("structure_size", Map.of("x", size.getX(), "y", size.getY(), "z", size.getZ()));
@@ -226,7 +230,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         if (buildService != null) {
                             try {
                                 Build recorded = buildService.recordNbtPlacement(
-                                    nbtFile.filename(), worldName, x, y, z,
+                                    filename, worldName, x, y, z,
                                     size.getX(), size.getY(), size.getZ(), rotation.toString());
                                 response.put("build_id", recorded.getId().toString());
                             } catch (AreaLockException | IllegalArgumentException e) {
@@ -239,7 +243,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         future.complete(response);
                     } else {
                         LOGGER.warn("Failed to place NBT structure '{}' at ({}, {}, {})",
-                            nbtFile.filename(), x, y, z);
+                            filename, x, y, z);
 
                         future.complete(Map.of(
                             "success", false,
@@ -253,12 +257,12 @@ public class NBTStructureEndpoint extends APIEndpoint {
                     LOGGER.error("Error placing structure: ", e);
                     future.complete(Map.of("error", "Exception during structure placement: " + e.getMessage()));
                 }
-            });
+            }, future);
 
             CompletableFuture<Map<String, Object>> persisted = future.thenApplyAsync(result -> {
                 if (Boolean.TRUE.equals(result.get("success"))) persistSnapshot(result, snapshot.get(), bounds);
                 return result;
-            });
+            }, OperationHttp.persistenceExecutor(ctx));
 
             respond(ctx, persisted, TIMEOUT_SECONDS, "structure placement",
                 result -> !result.containsKey("error"),
@@ -298,7 +302,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         StructurePlacementData placementData, AreaBounds bounds, Vec3i size, BlockRotation rotation,
                         String lockId) throws Exception {
         CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
-        server.execute(() -> {
+        OperationHttp.dispatch(server::execute, () -> {
             if (future.isCancelled()) return;
             try {
                 var missing = RegionSnapshot.missingChunks(world, bounds);
@@ -334,7 +338,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
             } catch (Exception e) {
                 future.completeExceptionally(e);
             }
-        });
+        }, future);
         Map<String, Object> result;
         try {
             result = future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);

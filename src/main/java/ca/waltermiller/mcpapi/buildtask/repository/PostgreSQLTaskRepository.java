@@ -32,10 +32,19 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     public PostgreSQLTaskRepository(DatabaseConfig databaseConfig) {
         this.databaseConfig = databaseConfig;
     }
+    private Connection transactionConnection;
+    PostgreSQLTaskRepository(DatabaseConfig config, Connection connection) {
+        this(config);
+        this.transactionConnection = connection;
+    }
+    public DatabaseConfig databaseConfig() { return databaseConfig; }
+    private Connection connection() throws SQLException {
+        return transactionConnection == null ? databaseConfig.getConnection() : BuildTransaction.lease(transactionConnection);
+    }
 
     @Override
     public BuildTask create(BuildTask task) throws SQLException {
-        try (Connection conn = databaseConfig.getConnection()) {
+        try (Connection conn = connection()) {
             createWithConnection(conn, task);
             return task;
         }
@@ -94,7 +103,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     public Optional<BuildTask> findById(UUID id) throws SQLException {
         String sql = "SELECT " + TASK_COLUMNS + " FROM build_tasks WHERE id = ?";
         
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setObject(1, id);
@@ -110,7 +119,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     
     @Override
     public BuildTask update(BuildTask task) throws SQLException {
-        try (Connection conn = databaseConfig.getConnection()) {
+        try (Connection conn = connection()) {
             updateWithConnection(conn, task);
             return task;
         }
@@ -118,21 +127,24 @@ public class PostgreSQLTaskRepository implements TaskRepository {
 
     @Override
     public void updateAll(List<BuildTask> tasks) throws SQLException {
-        Connection conn = databaseConfig.getConnection();
+        Connection conn = connection();
+        boolean ownsTransaction = transactionConnection == null;
         try {
-            conn.setAutoCommit(false);
+            if (ownsTransaction) conn.setAutoCommit(false);
 
             for (BuildTask task : tasks) {
                 updateWithConnection(conn, task);
             }
 
-            conn.commit();
+            if (ownsTransaction) conn.commit();
             LOGGER.debug("Updated {} tasks atomically", tasks.size());
-        } catch (SQLException e) {
-            conn.rollback();
+        } catch (SQLException | RuntimeException | Error e) {
+            if (ownsTransaction) {
+                try { conn.rollback(); } catch (SQLException rollback) { e.addSuppressed(rollback); }
+            }
             throw e;
         } finally {
-            conn.setAutoCommit(true);
+            if (ownsTransaction) conn.setAutoCommit(true);
             conn.close();
         }
     }
@@ -172,7 +184,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     public boolean deleteById(UUID id) throws SQLException {
         String sql = "DELETE FROM build_tasks WHERE id = ?";
         
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setObject(1, id);
@@ -192,7 +204,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     public List<BuildTask> findByBuildIdOrdered(UUID buildId) throws SQLException {
         String sql = "SELECT " + TASK_COLUMNS + " FROM build_tasks WHERE build_id = ? ORDER BY task_order ASC";
 
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setObject(1, buildId);
@@ -223,9 +235,10 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     
     @Override
     public void updateTaskQueue(UUID buildId, List<BuildTask> tasks) throws SQLException {
-        Connection conn = databaseConfig.getConnection();
+        Connection conn = connection();
+        boolean ownsTransaction = transactionConnection == null;
         try {
-            conn.setAutoCommit(false);
+            if (ownsTransaction) conn.setAutoCommit(false);
 
             // Delete existing tasks for this build, then insert in new order,
             // all on this connection so the whole swap is one transaction
@@ -234,27 +247,29 @@ public class PostgreSQLTaskRepository implements TaskRepository {
             for (int i = 0; i < tasks.size(); i++) {
                 BuildTask task = tasks.get(i);
                 task.setBuildId(buildId);
-                task.setTaskOrder(i + 1);
+                task.setTaskOrder(i);
                 createWithConnection(conn, task);
             }
 
-            conn.commit();
+            if (ownsTransaction) conn.commit();
             LOGGER.debug("Updated task queue for build: {}", buildId);
 
-        } catch (SQLException e) {
-            conn.rollback();
+        } catch (SQLException | RuntimeException | Error e) {
+            if (ownsTransaction) {
+                try { conn.rollback(); } catch (SQLException rollback) { e.addSuppressed(rollback); }
+            }
             throw e;
         } finally {
-            conn.setAutoCommit(true);
+            if (ownsTransaction) conn.setAutoCommit(true);
             conn.close();
         }
     }
     
     @Override
     public int getNextTaskOrder(UUID buildId) throws SQLException {
-        String sql = "SELECT COALESCE(MAX(task_order), 0) + 1 FROM build_tasks WHERE build_id = ?";
+        String sql = "SELECT COALESCE(MAX(task_order), -1) + 1 FROM build_tasks WHERE build_id = ?";
         
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setObject(1, buildId);
@@ -263,7 +278,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
                 if (rs.next()) {
                     return rs.getInt(1);
                 }
-                return 1;
+                return 0;
             }
         }
     }
@@ -282,7 +297,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
             ORDER BY bt.task_order ASC
             """;
         
-        try (Connection conn = databaseConfig.getConnection();
+        try (Connection conn = connection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, world);
@@ -296,7 +311,7 @@ public class PostgreSQLTaskRepository implements TaskRepository {
     
     @Override
     public int deleteByBuildId(UUID buildId) throws SQLException {
-        try (Connection conn = databaseConfig.getConnection()) {
+        try (Connection conn = connection()) {
             return deleteByBuildIdWithConnection(conn, buildId);
         }
     }

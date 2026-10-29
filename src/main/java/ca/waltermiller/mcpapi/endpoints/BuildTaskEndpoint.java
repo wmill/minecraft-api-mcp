@@ -1,5 +1,8 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.operation.OperationHttp;
+import ca.waltermiller.mcpapi.operation.OperationRegistry;
+
 import ca.waltermiller.mcpapi.buildtask.model.BoundingBox;
 import ca.waltermiller.mcpapi.buildtask.model.Build;
 import ca.waltermiller.mcpapi.buildtask.model.BuildStatus;
@@ -123,6 +126,10 @@ public class BuildTaskEndpoint extends APIEndpoint {
         } catch (SQLException e) {
             LOGGER.error("Database error {}", operation, e);
             ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
+        } catch (OperationRegistry.Failure failure) {
+            ctx.status(failure.status).json(Map.of("error", failure.getMessage()));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            ctx.status(400).json(Map.of("error", OperationHttp.invalidJson(e)));
         } catch (Exception e) {
             LOGGER.error("Unexpected error {}", operation, e);
             ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
@@ -283,14 +290,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
 
             ctx.status(201).json(Map.of(
                 "success", true,
-                "task", Map.of(
-                    "id", task.getId().toString(),
-                    "buildId", task.getBuildId().toString(),
-                    "taskOrder", task.getTaskOrder(),
-                    "taskType", task.getTaskType().toString(),
-                    "status", task.getStatus().toString(),
-                    "taskData", task.getTaskData()
-                )
+                "task", taskToMap(task)
             ));
 
             LOGGER.info("Added task {} to build {} at position {} via API", task.getId(), buildId, task.getTaskOrder());
@@ -502,7 +502,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
             String lockId = ctx.header(AreaLockService.HEADER);
             CompletableFuture<RestoreResponse> future = new CompletableFuture<>();
             // State checks, capture, restore and status commit are serialized on the server thread.
-            server.execute(() -> {
+            OperationHttp.dispatch(server::execute, () -> {
                 try {
                     future.complete(restoreBuild(buildId, redo, forced, lockId));
                 } catch (java.util.concurrent.CompletionException e) {
@@ -510,7 +510,11 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 } catch (Exception e) {
                     future.completeExceptionally(e);
                 }
-            });
+            }, future);
+            if (OperationHttp.tracked(ctx)) {
+                OperationHttp.respond(ctx, future, UNDO_TIMEOUT_SECONDS, result -> new OperationRegistry.Response(result.status(), result.body()));
+                return;
+            }
             try {
                 RestoreResponse result = future.get(UNDO_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 ctx.status(result.status()).json(result.body());
@@ -858,6 +862,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
 
             List<BuildTask> tasks = buildService.getTasks(buildId);
             tasks.sort(Comparator.comparingInt(BuildTask::getTaskOrder));
+            for (BuildTask task : tasks) taskExecutor.validateDimensions(task);
 
             RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(build.getWorld());
             ServerWorld serverWorld = worldKey != null ? server.getWorld(worldKey) : null;

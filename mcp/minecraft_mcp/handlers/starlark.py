@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..client.operations import PendingOperation, pending_result
+
 import base64
 from typing import Any
 
@@ -82,12 +84,16 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
                "world": placement.world, "rotation": placement.rotation}
     try:
         nbt = await client.get_artifact_nbt(artifact_id)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc, artifact_id=artifact_id, placement=outcome)
     try:
         result = await api_client.place_nbt_structure_bytes(
             nbt, f"{artifact_id}.nbt", position["x"], position["y"], position["z"],
             placement.world, placement.rotation, placement.include_entities, True, placement.dry_run)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         # A timeout/disconnect or server error may occur after the world write.
         conflict = area_lock_error(exc)
@@ -131,6 +137,8 @@ async def _with_thumbnail(result: CallToolResult, client: StarlarkServiceClient,
     """Attach a small iso preview; best-effort, so a render failure never fails the build."""
     try:
         data = await client.get_artifact_image(artifact_id, "iso", THUMBNAIL_PX)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         result.content.append(TextContent(type="text", text=f"(Preview unavailable: {exc})"))
         return result
@@ -152,6 +160,8 @@ async def handle_build_starlark_structure(
     client = _starlark_client()
     try:
         result = await client.build(source, entry=entry, props=props, root_size=root_size)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc, compilation_ok=False)
     if not result.get("ok"):
@@ -191,6 +201,8 @@ async def handle_place_starlark_structure(
             return _failure("not_found", f"Artifact {artifact_id} is unavailable (evicted or never built).",
                             "Recompile the original source, entry, props, and root_size, then use the returned ID.", artifact_id=artifact_id)
         return _service_error(exc, artifact_id=artifact_id)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc, artifact_id=artifact_id)
     return await _place(api_client, client, {**metadata, "artifact_id": artifact_id}, target)
@@ -233,6 +245,8 @@ async def handle_get_starlark_preview(api_client: MinecraftAPIClient, artifact_i
             return _failure("preview_unavailable", _detail(exc),
                             "The artifact is still placeable; inspect it in the world with a dry run instead.")
         return _service_error(exc)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc)
     return CallToolResult(content=[
@@ -245,6 +259,8 @@ async def handle_get_starlark_docs(api_client: MinecraftAPIClient, topic: str = 
                                   component: str | None = None, **arguments) -> CallToolResult:
     try:
         return format_success_response(await _starlark_client().get_catalog(topic, component))
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc)
 
@@ -252,6 +268,8 @@ async def handle_get_starlark_docs(api_client: MinecraftAPIClient, topic: str = 
 async def handle_list_starlark_examples(api_client: MinecraftAPIClient, **arguments) -> CallToolResult:
     try:
         result = await _starlark_client().list_examples()
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc)
     examples = result.get("examples") or []
@@ -268,6 +286,8 @@ async def handle_get_starlark_example(api_client: MinecraftAPIClient, name: str,
         if exc.response.status_code in (400, 404):
             return _failure("not_found", f"Example {name!r} was not found. Use list_starlark_examples for valid names.")
         return _service_error(exc)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc)
 
@@ -313,6 +333,8 @@ async def handle_save_starlark_script(
             "parent": parent, "entry": entry, "props": props, "root_size": root_size}
     try:
         result = await _starlark_client().save_library({k: v for k, v in body.items() if v is not None})
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc)
     if not result.get("ok"):
@@ -344,6 +366,8 @@ async def handle_search_starlark_library(
     try:
         result = await _starlark_client().search_library(q=query, tag=tag, author=author, max_x=max_x,
                                                          max_y=max_y, max_z=max_z, limit=limit)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc)
     entries = result.get("results") or []
@@ -370,6 +394,8 @@ async def handle_get_starlark_script(api_client: MinecraftAPIClient, name: str, 
         if exc.response.status_code in (400, 404):
             return _failure("not_found", _detail(exc), "Use search_starlark_library to find saved scripts.")
         return _service_error(exc)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return _service_error(exc)
     record = next(v for v in meta["versions"] if v["version"] == resolved)

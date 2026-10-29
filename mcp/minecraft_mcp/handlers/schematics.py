@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..client.operations import PendingOperation, pending_result
+
 import base64
 from typing import Optional
 
@@ -60,6 +62,8 @@ async def handle_get_schematic_tags(
         result = await _schematic_client().get_schematic_tags(limit=limit)
     except httpx.HTTPError as exc:
         return _unavailable(exc)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return format_error_response(exc, "getting schematic tags")
 
@@ -110,6 +114,8 @@ async def handle_search_schematics(
         )
     except httpx.HTTPError as exc:
         return _unavailable(exc)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return format_error_response(exc, "searching schematics")
 
@@ -164,6 +170,8 @@ async def handle_get_schematic(
         return _unavailable(exc)
     except httpx.HTTPError as exc:
         return _unavailable(exc)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return format_error_response(exc, "getting schematic metadata")
 
@@ -214,6 +222,8 @@ async def handle_get_schematic_image(
         return _unavailable(exc)
     except httpx.HTTPError as exc:
         return _unavailable(exc)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return format_error_response(exc, "getting schematic image")
     return CallToolResult(content=[
@@ -246,6 +256,8 @@ async def handle_place_schematic(
         return _unavailable(exc)
     except httpx.HTTPError as exc:
         return _unavailable(exc)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return format_error_response(exc, "loading schematic NBT")
 
@@ -264,6 +276,8 @@ async def handle_place_schematic(
             replace_blocks,
             dry_run,
         )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return format_error_response(exc, "placing schematic")
 

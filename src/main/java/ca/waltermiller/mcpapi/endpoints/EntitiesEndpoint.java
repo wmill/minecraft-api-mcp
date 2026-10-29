@@ -1,5 +1,8 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.operation.OperationHttp;
+import ca.waltermiller.mcpapi.operation.OperationRegistry;
+
 import io.javalin.Javalin;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
@@ -64,7 +67,7 @@ public class EntitiesEndpoint extends APIEndpoint {
                     count, req.type, total, req.x, req.y, req.z, worldKey.getValue());
 
             CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
-            server.execute(() -> {
+            OperationHttp.dispatch(server::execute, () -> {
                 List<Entity> spawned = new ArrayList<>();
                 try {
                     Set<String> ignored = new LinkedHashSet<>();
@@ -94,7 +97,7 @@ public class EntitiesEndpoint extends APIEndpoint {
                     spawned.forEach(root -> root.streamSelfAndPassengers().forEach(Entity::discard));
                     future.completeExceptionally(e);
                 }
-            });
+            }, future);
 
             respond(ctx, future, TIMEOUT_SECONDS, "entity spawn",
                 result -> !result.containsKey("error"),

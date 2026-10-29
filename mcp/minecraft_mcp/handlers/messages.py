@@ -4,6 +4,8 @@ Message-related tool handlers for the Minecraft MCP server.
 Handles tools for broadcasting messages and sending messages to specific players.
 """
 
+from ..client.operations import PendingOperation, pending_result
+
 from typing import Optional
 from mcp.types import CallToolResult, TextContent
 
@@ -44,6 +46,8 @@ async def handle_broadcast_message(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to broadcast message: {result}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "broadcasting message")
 
@@ -92,5 +96,7 @@ async def handle_send_message_to_player(
             )
     except ValueError as e:
         return format_validation_error(str(e))
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "sending message to player")

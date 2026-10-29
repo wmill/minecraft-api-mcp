@@ -67,7 +67,7 @@ public class BlocksEndpointCore {
 
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new BlockSetResult(false, "Unknown world: " + worldKey, 0, 0, null));
+            future.complete(new BlockSetResult(false, "Unknown world: " + worldKey, 0, 0, null, 400));
             return future;
         }
 
@@ -134,6 +134,12 @@ public class BlocksEndpointCore {
      * Get a chunk of blocks from the world
      */
     public CompletableFuture<ChunkResult> getChunk(ChunkRequest request) {
+        CheckedDimensions.volume(MAX_CHUNK_SIZE, request.size_x);
+        CheckedDimensions.volume(MAX_CHUNK_SIZE, request.size_y);
+        CheckedDimensions.volume(MAX_CHUNK_SIZE, request.size_z);
+        CheckedDimensions.end(request.start_x, request.size_x);
+        CheckedDimensions.end(request.start_y, request.size_y);
+        CheckedDimensions.end(request.start_z, request.size_z);
         CompletableFuture<ChunkResult> future = new CompletableFuture<>();
         
         // Validate world
@@ -141,13 +147,13 @@ public class BlocksEndpointCore {
         
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new ChunkResult(false, "Unknown world: " + worldKey, null, null, null, null));
+            future.complete(new ChunkResult(false, "Unknown world: " + worldKey, null, null, null, null, 400));
             return future;
         }
         
         // Validate chunk size limits (prevent huge requests)
         if (request.size_x > MAX_CHUNK_SIZE || request.size_y > MAX_CHUNK_SIZE || request.size_z > MAX_CHUNK_SIZE) {
-            future.complete(new ChunkResult(false, "Chunk size too large. Maximum size is " + MAX_CHUNK_SIZE + " per dimension", null, null, null, null));
+            future.complete(new ChunkResult(false, "Chunk size too large. Maximum size is " + MAX_CHUNK_SIZE + " per dimension", null, null, null, null, 400));
             return future;
         }
         
@@ -155,7 +161,7 @@ public class BlocksEndpointCore {
             worldKey.getValue(), request.start_x, request.start_y, request.start_z, request.size_x, request.size_y, request.size_z);
         
         // Execute on server thread
-        server.execute(() -> {
+        ca.waltermiller.mcpapi.operation.OperationHttp.dispatch(server::execute, () -> {
             try {
                 // Create 3D array to hold block data
                 BlockData[][][] blocks = new BlockData[request.size_x][request.size_y][request.size_z];
@@ -188,7 +194,7 @@ public class BlocksEndpointCore {
                 logger.error("Error getting chunk data", e);
                 future.complete(new ChunkResult(false, "Exception during chunk retrieval: " + e.getMessage(), null, null, null, null));
             }
-        });
+        }, future);
         
         return future;
     }
@@ -201,6 +207,7 @@ public class BlocksEndpointCore {
     }
 
     public CompletableFuture<FillResult> fillBox(FillBoxRequest request, String lockId) {
+        int checkedTotal = CheckedDimensions.fill(request.x1, request.y1, request.z1, request.x2, request.y2, request.z2);
         CompletableFuture<FillResult> future = new CompletableFuture<>();
         
         // Validate world
@@ -208,7 +215,7 @@ public class BlocksEndpointCore {
         
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new FillResult(false, "Unknown world: " + worldKey, 0, 0, 0, null, null));
+            future.complete(new FillResult(false, "Unknown world: " + worldKey, 0, 0, 0, null, null, 400));
             return future;
         }
         
@@ -221,14 +228,11 @@ public class BlocksEndpointCore {
         int maxZ = Math.max(request.z1, request.z2);
         
         // Calculate box size for validation
-        int sizeX = maxX - minX + 1;
-        int sizeY = maxY - minY + 1;
-        int sizeZ = maxZ - minZ + 1;
-        int totalBlocks = sizeX * sizeY * sizeZ;
+        int totalBlocks = checkedTotal;
         
         // Validate box size (prevent huge operations)
         if (totalBlocks > MAX_FILL_BLOCKS) {
-            future.complete(new FillResult(false, "Box too large. Maximum " + MAX_FILL_BLOCKS + " blocks allowed", 0, 0, 0, null, null));
+            future.complete(new FillResult(false, "Box too large. Maximum " + MAX_FILL_BLOCKS + " blocks allowed", 0, 0, 0, null, null, 400));
             return future;
         }
         
@@ -248,15 +252,16 @@ public class BlocksEndpointCore {
      */
     public FillResult fillBoxInto(BlockSink sink, FillBoxRequest request, RegistryKey<World> worldKey,
                                   int minX, int minY, int minZ, int maxX, int maxY, int maxZ, int totalBlocks) {
+        CheckedDimensions.fill(minX, minY, minZ, maxX, maxY, maxZ);
         try {
             Identifier blockIdentifier = Identifier.tryParse(request.block_type);
             if (blockIdentifier == null) {
-                return new FillResult(false, "Invalid block identifier: " + request.block_type, 0, 0, 0, null, null);
+                return new FillResult(false, "Invalid block identifier: " + request.block_type, 0, 0, 0, null, null, 400);
             }
 
             Block block = Registries.BLOCK.get(blockIdentifier);
             if (block == null) {
-                return new FillResult(false, "Unknown block: " + request.block_type, 0, 0, 0, null, null);
+                return new FillResult(false, "Unknown block: " + request.block_type, 0, 0, 0, null, null, 400);
             }
 
             BlockState blockState = block.getDefaultState();
@@ -265,9 +270,12 @@ public class BlocksEndpointCore {
 
             int flags = request.notify_neighbors ? Block.NOTIFY_ALL : Block.NOTIFY_LISTENERS;
 
-            for (int x = minX; x <= maxX; x++) {
-                for (int y = minY; y <= maxY; y++) {
-                    for (int z = minZ; z <= maxZ; z++) {
+            for (long lx = minX; lx <= maxX; lx++) {
+                int x = (int) lx;
+                for (long ly = minY; ly <= maxY; ly++) {
+                    int y = (int) ly;
+                    for (long lz = minZ; lz <= maxZ; lz++) {
+                        int z = (int) lz;
                         BlockPos pos = new BlockPos(x, y, z);
                         if (sink.setBlockState(pos, blockState, flags)) {
                             blocksSet++;
@@ -296,6 +304,7 @@ public class BlocksEndpointCore {
      * Get heightmap/topography for a rectangular area
      */
     public CompletableFuture<HeightmapResult> getHeightmap(HeightmapRequest request) {
+        CheckedDimensions.volume(MAX_HEIGHTMAP_POINTS, CheckedDimensions.span(request.x1, request.x2), CheckedDimensions.span(request.z1, request.z2));
         CompletableFuture<HeightmapResult> future = new CompletableFuture<>();
         
         // Validate world
@@ -303,7 +312,7 @@ public class BlocksEndpointCore {
         
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new HeightmapResult(false, "Unknown world: " + worldKey, null, null, null, null, null, null));
+            future.complete(new HeightmapResult(false, "Unknown world: " + worldKey, null, null, null, null, null, null, 400));
             return future;
         }
         
@@ -314,13 +323,13 @@ public class BlocksEndpointCore {
         int maxZ = Math.max(request.z1, request.z2);
         
         // Calculate area size for validation
-        int sizeX = maxX - minX + 1;
-        int sizeZ = maxZ - minZ + 1;
+        int sizeX = Math.toIntExact(CheckedDimensions.span(minX, maxX));
+        int sizeZ = Math.toIntExact(CheckedDimensions.span(minZ, maxZ));
         int totalPoints = sizeX * sizeZ;
         
         // Validate area size (prevent huge operations)
         if (totalPoints > MAX_HEIGHTMAP_POINTS) {
-            future.complete(new HeightmapResult(false, "Area too large. Maximum " + MAX_HEIGHTMAP_POINTS + " height points allowed", null, null, null, null, null, null));
+            future.complete(new HeightmapResult(false, "Area too large. Maximum " + MAX_HEIGHTMAP_POINTS + " height points allowed", null, null, null, null, null, null, 400));
             return future;
         }
         
@@ -332,7 +341,7 @@ public class BlocksEndpointCore {
                 : Heightmap.Type.WORLD_SURFACE;
         } catch (IllegalArgumentException e) {
             future.complete(new HeightmapResult(false, "Invalid heightmap type: " + request.heightmap_type + 
-                ". Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR", null, null, null, null, null, null));
+                ". Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR", null, null, null, null, null, null, 400));
             return future;
         }
         
@@ -340,7 +349,7 @@ public class BlocksEndpointCore {
             worldKey.getValue(), minX, minZ, maxX, maxZ, heightmapType);
         
         // Execute on server thread
-        server.execute(() -> {
+        ca.waltermiller.mcpapi.operation.OperationHttp.dispatch(server::execute, () -> {
             try {
                 // Create 2D array to hold height data
                 int[][] heights = new int[sizeX][sizeZ];
@@ -379,7 +388,7 @@ public class BlocksEndpointCore {
                 logger.error("Error generating heightmap", e);
                 future.complete(new HeightmapResult(false, "Exception during heightmap generation: " + e.getMessage(), null, null, null, null, null, null));
             }
-        });
+        }, future);
         
         return future;
     }
@@ -414,13 +423,13 @@ public class BlocksEndpointCore {
             RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(heightmap.world());
             ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
             if (world == null) {
-                future.complete(new TerrainSampleResult(false, "Unknown world: " + heightmap.world(), heightmap, null));
+                future.complete(new TerrainSampleResult(false, "Unknown world: " + heightmap.world(), heightmap, null, 400));
                 return future;
             }
             int minX = heightmap.areaBounds().get("min").get("x");
             int minZ = heightmap.areaBounds().get("min").get("z");
             int[][] heights = heightmap.heights();
-            server.execute(() -> {
+            ca.waltermiller.mcpapi.operation.OperationHttp.dispatch(server::execute, () -> {
                 try {
                     String[][] blocks = new String[heights.length][];
                     BlockPos.Mutable pos = new BlockPos.Mutable();
@@ -437,15 +446,25 @@ public class BlocksEndpointCore {
                     future.complete(new TerrainSampleResult(false,
                         "Exception during surface sampling: " + e.getMessage(), heightmap, null));
                 }
-            });
+            }, future);
             return future;
         });
     }
 }
 
 // Result classes for core operations
-record BlockSetResult(boolean success, String error, int blocksSet, int blocksSkipped, String world) implements OperationResult {}
-record ChunkResult(boolean success, String error, String world, Map<String, Integer> startPosition, Map<String, Integer> size, BlockData[][][] blocks) implements OperationResult {}
-record FillResult(boolean success, String error, int blocksSet, int blocksFailed, int totalBlocks, String world, Map<String, Map<String, Integer>> boxBounds) implements OperationResult {}
-record HeightmapResult(boolean success, String error, String world, Map<String, Map<String, Integer>> areaBounds, Map<String, Integer> size, String heightmapType, Map<String, Integer> heightRange, int[][] heights) implements OperationResult {}
-record TerrainSampleResult(boolean success, String error, HeightmapResult heightmap, String[][] surfaceBlocks) implements OperationResult {}
+record BlockSetResult(boolean success, String error, int blocksSet, int blocksSkipped, String world, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    BlockSetResult(boolean success, String error, int blocksSet, int blocksSkipped, String world) { this(success, error, blocksSet, blocksSkipped, world, 500); }
+}
+record ChunkResult(boolean success, String error, String world, Map<String, Integer> startPosition, Map<String, Integer> size, BlockData[][][] blocks, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    ChunkResult(boolean success, String error, String world, Map<String, Integer> startPosition, Map<String, Integer> size, BlockData[][][] blocks) { this(success, error, world, startPosition, size, blocks, 500); }
+}
+record FillResult(boolean success, String error, int blocksSet, int blocksFailed, int totalBlocks, String world, Map<String, Map<String, Integer>> boxBounds, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    FillResult(boolean success, String error, int blocksSet, int blocksFailed, int totalBlocks, String world, Map<String, Map<String, Integer>> boxBounds) { this(success, error, blocksSet, blocksFailed, totalBlocks, world, boxBounds, 500); }
+}
+record HeightmapResult(boolean success, String error, String world, Map<String, Map<String, Integer>> areaBounds, Map<String, Integer> size, String heightmapType, Map<String, Integer> heightRange, int[][] heights, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    HeightmapResult(boolean success, String error, String world, Map<String, Map<String, Integer>> areaBounds, Map<String, Integer> size, String heightmapType, Map<String, Integer> heightRange, int[][] heights) { this(success, error, world, areaBounds, size, heightmapType, heightRange, heights, 500); }
+}
+record TerrainSampleResult(boolean success, String error, HeightmapResult heightmap, String[][] surfaceBlocks, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    TerrainSampleResult(boolean success, String error, HeightmapResult heightmap, String[][] surfaceBlocks) { this(success, error, heightmap, surfaceBlocks, 500); }
+}

@@ -34,6 +34,7 @@ class SpawnEntityAsyncTests(unittest.IsolatedAsyncioTestCase):
         posted = {}
 
         class FakeResponse:
+            status_code = 200
             def raise_for_status(self):
                 return None
 
@@ -47,7 +48,8 @@ class SpawnEntityAsyncTests(unittest.IsolatedAsyncioTestCase):
             async def __aexit__(self, exc_type, exc, tb):
                 return None
 
-            async def post(self, url, json):
+            async def post(self, url, json, headers):
+                assert headers["Idempotency-Key"]
                 posted["url"] = url
                 posted["json"] = json
                 return FakeResponse()

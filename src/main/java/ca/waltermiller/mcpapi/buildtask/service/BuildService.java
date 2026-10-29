@@ -12,6 +12,10 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashSet;
+import ca.waltermiller.mcpapi.buildtask.repository.BuildTransaction;
+import ca.waltermiller.mcpapi.buildtask.repository.PostgreSQLBuildRepository;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -30,12 +34,31 @@ public class BuildService {
     private final TaskRepository taskRepository;
     private final TaskExecutor taskExecutor;
     private final ExecutorService executorService;
+    private volatile boolean stopping;
+    private final java.util.Set<CompletableFuture<?>> executions = new HashSet<>();
 
     public BuildService(BuildRepository buildRepository, TaskRepository taskRepository, TaskExecutor taskExecutor) {
+        this(buildRepository, taskRepository, taskExecutor, Executors.newCachedThreadPool(), false);
+    }
+    private final boolean inTransaction;
+    private BuildService(BuildRepository buildRepository, TaskRepository taskRepository, TaskExecutor taskExecutor,
+                         ExecutorService executor, boolean inTransaction) {
+        this.inTransaction = inTransaction;
         this.buildRepository = buildRepository;
         this.taskRepository = taskRepository;
         this.taskExecutor = taskExecutor;
-        this.executorService = Executors.newCachedThreadPool();
+        this.executorService = executor;
+    }
+
+    @FunctionalInterface
+    private interface Change<T> { T run(BuildService service) throws SQLException; }
+    private <T> T transaction(UUID buildId, Change<T> change) throws SQLException {
+        if (stopping) throw new ca.waltermiller.mcpapi.operation.OperationRegistry.Failure(503, "Build service is stopping");
+        if (buildRepository instanceof PostgreSQLBuildRepository postgres) {
+            return BuildTransaction.run(postgres.databaseConfig(), buildId,
+                (builds, tasks) -> change.run(new BuildService(builds, tasks, taskExecutor, executorService, true)));
+        }
+        synchronized (this) { return change.run(this); }
     }
 
     /**
@@ -153,6 +176,7 @@ public class BuildService {
     }
 
     private void requireNotReverted(Build build) {
+        if (build.getStatus() == BuildStatus.IN_PROGRESS) throw new IllegalStateException("Cannot edit a build while it is executing");
         if (build.getStatus() == BuildStatus.REVERTED) {
             throw new IllegalStateException("Cannot edit a reverted build's placement history; use redo_build or create a new build");
         }
@@ -193,6 +217,7 @@ public class BuildService {
         if (replay && build.getStatus() == BuildStatus.IN_PROGRESS) {
             throw new IllegalStateException("Cannot replay a build while it is executing");
         }
+        for (BuildTask task : tasks) taskExecutor.validateDimensions(task);
     }
 
     /**
@@ -212,6 +237,7 @@ public class BuildService {
      * Requirements: 2.1, 2.5
      */
     public BuildTask addTask(UUID buildId, AddTaskRequest request) throws SQLException {
+        if (!inTransaction && buildRepository instanceof PostgreSQLBuildRepository) { return transaction(buildId, s -> s.addTask(buildId, request)); }
         if (buildId == null) {
             throw new IllegalArgumentException("Build ID cannot be null");
         }
@@ -231,19 +257,23 @@ public class BuildService {
             throw new IllegalStateException("Cannot add tasks to completed build: " + buildId);
         }
 
-        // Get next task order
-        int taskOrder = taskRepository.getNextTaskOrder(buildId);
-        
-        // Create task
-        BuildTask task = new BuildTask(buildId, taskOrder, request.task_type, request.task_data, request.description);
-        
-        LOGGER.info("Adding task {} of type {} to build {}", task.getId(), task.getTaskType(), buildId);
-        
-        // Add to queue
-        BuildTask savedTask = taskRepository.addToQueue(buildId, task);
-        
-        LOGGER.info("Added task {} to build {} at position {}", savedTask.getId(), buildId, taskOrder);
-        return savedTask;
+        List<BuildTask> tasks = new ArrayList<>(taskRepository.findByBuildIdOrdered(buildId));
+        BuildTask task = new BuildTask(buildId, tasks.size(), request.task_type, request.task_data, request.description);
+        tasks.add(task);
+        taskRepository.updateTaskQueue(buildId, tasks);
+        return task;
+    }
+
+    public void addTasks(UUID buildId, List<AddTaskRequest> requests) throws SQLException {
+        transaction(buildId, service -> {
+            Build build = service.buildRepository.findById(buildId).orElseThrow(() -> new IllegalArgumentException("Build not found"));
+            service.requireNotReverted(build);
+            if (build.getStatus() == BuildStatus.COMPLETED) throw new IllegalStateException("Cannot add tasks to completed build");
+            List<BuildTask> queue = new ArrayList<>(service.taskRepository.findByBuildIdOrdered(buildId));
+            for (AddTaskRequest request : requests) queue.add(new BuildTask(buildId, queue.size(), request.task_type, request.task_data, request.description));
+            service.taskRepository.updateTaskQueue(buildId, queue);
+            return null;
+        });
     }
 
     /**
@@ -263,6 +293,7 @@ public class BuildService {
      * Requirements: 2.5
      */
     public void updateTaskQueue(UUID buildId, List<BuildTask> tasks) throws SQLException {
+        if (!inTransaction && buildRepository instanceof PostgreSQLBuildRepository) { transaction(buildId, s -> { s.updateTaskQueue(buildId, tasks); return null; }); return; }
         if (buildId == null) {
             throw new IllegalArgumentException("Build ID cannot be null");
         }
@@ -282,17 +313,20 @@ public class BuildService {
             throw new IllegalStateException("Cannot modify tasks for completed build: " + buildId);
         }
 
-        LOGGER.info("Updating task queue for build {} with {} tasks", buildId, tasks.size());
-        
-        // Update task orders and save
-        for (int i = 0; i < tasks.size(); i++) {
-            BuildTask task = tasks.get(i);
-            task.setBuildId(buildId);
-            task.setTaskOrder(i);
+        List<BuildTask> existing = taskRepository.findByBuildIdOrdered(buildId);
+        var byId = existing.stream().collect(java.util.stream.Collectors.toMap(BuildTask::getId, t -> t));
+        var seen = new HashSet<UUID>();
+        List<BuildTask> ordered = new ArrayList<>();
+        for (BuildTask task : tasks) {
+            if (task == null || !byId.containsKey(task.getId()) || !seen.add(task.getId())) {
+                throw new IllegalArgumentException("Reorder must contain every existing task ID exactly once");
+            }
+            ordered.add(byId.get(task.getId()));
         }
-        
-        taskRepository.updateTaskQueue(buildId, tasks);
-        
+        if (seen.size() != existing.size()) throw new IllegalArgumentException("Reorder must contain every existing task ID exactly once");
+        for (int i = 0; i < ordered.size(); i++) ordered.get(i).setTaskOrder(i);
+        taskRepository.updateTaskQueue(buildId, ordered);
+
         LOGGER.info("Updated task queue for build {}", buildId);
     }
 
@@ -305,95 +339,84 @@ public class BuildService {
     }
 
     public CompletableFuture<BuildExecutionResult> executeBuild(UUID buildId, String lockId) {
-        if (buildId == null) {
-            return CompletableFuture.completedFuture(
-                new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build ID cannot be null"));
-        }
+        return startExecution(buildId, lockId, false);
+    }
 
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                LOGGER.info("Starting execution of build {}", buildId);
-                
-                // Get build and verify it exists
-                Optional<Build> buildOpt = buildRepository.findById(buildId);
-                if (buildOpt.isEmpty()) {
-                    return new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build not found: " + buildId);
+    private record Claim(Build build, List<BuildTask> tasks) {}
+
+    private synchronized CompletableFuture<BuildExecutionResult> startExecution(UUID buildId, String lockId, boolean replay) {
+        if (stopping) throw new ca.waltermiller.mcpapi.operation.OperationRegistry.Failure(503, "Build execution is stopping");
+        final Claim claim;
+        try {
+            claim = transaction(buildId, service -> {
+                Build build = service.buildRepository.findById(buildId)
+                    .orElseThrow(() -> new IllegalArgumentException("Build not found: " + buildId));
+                List<BuildTask> tasks = service.taskRepository.findByBuildIdOrdered(buildId);
+                validateTaskExecution(build, tasks, replay);
+                if (build.getStatus() == BuildStatus.IN_PROGRESS || (!replay && build.getStatus() == BuildStatus.COMPLETED)) {
+                    throw new IllegalStateException("Build is already executing or completed");
                 }
-
-                Build build = buildOpt.get();
-                if (build.getStatus() == BuildStatus.COMPLETED) {
-                    return new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build already completed");
+                if (replay) {
+                    for (BuildTask task : tasks) {
+                        task.resetForReplay();
+                        service.taskRepository.update(task);
+                    }
                 }
-
-                List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
-                validateTaskExecution(build, tasks, false);
-
-                // Update build status to in progress
                 build.setStatus(BuildStatus.IN_PROGRESS);
-                buildRepository.update(build);
-
-                // Get tasks in order
-                if (tasks.isEmpty()) {
-                    build.setStatus(BuildStatus.COMPLETED);
-                    buildRepository.update(build);
-                    return new BuildExecutionResult(buildId, true, 0, 0, List.of(), "No tasks to execute");
+                service.buildRepository.update(build);
+                return new Claim(build, tasks);
+            });
+        } catch (SQLException failure) {
+            throw new ca.waltermiller.mcpapi.operation.OperationRegistry.Failure(500, "Could not claim build execution");
+        }
+        CompletableFuture<ExecutionProgress> chain = CompletableFuture.completedFuture(new ExecutionProgress());
+        for (BuildTask task : claim.tasks()) {
+            chain = chain.thenComposeAsync(progress -> {
+                if (progress.stop) return CompletableFuture.completedFuture(progress);
+                if (task.getStatus() == TaskStatus.COMPLETED) {
+                    progress.executed++;
+                    return CompletableFuture.completedFuture(progress);
                 }
-
-                LOGGER.info("Executing {} tasks for build {}", tasks.size(), buildId);
-
-                // Execute tasks in order
-                int tasksExecuted = 0;
-                int tasksFailed = 0;
-                
-                for (BuildTask task : tasks) {
-                    if (task.getStatus() == TaskStatus.COMPLETED) {
-                        tasksExecuted++;
-                        continue; // Skip already completed tasks
-                    }
-                    
-                    try {
-                        TaskExecutor.TaskExecutionResult result = lockId == null ? taskExecutor.executeTask(task) : taskExecutor.executeTask(task, lockId);
-                        
-                        // Update task in database
-                        taskRepository.update(task);
-                        
-                        if (result.success()) {
-                            tasksExecuted++;
-                            LOGGER.info("Task {} completed successfully", task.getId());
-                        } else {
-                            tasksFailed++;
-                            LOGGER.error("Task {} failed: {}", task.getId(), result.errorMessage());
-                            if (result.lockError() != null) break;
-                        }
-                    } catch (Exception e) {
-                        tasksFailed++;
-                        task.markFailed("Exception during execution: " + e.getMessage());
-                        taskRepository.update(task);
-                        LOGGER.error("Task {} failed with exception", task.getId(), e);
-                    }
+                try {
+                    task.markExecuting();
+                    taskRepository.update(task);
+                } catch (SQLException failure) {
+                    return CompletableFuture.failedFuture(failure);
                 }
-
-                // Update build status based on results
-                boolean allTasksCompleted = tasksFailed == 0;
-                build.setStatus(allTasksCompleted ? BuildStatus.COMPLETED : BuildStatus.FAILED);
-                buildRepository.update(build);
-
-                LOGGER.info("Build {} execution completed. Tasks executed: {}, failed: {}", 
-                    buildId, tasksExecuted, tasksFailed);
-
-                return new BuildExecutionResult(buildId, allTasksCompleted, tasksExecuted, tasksFailed, 
-                    List.of(), allTasksCompleted ? "Build completed successfully" : "Some tasks failed");
-
-            } catch (SQLException e) {
-                LOGGER.error("Database error during build execution", e);
-                return new BuildExecutionResult(buildId, false, 0, 0, List.of(), 
-                    "Database error: " + e.getMessage());
-            } catch (Exception e) {
-                LOGGER.error("Unexpected error during build execution", e);
-                return new BuildExecutionResult(buildId, false, 0, 0, List.of(), 
-                    "Unexpected error: " + e.getMessage());
-            }
+                return taskExecutor.executeTaskAsync(task, lockId).thenApplyAsync(result -> {
+                    try { taskRepository.update(task); }
+                    catch (SQLException failure) { throw new java.util.concurrent.CompletionException(failure); }
+                    if (result.success()) progress.executed++;
+                    else { progress.failed++; progress.stop = result.lockError() != null; }
+                    return progress;
+                }, executorService);
+            }, executorService);
+        }
+        CompletableFuture<BuildExecutionResult> execution = chain.handleAsync((progress, failure) -> {
+            Build build = claim.build();
+            boolean success = failure == null && progress.failed == 0;
+            build.setStatus(success ? BuildStatus.COMPLETED : BuildStatus.FAILED);
+            try { buildRepository.update(build); }
+            catch (SQLException persistence) { throw new java.util.concurrent.CompletionException(persistence); }
+            if (failure != null) LOGGER.error("Build execution failed for {}", buildId, failure);
+            return new BuildExecutionResult(buildId, success, progress == null ? 0 : progress.executed,
+                progress == null ? 1 : progress.failed, List.of(), failure == null
+                    ? success ? "Build completed successfully" : "Some tasks failed" : "Build execution failed");
         }, executorService);
+        executions.add(execution);
+        execution.whenComplete((result, failure) -> {
+            synchronized (this) {
+                executions.remove(execution);
+                if (stopping && executions.isEmpty()) executorService.shutdown();
+            }
+        });
+        return execution;
+    }
+
+    private static final class ExecutionProgress {
+        int executed;
+        int failed;
+        boolean stop;
     }
 
     /**
@@ -405,53 +428,7 @@ public class BuildService {
     }
 
     public CompletableFuture<BuildExecutionResult> replayBuild(UUID buildId, String lockId) {
-        if (buildId == null) {
-            return CompletableFuture.completedFuture(
-                new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build ID cannot be null"));
-        }
-
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                LOGGER.info("Starting replay of build {}", buildId);
-
-                // Get build and verify it exists
-                Optional<Build> buildOpt = buildRepository.findById(buildId);
-                if (buildOpt.isEmpty()) {
-                    return new BuildExecutionResult(buildId, false, 0, 0, List.of(), "Build not found: " + buildId);
-                }
-
-                Build build = buildOpt.get();
-
-                List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
-                validateTaskExecution(build, tasks, true);
-
-                // Reset build status to CREATED
-                build.setStatus(BuildStatus.CREATED);
-                buildRepository.update(build);
-
-                // NBT placements were rejected before any state changes.
-                for (BuildTask task : tasks) {
-                    task.resetForReplay();
-                    taskRepository.update(task);
-                }
-
-                LOGGER.info("Reset {} tasks for replay of build {}", tasks.size(), buildId);
-
-            } catch (SQLException e) {
-                LOGGER.error("Database error resetting build for replay", e);
-                return new BuildExecutionResult(buildId, false, 0, 0, List.of(),
-                    "Database error during reset: " + e.getMessage());
-            }
-
-            // Now execute the build normally
-            try {
-                return executeBuild(buildId, lockId).get();
-            } catch (Exception e) {
-                LOGGER.error("Error during replay execution", e);
-                return new BuildExecutionResult(buildId, false, 0, 0, List.of(),
-                    "Error during replay: " + e.getMessage());
-            }
-        }, executorService);
+        return startExecution(buildId, lockId, true);
     }
 
     /**
@@ -497,14 +474,20 @@ public class BuildService {
     /**
      * Shuts down the executor service.
      */
-    public void shutdown() {
-        executorService.shutdown();
+    public synchronized void shutdown() {
+        stopping = true;
+        if (executions.isEmpty()) executorService.shutdown();
+    }
+
+    public boolean awaitTermination(long deadline) throws InterruptedException {
+        return executorService.awaitTermination(Math.max(0, deadline - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
     }
 
     /**
      * Deletes a task from a build and reorders remaining tasks.
      */
     public void deleteTask(UUID buildId, UUID taskId) throws SQLException {
+        if (!inTransaction && buildRepository instanceof PostgreSQLBuildRepository) { transaction(buildId, s -> { s.deleteTask(buildId, taskId); return null; }); return; }
         if (buildId == null) {
             throw new IllegalArgumentException("Build ID cannot be null");
         }
@@ -554,6 +537,7 @@ public class BuildService {
      * Shifts existing tasks at and after that position.
      */
     public BuildTask insertTaskAt(UUID buildId, AddTaskRequest request, int position) throws SQLException {
+        if (!inTransaction && buildRepository instanceof PostgreSQLBuildRepository) { return transaction(buildId, s -> s.insertTaskAt(buildId, request, position)); }
         if (buildId == null) {
             throw new IllegalArgumentException("Build ID cannot be null");
         }
@@ -585,19 +569,11 @@ public class BuildService {
 
         LOGGER.info("Inserting task {} at position {} in build {}", newTask.getId(), insertPosition, buildId);
 
-        // Save the new task
-        BuildTask savedTask = taskRepository.create(newTask);
-
-        // Shift existing tasks at and after insert position
-        for (BuildTask task : tasks) {
-            if (task.getTaskOrder() >= insertPosition) {
-                task.setTaskOrder(task.getTaskOrder() + 1);
-            }
-        }
+        tasks = new ArrayList<>(tasks);
+        tasks.add(insertPosition, newTask);
+        for (int i = 0; i < tasks.size(); i++) tasks.get(i).setTaskOrder(i);
         taskRepository.updateTaskQueue(buildId, tasks);
-
-        LOGGER.info("Inserted task {} at position {}", savedTask.getId(), insertPosition);
-        return savedTask;
+        return newTask;
     }
 
     /**
@@ -605,6 +581,7 @@ public class BuildService {
      */
     public BuildTask updateTask(UUID buildId, UUID taskId, com.fasterxml.jackson.databind.JsonNode partialTaskData,
                                 String description) throws SQLException {
+        if (!inTransaction && buildRepository instanceof PostgreSQLBuildRepository) { return transaction(buildId, s -> s.updateTask(buildId, taskId, partialTaskData, description)); }
         if (buildId == null) {
             throw new IllegalArgumentException("Build ID cannot be null");
         }
@@ -658,6 +635,7 @@ public class BuildService {
         }
 
         BuildTask updatedTask = taskRepository.update(task);
+        if (inTransaction) taskRepository.updateTaskQueue(buildId, taskRepository.findByBuildIdOrdered(buildId));
         LOGGER.info("Updated task {}", taskId);
         return updatedTask;
     }
@@ -668,6 +646,7 @@ public class BuildService {
      * misrepresent already-placed blocks as having moved.
      */
     public List<BuildTask> translateBuild(UUID buildId, int dx, int dy, int dz) throws SQLException {
+        if (!inTransaction && buildRepository instanceof PostgreSQLBuildRepository) { return transaction(buildId, s -> s.translateBuild(buildId, dx, dy, dz)); }
         if (buildId == null) {
             throw new IllegalArgumentException("Build ID cannot be null");
         }
@@ -699,7 +678,7 @@ public class BuildService {
             task.setTaskData(translated);
         }
 
-        taskRepository.updateAll(tasks);
+        taskRepository.updateTaskQueue(buildId, tasks);
 
         LOGGER.info("Translated build {} by ({},{},{})", buildId, dx, dy, dz);
         return tasks;

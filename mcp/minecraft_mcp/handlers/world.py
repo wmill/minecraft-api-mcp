@@ -4,6 +4,8 @@ World-related tool handlers for the Minecraft MCP server.
 Handles tools for players, entities, and world information.
 """
 
+from ..client.operations import PendingOperation, pending_result
+
 from typing import Any, Dict
 
 import httpx
@@ -42,6 +44,8 @@ async def handle_get_players(api_client: MinecraftAPIClient, **arguments) -> Cal
             response_text += format_player_info(player, facing)
         
         return format_success_response(response_text)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "getting players")
 
@@ -64,6 +68,8 @@ async def handle_get_entities(api_client: MinecraftAPIClient, **arguments) -> Ca
         response_text += format_list_with_limit(result, limit=20, item_formatter=format_entity_info)
         
         return format_success_response(response_text)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "getting entities")
 
@@ -111,6 +117,8 @@ async def handle_spawn_entity(
                 content=[TextContent(type="text", text=f"❌ Failed to spawn entity: {message}")]
             )
         return format_error_response(e, "spawning entity")
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "spawning entity")
 

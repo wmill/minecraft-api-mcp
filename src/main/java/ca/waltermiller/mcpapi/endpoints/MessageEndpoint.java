@@ -1,5 +1,8 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.operation.OperationHttp;
+import ca.waltermiller.mcpapi.operation.OperationRegistry;
+
 import io.javalin.Javalin;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -24,15 +27,15 @@ public class MessageEndpoint extends APIEndpoint {
         app.post("/api/message/broadcast", ctx -> {
             BroadcastMessageRequest req = ctx.bodyAsClass(BroadcastMessageRequest.class);
             
-            CompletableFuture<Void> future = new CompletableFuture<>();
+            CompletableFuture<Integer> future = new CompletableFuture<>();
             
-            server.execute(() -> {
+            OperationHttp.dispatch(server::execute, () -> {
                 try {
                     Text messageText = Text.literal(req.message());
                     int playerCount = server.getPlayerManager().getPlayerList().size();
                     
                     if (playerCount == 0) {
-                        future.complete(null);
+                        future.complete(server.getPlayerManager().getPlayerList().size());
                         return;
                     }
                     
@@ -41,13 +44,23 @@ public class MessageEndpoint extends APIEndpoint {
                         player.sendMessage(messageText, req.action_bar());
                     }
                     
-                    future.complete(null);
+                    future.complete(server.getPlayerManager().getPlayerList().size());
                 } catch (Exception e) {
                     future.completeExceptionally(e);
                 }
-            });
+            }, future);
             
-            try {
+            if (OperationHttp.tracked(ctx)) {
+                try {
+                    OperationHttp.respond(ctx, future, TIMEOUT_SECONDS, count -> new OperationRegistry.Response(200,
+                        Map.of("success", true, "message", "Message sent to all players", "player_count", count)));
+                } catch (Exception failure) {
+                    var response = OperationHttp.failure(failure);
+                    ctx.status(response.status()).json(response.body());
+                }
+                return;
+            }
+            try { // legacy broadcast wait
                 future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 ctx.json(Map.of(
                     "success", true,
@@ -66,9 +79,9 @@ public class MessageEndpoint extends APIEndpoint {
         app.post("/api/message/player", ctx -> {
             PlayerMessageRequest req = ctx.bodyAsClass(PlayerMessageRequest.class);
             
-            CompletableFuture<Void> future = new CompletableFuture<>();
+            CompletableFuture<Integer> future = new CompletableFuture<>();
             
-            server.execute(() -> {
+            OperationHttp.dispatch(server::execute, () -> {
                 try {
                     ServerPlayerEntity player = null;
                     
@@ -88,12 +101,22 @@ public class MessageEndpoint extends APIEndpoint {
                     Text messageText = Text.literal(req.message());
                     player.sendMessage(messageText, req.action_bar());
                     
-                    future.complete(null);
+                    future.complete(server.getPlayerManager().getPlayerList().size());
                 } catch (Exception e) {
                     future.completeExceptionally(e);
                 }
-            });
+            }, future);
             
+            if (OperationHttp.tracked(ctx)) {
+                try {
+                    OperationHttp.respond(ctx, future, TIMEOUT_SECONDS, count -> new OperationRegistry.Response(200,
+                        Map.of("success", true, "message", "Message sent to player")));
+                } catch (Exception failure) {
+                    var response = OperationHttp.failure(failure);
+                    ctx.status(response.status()).json(response.body());
+                }
+                return;
+            }
             try {
                 future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 ctx.json(Map.of(

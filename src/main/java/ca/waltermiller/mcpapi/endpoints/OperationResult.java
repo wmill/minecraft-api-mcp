@@ -9,4 +9,6 @@ interface OperationResult {
     boolean success();
 
     String error();
+
+    default int failureStatus() { return 500; }
 }

@@ -5,6 +5,7 @@ import json
 from mcp.types import CallToolResult, TextContent
 
 from ..utils.formatting import format_error_response
+from ..client.operations import PendingOperation, pending_result
 
 
 async def _result(operation):
@@ -12,6 +13,8 @@ async def _result(operation):
         payload = await operation
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(payload))],
                               structuredContent=payload)
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return format_error_response(exc, "managing area reservation")
 

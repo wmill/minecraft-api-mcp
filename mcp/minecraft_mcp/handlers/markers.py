@@ -4,6 +4,7 @@ import json
 import httpx
 from mcp.types import CallToolResult, TextContent
 from ..utils.formatting import format_error_response
+from ..client.operations import PendingOperation, pending_result
 
 
 async def _result(operation):
@@ -17,6 +18,8 @@ async def _result(operation):
             payload = {**payload, "success": False}
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(payload))],
                               structuredContent=payload, isError=not payload.get("success", False))
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as exc:
         return format_error_response(exc, "area marker")
 

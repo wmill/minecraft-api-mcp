@@ -91,4 +91,6 @@ All heights are standing Y: the first air block above the ground, the same as
 - Rounding to whole blocks means very fine noise (a perfect 1-block checkerboard)
   survives. Real terrain smooths as expected.
 - Error codes: 400 `invalid_request` / `unloaded_chunks`; 409 `area_locked` /
-  `outside_area_lock` / `invalid_area_lock` / `terrain_changed`; 504 `timeout`.
+  `outside_area_lock` / `invalid_area_lock` / `terrain_changed`. Dry runs may return
+  504 `timeout`; writes instead return a [pollable 202 operation](operations-and-queues.md)
+  when the HTTP wait expires, and finish through build and snapshot persistence.

@@ -4,6 +4,8 @@ Build management tool handlers for the Minecraft MCP server.
 Handles tools for creating builds, adding tasks to builds, executing builds, and querying build status.
 """
 
+from ..client.operations import PendingOperation, pending_result
+
 import base64
 from typing import Any, Dict, List, Optional
 
@@ -84,6 +86,8 @@ async def handle_create_build(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to create build: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "creating build")
 
@@ -167,6 +171,8 @@ async def handle_add_build_task_single_block_set(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "adding single block build task")
 
@@ -223,6 +229,8 @@ async def handle_add_build_task_block_set(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "adding build task")
 
@@ -291,6 +299,8 @@ async def handle_add_build_task_block_fill(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "adding build task")
 
@@ -362,6 +372,8 @@ async def handle_add_build_task_prefab_door(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "adding build task")
 
@@ -436,6 +448,8 @@ async def handle_add_build_task_prefab_stairs(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "adding build task")
 
@@ -504,6 +518,8 @@ async def handle_add_build_task_prefab_window(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "adding build task")
 
@@ -564,6 +580,8 @@ async def handle_add_build_task_prefab_torch(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "adding build task")
 
@@ -638,6 +656,8 @@ async def handle_add_build_task_prefab_sign(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "adding build task")
 
@@ -701,6 +721,8 @@ async def handle_add_build_task_prefab_ladder(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to add task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "adding build task")
 
@@ -734,6 +756,8 @@ async def handle_execute_build(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to execute build: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "executing build")
 
@@ -767,6 +791,8 @@ async def handle_replay_build(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to replay build: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "replaying build")
 
@@ -845,6 +871,8 @@ async def handle_clone_build(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Failed to clone build: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "cloning build")
 
@@ -910,6 +938,8 @@ async def handle_query_builds_by_location(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to query builds: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "querying builds by location")
 
@@ -988,6 +1018,8 @@ async def handle_get_build_status(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to get build status: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "getting build status")
 
@@ -1045,6 +1077,8 @@ async def handle_audit_build(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to audit build: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "auditing build")
 
@@ -1082,6 +1116,8 @@ async def handle_translate_build(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to translate build: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "translating build")
 
@@ -1114,6 +1150,8 @@ async def handle_plan_rail_route(
         return CallToolResult(
             content=[TextContent(type="text", text=f"❌ Failed to start rail planning: {result.get('error', 'Unknown error')}")]
         )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "starting rail planner")
 
@@ -1141,6 +1179,8 @@ async def handle_get_rail_plan_status(
         return CallToolResult(
             content=[TextContent(type="text", text=f"❌ Failed to fetch rail planning status: {result.get('error', 'Unknown error')}")]
         )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "getting rail planner status")
 
@@ -1174,6 +1214,8 @@ async def handle_delete_build_task(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to delete task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "deleting build task")
 
@@ -1225,6 +1267,8 @@ async def handle_update_build_task(
             return CallToolResult(
                 content=[TextContent(type="text", text=f"❌ Failed to update task: {result.get('error', 'Unknown error')}")]
             )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "updating build task")
 
@@ -1289,5 +1333,7 @@ async def handle_preview_build(
                 TextContent(type="text", text=advisory),
             ]
         )
+    except PendingOperation as pending:
+        return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "rendering build preview")

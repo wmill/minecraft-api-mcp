@@ -33,6 +33,20 @@ public class APIEndpoint {
                                Predicate<T> success,
                                Function<T, String> error,
                                Function<T, Object> body) {
+        if (ca.waltermiller.mcpapi.operation.OperationHttp.tracked(ctx)) {
+            try {
+                ca.waltermiller.mcpapi.operation.OperationHttp.respond(ctx, future, timeoutSeconds, result -> {
+                    if (success.test(result)) return new ca.waltermiller.mcpapi.operation.OperationRegistry.Response(200, body.apply(result));
+                    String message = error.apply(result);
+                    return new ca.waltermiller.mcpapi.operation.OperationRegistry.Response(result instanceof OperationResult typed ? typed.failureStatus() : 500,
+                        Map.of("error", message == null ? "Unknown error" : message));
+                });
+            } catch (Exception failure) {
+                var response = ca.waltermiller.mcpapi.operation.OperationHttp.failure(failure);
+                ctx.status(response.status()).json(response.body());
+            }
+            return;
+        }
         try {
             T result = future.get(timeoutSeconds, TimeUnit.SECONDS);
             if (success.test(result)) {

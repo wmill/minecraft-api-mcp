@@ -88,7 +88,7 @@ public class PrefabEndpointCore {
 
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new DoorResult(false, "Unknown world: " + worldKey, null, 0, null, null, false));
+            future.complete(new DoorResult(false, "Unknown world: " + worldKey, null, 0, null, null, false, 400));
             return future;
         }
 
@@ -103,22 +103,22 @@ public class PrefabEndpointCore {
      */
     public DoorResult placeDoorInto(BlockSink sink, DoorRequest request, RegistryKey<World> worldKey) {
         if (request.width <= 0) {
-            return new DoorResult(false, "Width must be positive", null, 0, null, null, false);
+            return new DoorResult(false, "Width must be positive", null, 0, null, null, false, 400);
         }
 
         Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
-            return new DoorResult(false, "Invalid block identifier", null, 0, null, null, false);
+            return new DoorResult(false, "Invalid block identifier", null, 0, null, null, false, 400);
         }
 
         Block block = Registries.BLOCK.get(blockId);
         if (!(block instanceof DoorBlock)) {
-            return new DoorResult(false, "Block is not a door: " + request.block_type, null, 0, null, null, false);
+            return new DoorResult(false, "Block is not a door: " + request.block_type, null, 0, null, null, false, 400);
         }
 
         Direction facing = parseHorizontalDirection(request.facing);
         if (facing == null) {
-            return new DoorResult(false, "Facing must be one of north, south, east, west", null, 0, null, null, false);
+            return new DoorResult(false, "Facing must be one of north, south, east, west", null, 0, null, null, false, 400);
         }
 
         DoorHinge hinge = "right".equalsIgnoreCase(request.hinge) ? DoorHinge.RIGHT : DoorHinge.LEFT;
@@ -186,7 +186,7 @@ public class PrefabEndpointCore {
 
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new StairResult(false, "Unknown world: " + worldKey, null, 0, null, false));
+            future.complete(new StairResult(false, "Unknown world: " + worldKey, null, 0, null, false, 400));
             return future;
         }
 
@@ -198,22 +198,22 @@ public class PrefabEndpointCore {
     public StairResult placeStairsInto(BlockSink sink, StairRequest request, RegistryKey<World> worldKey) {
         Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
-            return new StairResult(false, "Invalid block identifier", null, 0, null, false);
+            return new StairResult(false, "Invalid block identifier", null, 0, null, false, 400);
         }
         Identifier stairId = Identifier.tryParse(request.stair_type);
         if (stairId == null) {
-            return new StairResult(false, "Invalid stair block identifier", null, 0, null, false);
+            return new StairResult(false, "Invalid stair block identifier", null, 0, null, false, 400);
         }
 
         Block baseBlock = Registries.BLOCK.get(blockId);
         Block stairBlock = Registries.BLOCK.get(stairId);
         if (!(stairBlock instanceof StairsBlock)) {
-            return new StairResult(false, "Block is not a stair: " + request.stair_type, null, 0, null, false);
+            return new StairResult(false, "Block is not a stair: " + request.stair_type, null, 0, null, false, 400);
         }
 
         Direction staircaseDirection = parseHorizontalDirection(request.staircase_direction);
         if (staircaseDirection == null) {
-            return new StairResult(false, "staircase_direction must be one of north, south, east, west", null, 0, null, false);
+            return new StairResult(false, "staircase_direction must be one of north, south, east, west", null, 0, null, false, 400);
         }
 
         logger.info("Placing stair prefab in world {} from ({}, {}, {}) to ({}, {}, {}) staircase_direction {}",
@@ -242,7 +242,7 @@ public class PrefabEndpointCore {
 
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new WindowPaneResult(false, "Unknown world: " + worldKey, null, 0, null, false));
+            future.complete(new WindowPaneResult(false, "Unknown world: " + worldKey, null, 0, null, false, 400));
             return future;
         }
 
@@ -253,24 +253,24 @@ public class PrefabEndpointCore {
 
     public WindowPaneResult placeWindowPaneInto(BlockSink sink, WindowPaneRequest request, RegistryKey<World> worldKey) {
         if (request.height <= 0) {
-            return new WindowPaneResult(false, "Height must be positive", null, 0, null, false);
+            return new WindowPaneResult(false, "Height must be positive", null, 0, null, false, 400);
         }
 
         Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
-            return new WindowPaneResult(false, "Invalid block identifier", null, 0, null, false);
+            return new WindowPaneResult(false, "Invalid block identifier", null, 0, null, false, 400);
         }
 
         Block block = Registries.BLOCK.get(blockId);
         if (!(block instanceof PaneBlock)) {
-            return new WindowPaneResult(false, "Block is not a pane block: " + request.block_type, null, 0, null, false);
+            return new WindowPaneResult(false, "Block is not a pane block: " + request.block_type, null, 0, null, false, 400);
         }
 
         boolean isEastWest = request.start_z == request.end_z;
         boolean isNorthSouth = request.start_x == request.end_x;
 
         if (!isEastWest && !isNorthSouth) {
-            return new WindowPaneResult(false, "Window pane wall must be aligned north-south or east-west", null, 0, null, false);
+            return new WindowPaneResult(false, "Window pane wall must be aligned north-south or east-west", null, 0, null, false, 400);
         }
 
         logger.info("Placing window pane wall in world {} from ({}, {}, {}) to ({}, {}, {}) height {}",
@@ -299,7 +299,7 @@ public class PrefabEndpointCore {
 
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new TorchResult(false, "Unknown world: " + worldKey, null, null, null, false, null));
+            future.complete(new TorchResult(false, "Unknown world: " + worldKey, null, null, null, false, null, 400));
             return future;
         }
 
@@ -311,7 +311,7 @@ public class PrefabEndpointCore {
     public TorchResult placeTorchInto(BlockSink sink, TorchRequest request, RegistryKey<World> worldKey) {
         Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
-            return new TorchResult(false, "Invalid block identifier", null, null, null, false, null);
+            return new TorchResult(false, "Invalid block identifier", null, null, null, false, null, 400);
         }
 
         Block block = Registries.BLOCK.get(blockId);
@@ -332,7 +332,7 @@ public class PrefabEndpointCore {
                     facing = parseHorizontalDirection(request.facing);
 
                     if (facing == null) {
-                        return new TorchResult(false, "Invalid facing direction. Must be north, south, east, or west", null, null, null, false, null);
+                        return new TorchResult(false, "Invalid facing direction. Must be north, south, east, or west", null, null, null, false, null, 400);
                     }
 
                     BlockPos attachPos = pos.offset(facing);
@@ -350,7 +350,7 @@ public class PrefabEndpointCore {
                     }
 
                     if (facing == null) {
-                        return new TorchResult(false, "No adjacent solid block found to attach wall torch. Please specify facing or provide a wall.", null, null, null, false, null);
+                        return new TorchResult(false, "No adjacent solid block found to attach wall torch. Please specify facing or provide a wall.", null, null, null, false, null, 400);
                     }
                 }
 
@@ -388,7 +388,7 @@ public class PrefabEndpointCore {
 
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new SignResult(false, "Unknown world: " + worldKey, null, null, null, null, null, null, false));
+            future.complete(new SignResult(false, "Unknown world: " + worldKey, null, null, null, null, null, null, false, 400));
             return future;
         }
 
@@ -400,7 +400,7 @@ public class PrefabEndpointCore {
     public SignResult placeSignInto(BlockSink sink, SignRequest request, RegistryKey<World> worldKey) {
         Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
-            return new SignResult(false, "Invalid block identifier", null, null, null, null, null, null, false);
+            return new SignResult(false, "Invalid block identifier", null, null, null, null, null, null, false, 400);
         }
 
         Block block = Registries.BLOCK.get(blockId);
@@ -408,14 +408,14 @@ public class PrefabEndpointCore {
         boolean isStandingSign = block instanceof SignBlock && !isWallSign;
 
         if (!isWallSign && !isStandingSign) {
-            return new SignResult(false, "Block is not a sign: " + request.block_type, null, null, null, null, null, null, false);
+            return new SignResult(false, "Block is not a sign: " + request.block_type, null, null, null, null, null, null, false, 400);
         }
 
         if (request.front_lines != null && request.front_lines.length > MAX_SIGN_LINES) {
-            return new SignResult(false, "Front text can have maximum " + MAX_SIGN_LINES + " lines", null, null, null, null, null, null, false);
+            return new SignResult(false, "Front text can have maximum " + MAX_SIGN_LINES + " lines", null, null, null, null, null, null, false, 400);
         }
         if (request.back_lines != null && request.back_lines.length > MAX_SIGN_LINES) {
-            return new SignResult(false, "Back text can have maximum " + MAX_SIGN_LINES + " lines", null, null, null, null, null, null, false);
+            return new SignResult(false, "Back text can have maximum " + MAX_SIGN_LINES + " lines", null, null, null, null, null, null, false, 400);
         }
 
         logger.info("Placing sign in world {} at ({}, {}, {}) type {}",
@@ -432,7 +432,7 @@ public class PrefabEndpointCore {
                     facing = parseHorizontalDirection(request.facing);
 
                     if (facing == null) {
-                        return new SignResult(false, "Invalid facing direction. Must be north, south, east, or west", null, null, null, null, null, null, false);
+                        return new SignResult(false, "Invalid facing direction. Must be north, south, east, or west", null, null, null, null, null, null, false, 400);
                     }
                 } else {
                     Direction[] directions = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
@@ -507,7 +507,7 @@ public class PrefabEndpointCore {
 
         ServerWorld world = worldKey != null ? server.getWorld(worldKey) : null;
         if (world == null) {
-            future.complete(new LadderResult(false, "Unknown world: " + worldKey, null, 0, null, null, null));
+            future.complete(new LadderResult(false, "Unknown world: " + worldKey, null, 0, null, null, null, 400));
             return future;
         }
 
@@ -518,21 +518,21 @@ public class PrefabEndpointCore {
 
     public LadderResult placeLadderInto(BlockSink sink, LadderRequest request, RegistryKey<World> worldKey) {
         if (request.height <= 0) {
-            return new LadderResult(false, "Height must be positive", null, 0, null, null, null);
+            return new LadderResult(false, "Height must be positive", null, 0, null, null, null, 400);
         }
 
         Identifier blockId = Identifier.tryParse(request.block_type);
         if (blockId == null) {
-            return new LadderResult(false, "Invalid block identifier", null, 0, null, null, null);
+            return new LadderResult(false, "Invalid block identifier", null, 0, null, null, null, 400);
         }
 
         Block block = Registries.BLOCK.get(blockId);
         if (!(block instanceof LadderBlock)) {
-            return new LadderResult(false, "Block is not a ladder: " + request.block_type, null, 0, null, null, null);
+            return new LadderResult(false, "Block is not a ladder: " + request.block_type, null, 0, null, null, null, 400);
         }
 
         if (request.y < MIN_WORLD_Y || request.y > MAX_WORLD_Y) {
-            return new LadderResult(false, "Y coordinate out of world bounds (" + MIN_WORLD_Y + " to " + MAX_WORLD_Y + ")", null, 0, null, null, null);
+            return new LadderResult(false, "Y coordinate out of world bounds (" + MIN_WORLD_Y + " to " + MAX_WORLD_Y + ")", null, 0, null, null, null, 400);
         }
 
         int maxHeight = MAX_WORLD_Y - request.y + 1;
@@ -549,7 +549,7 @@ public class PrefabEndpointCore {
                 facing = parseHorizontalDirection(request.facing);
 
                 if (facing == null) {
-                    return new LadderResult(false, "Invalid facing direction. Must be north, south, east, or west", null, 0, null, null, null);
+                    return new LadderResult(false, "Invalid facing direction. Must be north, south, east, or west", null, 0, null, null, null, 400);
                 }
 
                 if (!validateLadderAttachment(sink, request.x, request.y, request.z, actualHeight, facing)) {
@@ -561,7 +561,7 @@ public class PrefabEndpointCore {
                 if (facing == null) {
                     facing = applyLadderFallbackLogic(sink, request.x, request.y, request.z, actualHeight);
                     if (facing == null) {
-                        return new LadderResult(false, "No suitable attachment found for ladder placement. Consider specifying a facing direction or providing adjacent solid blocks.", null, 0, null, null, null);
+                        return new LadderResult(false, "No suitable attachment found for ladder placement. Consider specifying a facing direction or providing adjacent solid blocks.", null, 0, null, null, null, 400);
                     }
                     logger.info("Using fallback facing direction {} for ladder placement", facing.asString());
                 }
@@ -862,9 +862,21 @@ public class PrefabEndpointCore {
 }
 
 // Result classes for core operations
-record DoorResult(boolean success, String error, String world, int doors_placed, String facing, String hinge, boolean open) implements OperationResult {}
-record StairResult(boolean success, String error, String world, int blocks_placed, String staircase_direction, boolean fill_support) implements OperationResult {}
-record WindowPaneResult(boolean success, String error, String world, int panes_placed, String orientation, boolean waterlogged) implements OperationResult {}
-record TorchResult(boolean success, String error, String world, String block_type, Map<String, Integer> position, boolean wall_mounted, String facing) implements OperationResult {}
-record SignResult(boolean success, String error, String world, Map<String, Integer> position, String block_type, String sign_type, String facing, Integer rotation, boolean glowing) implements OperationResult {}
-record LadderResult(boolean success, String error, String world, int blocks_placed, String facing, Map<String, Integer> start_position, Map<String, Integer> end_position) implements OperationResult {}
+record DoorResult(boolean success, String error, String world, int doors_placed, String facing, String hinge, boolean open, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    DoorResult(boolean success, String error, String world, int doors_placed, String facing, String hinge, boolean open) { this(success, error, world, doors_placed, facing, hinge, open, 500); }
+}
+record StairResult(boolean success, String error, String world, int blocks_placed, String staircase_direction, boolean fill_support, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    StairResult(boolean success, String error, String world, int blocks_placed, String staircase_direction, boolean fill_support) { this(success, error, world, blocks_placed, staircase_direction, fill_support, 500); }
+}
+record WindowPaneResult(boolean success, String error, String world, int panes_placed, String orientation, boolean waterlogged, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    WindowPaneResult(boolean success, String error, String world, int panes_placed, String orientation, boolean waterlogged) { this(success, error, world, panes_placed, orientation, waterlogged, 500); }
+}
+record TorchResult(boolean success, String error, String world, String block_type, Map<String, Integer> position, boolean wall_mounted, String facing, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    TorchResult(boolean success, String error, String world, String block_type, Map<String, Integer> position, boolean wall_mounted, String facing) { this(success, error, world, block_type, position, wall_mounted, facing, 500); }
+}
+record SignResult(boolean success, String error, String world, Map<String, Integer> position, String block_type, String sign_type, String facing, Integer rotation, boolean glowing, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    SignResult(boolean success, String error, String world, Map<String, Integer> position, String block_type, String sign_type, String facing, Integer rotation, boolean glowing) { this(success, error, world, position, block_type, sign_type, facing, rotation, glowing, 500); }
+}
+record LadderResult(boolean success, String error, String world, int blocks_placed, String facing, Map<String, Integer> start_position, Map<String, Integer> end_position, @com.fasterxml.jackson.annotation.JsonIgnore int failureStatus) implements OperationResult {
+    LadderResult(boolean success, String error, String world, int blocks_placed, String facing, Map<String, Integer> start_position, Map<String, Integer> end_position) { this(success, error, world, blocks_placed, facing, start_position, end_position, 500); }
+}

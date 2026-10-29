@@ -1,5 +1,8 @@
 package ca.waltermiller.mcpapi.endpoints;
 
+import ca.waltermiller.mcpapi.operation.OperationHttp;
+import ca.waltermiller.mcpapi.operation.OperationRegistry;
+
 import ca.waltermiller.mcpapi.preview.WorldBlockSink;
 import ca.waltermiller.mcpapi.arealock.AreaBounds;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
@@ -59,10 +62,10 @@ public class RainFireEndpoint extends APIEndpoint {
 
             CompletableFuture<RainFireResult> future = new CompletableFuture<>();
             String lockId = ctx.header(AreaLockService.HEADER);
-            server.execute(() -> {
+            OperationHttp.dispatch(server::execute, () -> {
                 try { future.complete(rainFire(world, worldKey, req, lockId)); }
                 catch (Exception e) { future.completeExceptionally(e); }
-            });
+            }, future);
 
             respond(ctx, future, TIMEOUT_SECONDS, "rain_fire",
                 RainFireResult::success, RainFireResult::error,
