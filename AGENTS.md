@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 - Run Python commands from the relevant Python project with `uv run` so the correct environment is used.
-- This repository combines a Minecraft 1.21.7 Fabric mod, a Javalin REST API on port 7070, PostgreSQL-backed build task persistence, a Python MCP server, and optional schematic and Starlark build services.
+- This repository combines a Minecraft 1.21.7 Fabric mod, a Javalin REST API on port 7070, PostgreSQL-backed build task persistence, a Python MCP server, a Starlark build service, and an optional schematic service.
 - Python projects have independent `pyproject.toml`/`uv.lock` files. Run `uv sync` and `uv run ...` from the project being changed rather than from the repository root.
 - MCP and schematic services require Python 3.12+; the Starlark service requires Python 3.13+. Java targets version 21.
 
@@ -17,7 +17,7 @@
 - `src/test/java/ca/waltermiller/mcpapi`: JUnit 5 tests for endpoint cores, build-task logic, database config/manager, and utilities.
 - `mcp/`: Python MCP server package (`minecraft_mcp`) that wraps the REST API and optional services as MCP tools; supports stdio, SSE, and streamable HTTP transports.
 - `schematic-service/`: Optional FastAPI schematic catalog/search service on port 7080. Its local catalog, converted NBT, and image metadata live in the git-ignored `schematic-service-data/` directory.
-- `starlark-service/`: Optional FastAPI build/cache, saved script library, and artifact preview service on port 7090. Compiler `starlark-to-nbt/` and renderer `nbt-image-gen/` are git submodules installed as editable dependencies. Follow the compiler's nested `AGENTS.md` for compiler or component-library changes. Cached artifacts live in git-ignored `starlark-service-data/`.
+- `starlark-service/`: Default-stack FastAPI build/cache, saved script library, and artifact preview service on port 7090. Compiler `starlark-to-nbt/` and renderer `nbt-image-gen/` are git submodules installed as editable dependencies. Follow the compiler's nested `AGENTS.md` for compiler or component-library changes. Cached artifacts live in git-ignored `starlark-service-data/`.
 - `starlark-library/`: Git-tracked saved scripts, with `<name>/meta.json` and immutable `v<N>.star` versions. Never edit or delete published versions; save a new version because imports and cached artifacts depend on their contents.
 - `docs/`: OpenAPI specifications and guides for area locks, site surveys, and undo/redo. Keep affected API documentation synchronized with behavior changes.
 - `scripts/`: PostgreSQL snapshot helpers and the disposable-server undo/redo regression harness.
@@ -34,9 +34,9 @@
 - `./gradlew remapJar`: Build the fat jar and remap it for distribution; this task already depends on `shadowJar`.
 - `./gradlew runServer`: Start the dev Minecraft server with the mod loaded. `./gradlew runClient` starts a client.
 - `docker compose up -d postgres`: Start the local PostgreSQL dependency used by build-task persistence.
-- `docker compose up -d`: Start the composed services. The compose stack includes PostgreSQL, Minecraft, MCP, nginx, and certbot.
+- `docker compose up -d`: Start the composed services. The compose stack includes PostgreSQL, Minecraft, MCP, Starlark, nginx, and certbot.
 - `docker compose --profile schematics up -d elasticsearch schematic-service`: Start schematic search and its Elasticsearch dependency.
-- `docker compose --profile starlark up -d starlark-service`: Start the Starlark build service.
+- `docker compose up -d starlark-service`: Start the Starlark build service.
 - Gradle Docker tasks: `./gradlew dockerBuild`, `dockerRun`, `dockerLogs`, `dockerStop`, and `dockerCompose`.
 - MCP server: from `mcp/`, run `uv sync`, then `uv run minecraft-mcp` for stdio. For the container's transport locally, use `uv run minecraft-mcp --transport streamable-http --stateless --host 127.0.0.1 --port 3737` (endpoint `/mcp`). SSE remains available with `--transport sse --port 3000`.
 - Schematic service: from `schematic-service/`, run `uv sync`, then `uv run schematic-service` or `uv run uvicorn schematic_service.app:app --host 0.0.0.0 --port 7080`.

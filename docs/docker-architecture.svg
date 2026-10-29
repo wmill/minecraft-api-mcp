@@ -78,8 +78,8 @@
   <path d="M190 470V385" fill="none" stroke="#52657c" stroke-width="2" stroke-dasharray="3 5"/>
   <text x="202" y="448" class="label">shared files</text>
 
-  <rect x="450" y="470" width="260" height="155" rx="12" class="optional"/>
-  <text x="470" y="500" class="small">OPTIONAL · profile: starlark</text>
+  <rect x="450" y="470" width="260" height="155" rx="12" class="node"/>
+  <text x="470" y="500" class="small">DEFAULT STACK</text>
   <text x="470" y="529" class="name">starlark-service</text>
   <text x="470" y="555" class="body">Compile NBT + render previews</text>
   <text x="470" y="581" class="small">Mounts: starlark-service-data</text>

@@ -17,7 +17,7 @@ changing terrain.
 
 The diagram follows [docker-compose.yml](docker-compose.yml) and [nginx.conf](nginx.conf).
 The purple services run only when their Compose profiles are enabled. MCP fetches
-NBT artifacts from the optional services and sends placements to the Minecraft API.
+NBT artifacts from Starlark and the optional schematic service and sends placements to the Minecraft API.
 For the `schematics` profile, also set `SCHEMATIC_SERVICE_URL=http://schematic-service:7080`
 in the MCP container's environment; Compose currently configures only the Starlark URL.
 
@@ -77,13 +77,13 @@ Your MCP client starts and manages this process; no MCP HTTP port is needed.
 MCP uses `http://localhost:7070` by default. If you previously changed `BASE_URL`
 in `mcp/.env`, point it back to that local API.
 
-Optional services can still run in Docker alongside this setup:
+Run Starlark and optional schematic search in Docker alongside this setup:
 
 ```bash
 # Schematic search (see the indexing instructions below)
 docker compose --profile schematics up -d elasticsearch schematic-service
 # Starlark compilation, previews, and saved scripts
-docker compose --profile starlark up -d starlark-service
+docker compose up -d starlark-service
 ```
 
 The local MCP defaults already target their published localhost ports, 7080 and
@@ -113,7 +113,7 @@ The optional schematic service defaults to `http://localhost:7080`. Override it 
 SCHEMATIC_SERVICE_URL="http://localhost:7080"
 ```
 
-The optional Starlark build service defaults to `http://localhost:7090`. Override it in `mcp/.env` with:
+The Starlark build service defaults to `http://localhost:7090`. Override it in `mcp/.env` with:
 
 ```bash
 STARLARK_SERVICE_URL="http://localhost:7090"
@@ -143,7 +143,8 @@ After that the gradle runServer command worked for me. Kudos to the fabric devs.
 
 ## Docker builds and x64 deployment
 
-Use `./gradlew dockerCompose` to rebuild and start the local stack. It runs
+Initialize the Starlark submodules with `git submodule update --init --recursive`
+before building the stack. Use `./gradlew dockerCompose` to rebuild and start the local stack. It runs
 `shadowJar -> remapJar -> prepareDocker` before `docker compose up -d --build`.
 `./gradlew dockerBuild` builds just the local Minecraft image. Local builds use
 the host architecture; deployment builds use Bake and default to `linux/amd64`.
@@ -172,17 +173,16 @@ docker login ghcr.io  # if not already authenticated
 ```
 
 `dockerPush` prepares the jar and runs `docker buildx bake -f docker-bake.hcl --push`
-for Minecraft, MCP, and nginx, tagged under `ghcr.io/wmill` with `latest`.
+for Minecraft, MCP, nginx, and Starlark, tagged under `ghcr.io/wmill` with `latest`.
 It pushes directly without loading the finished images into the local image store.
 `./gradlew dockerBake` builds the same targets into the builder cache without
-pushing. Optional schematic/Starlark services are not in the Bake default group;
-they are in the `optional` group. Build or push them explicitly (the Starlark image
-needs both submodules initialized first, or its build fails):
+pushing. Initialize both submodules before building the default images; the Starlark
+image requires them. Only the schematic service remains in the `optional` group:
 
 ```bash
 git submodule update --init --recursive
-docker buildx bake -f docker-bake.hcl optional --push            # both
-docker buildx bake -f docker-bake.hcl starlark-service --push    # or one
+docker buildx bake -f docker-bake.hcl optional --push            # schematic service
+docker buildx bake -f docker-bake.hcl starlark-service --push    # Starlark alone
 docker buildx bake -f docker-bake.hcl schematic-service --push
 ```
 
@@ -297,7 +297,7 @@ MCP tools added for this flow:
 
 ## Starlark build service
 
-There is an optional Starlark build service in `starlark-service/`. MCP users submit Starlark build scripts; the service compiles them into structure NBT with [starlark-to-nbt](https://github.com/wmill/starlark-to-nbt), returns structured diagnostics on failure (so the LLM can edit and resubmit), caches successful builds by content hash, renders preview images of the result, keeps a shared library of saved scripts, and serves the NBT so MCP can place it through the existing `/api/world/structure/place` endpoint.
+The default Docker Compose stack includes the Starlark build service in `starlark-service/`. MCP users submit Starlark build scripts; the service compiles them into structure NBT with [starlark-to-nbt](https://github.com/wmill/starlark-to-nbt), returns structured diagnostics on failure (so the LLM can edit and resubmit), caches successful builds by content hash, renders preview images of the result, keeps a shared library of saved scripts, and serves the NBT so MCP can place it through the existing `/api/world/structure/place` endpoint.
 
 Two tools are vendored as **git submodules**: starlark-to-nbt at `starlark-service/starlark-to-nbt` and [nbt-image-gen](https://github.com/wmill/nbt-image-gen) (preview rendering) at `starlark-service/nbt-image-gen`. After cloning this repo, run:
 
@@ -305,10 +305,11 @@ Two tools are vendored as **git submodules**: starlark-to-nbt at `starlark-servi
 git submodule update --init
 ```
 
-Start the service with:
+`docker compose up -d` starts Starlark with the rest of the default stack.
+To start just this service:
 
 ```bash
-docker compose --profile starlark up -d starlark-service
+docker compose up -d starlark-service
 curl http://localhost:7090/health
 ```
 

@@ -1,10 +1,10 @@
 group "default" {
-  targets = ["nginx", "minecraft", "mcp"]
+  targets = ["nginx", "minecraft", "mcp", "starlark-service"]
 }
 
-# Opt-in services (compose profiles "schematics" and "starlark")
+# Opt-in services (compose profile "schematics")
 group "optional" {
-  targets = ["schematic-service", "starlark-service"]
+  targets = ["schematic-service"]
 }
 
 # Optional knobs you can override from the CLI
