@@ -39,6 +39,26 @@ class OperationHttpTest {
         } finally { app.stop(); }
     }
 
+    record Fill(int x1, String block_type) {}
+
+    @Test void unknownJsonFieldIsBadRequestAndRecordedAsSuch() throws Exception {
+        var app = Javalin.create();
+        try (var registry = new OperationRegistry(); var client = HttpClient.newHttpClient()) {
+            OperationHttp.install(app, registry);
+            app.post("/api/world/blocks/set", ctx -> ctx.json(ctx.bodyAsClass(Fill.class)));
+            app.start(0);
+            String base = "http://localhost:" + app.port();
+            var response = post(client, base, "{\"x1\":1,\"blockType\":\"minecraft:stone\"}", "bad-json", "owner");
+            assertThat(response.statusCode()).as(response.body()).isEqualTo(400);
+            assertThat(Json.MAPPER.readTree(response.body()).path("error").asText())
+                .startsWith("Invalid JSON body: ").contains("blockType").doesNotContain("line:");
+            String id = response.headers().firstValue("X-Operation-Id").orElseThrow();
+            var operation = client.send(HttpRequest.newBuilder(URI.create(base + "/api/operations/" + id)).build(),
+                HttpResponse.BodyHandlers.ofString());
+            assertThat(Json.MAPPER.readTree(operation.body()).path("result_status").asInt()).isEqualTo(400);
+        } finally { app.stop(); }
+    }
+
     @Test void delayedEditRetriesPollsAndPreservesFailurePayload() throws Exception {
         var app = Javalin.create();
         try (var registry = new OperationRegistry(); var client = HttpClient.newHttpClient()) {

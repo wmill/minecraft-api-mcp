@@ -128,6 +128,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
             ctx.status(500).json(Map.of("error", "Database error: " + e.getMessage()));
         } catch (OperationRegistry.Failure failure) {
             ctx.status(failure.status).json(Map.of("error", failure.getMessage()));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            ctx.status(400).json(Map.of("error", OperationHttp.invalidJson(e)));
         } catch (Exception e) {
             LOGGER.error("Unexpected error {}", operation, e);
             ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
@@ -288,14 +290,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
 
             ctx.status(201).json(Map.of(
                 "success", true,
-                "task", Map.of(
-                    "id", task.getId().toString(),
-                    "buildId", task.getBuildId().toString(),
-                    "taskOrder", task.getTaskOrder(),
-                    "taskType", task.getTaskType().toString(),
-                    "status", task.getStatus().toString(),
-                    "taskData", task.getTaskData()
-                )
+                "task", taskToMap(task)
             ));
 
             LOGGER.info("Added task {} to build {} at position {} via API", task.getId(), buildId, task.getTaskOrder());

@@ -3,6 +3,7 @@ package ca.waltermiller.mcpapi.operation;
 import ca.waltermiller.mcpapi.arealock.AreaLockException;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import ca.waltermiller.mcpapi.buildtask.Json;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
@@ -20,10 +21,16 @@ public final class OperationHttp {
     private static final ThreadLocal<Current> CURRENT = new ThreadLocal<>();
     private OperationHttp() {}
 
+    /** Client-facing message for a malformed or mistyped JSON body, without Jackson's source location. */
+    public static String invalidJson(JsonProcessingException failure) {
+        return "Invalid JSON body: " + Objects.toString(failure.getOriginalMessage(), "malformed JSON");
+    }
+
     public static void install(Javalin app, OperationRegistry registry) {
         app.exception(OperationRegistry.Failure.class, (failure, ctx) -> ctx.status(failure.status).json(Map.of("error", failure.getMessage())));
         app.exception(IllegalArgumentException.class, (failure, ctx) -> ctx.status(400).json(Map.of("error", failure.getMessage())));
         app.exception(IllegalStateException.class, (failure, ctx) -> ctx.status(409).json(Map.of("error", failure.getMessage())));
+        app.exception(JsonProcessingException.class, (failure, ctx) -> ctx.status(400).json(Map.of("error", invalidJson(failure))));
         app.beforeMatched(ctx -> {
             CURRENT.remove();
             if (!mutation(ctx)) return;
