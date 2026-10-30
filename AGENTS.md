@@ -12,6 +12,8 @@
 - `src/main/java/ca/waltermiller/mcpapi/database`: HikariCP/PostgreSQL configuration, schema creation, and connection management.
 - `src/main/java/ca/waltermiller/mcpapi/preview`: Isometric preview grids, palettes, terrain adapters, and rendering logic.
 - `src/main/java/ca/waltermiller/mcpapi/arealock`: Area reservations and write authorization; `survey/`: site suitability and occupancy queries; `snapshot/`: NBT snapshots and undo/redo restoration.
+- `src/main/java/ca/waltermiller/mcpapi/operation`: Process-local mutation tracking, idempotency, polling, and shutdown coordination.
+- `src/main/java/ca/waltermiller/mcpapi/terrain`: Terrain sampling, smoothing plans, guarded application, and map rendering; `marker/`: temporary particle outlines and packet-only labels.
 - `src/client/java/ca/waltermiller/mcpapi`: Optional client entrypoint hooks and client mixins.
 - `src/main/resources`: `fabric.mod.json`, mod assets, and resource metadata.
 - `src/test/java/ca/waltermiller/mcpapi`: JUnit 5 tests for endpoint cores, build-task logic, database config/manager, and utilities.
@@ -19,7 +21,7 @@
 - `schematic-service/`: Optional FastAPI schematic catalog/search service on port 7080. Its local catalog, converted NBT, and image metadata live in the git-ignored `schematic-service-data/` directory.
 - `starlark-service/`: Default-stack FastAPI build/cache, saved script library, and artifact preview service on port 7090. Compiler `starlark-to-nbt/` and renderer `nbt-image-gen/` are git submodules installed as editable dependencies. Follow the compiler's nested `AGENTS.md` for compiler or component-library changes. Cached artifacts live in git-ignored `starlark-service-data/`.
 - `starlark-library/`: Git-tracked saved scripts, with `<name>/meta.json` and immutable `v<N>.star` versions. Never edit or delete published versions; save a new version because imports and cached artifacts depend on their contents.
-- `docs/`: OpenAPI specifications and guides for area locks, site surveys, and undo/redo. Keep affected API documentation synchronized with behavior changes.
+- `docs/`: OpenAPI specifications and guides for area locks, markers, site surveys, terrain smoothing, operations/queues, and undo/redo. Keep affected API documentation synchronized with behavior changes.
 - `scripts/`: PostgreSQL snapshot helpers and the disposable-server undo/redo regression harness.
 - `skills/minecraft-http-gateway`: Local Codex skill and helper scripts for using the Minecraft HTTP API.
 - `nbt-gen/`: Generated `.nbt` structures and generation helpers; avoid committing large generated binaries unless required.
@@ -37,7 +39,7 @@
 - `docker compose up -d`: Start the composed services. The compose stack includes PostgreSQL, Minecraft, MCP, Starlark, nginx, and certbot.
 - `docker compose --profile schematics up -d elasticsearch schematic-service`: Start schematic search and its Elasticsearch dependency.
 - `docker compose up -d starlark-service`: Start the Starlark build service.
-- Gradle Docker tasks: `./gradlew dockerBuild`, `dockerRun`, `dockerLogs`, `dockerStop`, and `dockerCompose`.
+- Gradle Docker tasks: `./gradlew prepareDocker` stages the remapped jar; `dockerBuild`, `dockerRun`, `dockerLogs`, `dockerStop`, and `dockerCompose` support local containers. `dockerBake` builds the Bake targets and `dockerPush` publishes them; only publish when requested.
 - MCP server: from `mcp/`, run `uv sync`, then `uv run minecraft-mcp` for stdio. For the container's transport locally, use `uv run minecraft-mcp --transport streamable-http --stateless --host 127.0.0.1 --port 3737` (endpoint `/mcp`). SSE remains available with `--transport sse --port 3000`.
 - Schematic service: from `schematic-service/`, run `uv sync`, then `uv run schematic-service` or `uv run uvicorn schematic_service.app:app --host 0.0.0.0 --port 7080`.
 - Starlark service: initialize both submodules from the repository root with `git submodule update --init --recursive`, then from `starlark-service/` run `uv sync`, `uv run starlark-service`, and `uv run pytest`.
@@ -57,8 +59,14 @@
 - Use Java records/DTOs for structured request and response payloads when that matches existing endpoint style.
 - Database access should stay behind repository/service classes and use `DatabaseManager` rather than ad hoc connections.
 - Keep optional-service HTTP access behind the client modules in `mcp/minecraft_mcp/client`; keep MCP tool schemas, registry entries, and handlers synchronized.
+- Mutations must use the established operation dispatch and MCP polling/retry helpers. Preserve `X-Operation-Id`, pollable HTTP 202 responses, and the same `Idempotency-Key` across retries. A 202 or MCP `pending` result is not completion; a 404 for an expired/unknown operation must not trigger automatic resubmission. See `docs/operations-and-queues.md`.
+- Operation results must redact reservation tokens unless the caller supplies the matching idempotency key. Keep operation retention and restart limitations explicit; operation tracking is process-local, unlike persisted build tasks.
+- Queue edits and execution/replay claims must lock the build row in a JDBC transaction. Queue edits normalize zero-based orders and preserve task identity/data; world execution must not hold a database transaction. Persist task execution status around actual completion, not HTTP deadlines. Preserve startup recovery of interrupted builds/tasks.
+- Validate bounds and overflow before allocation, dispatch, or world access. Preserve the 100,000-block fill cap, 10,000-point heightmap cap, and 64-block per-dimension chunk cap; see `docs/operations-and-queues.md`.
 - Preserve area-lock authorization in world mutation paths. Follow `GuardedPlacement` and existing endpoint patterns; `force` on undo/redo must not bypass reservations. See `docs/area-locks.md`.
 - NBT dry runs must remain read-only: no chunk loading/generation or lock renewal. Snapshot capture, restoration, and build-status persistence must retain their server-thread and locking guarantees. Preserve undo/redo snapshots and pending recovery markers; see `docs/undo-and-dry-run.md`.
+- Terrain smoothing must sample loaded chunks, plan outside the server thread, then revalidate and snapshot inside the guarded write. Preserve built/fluid masks, undo/redo recording, and rejection of execute/replay/clone for `TERRAIN_SMOOTH` builds. Heights are standing Y (first air above ground); see `docs/terrain-smoothing.md`.
+- Markers use inclusive cuboids and must remain temporary: no block edits, chunk loading, reservation acquisition/renewal, or saved entities. Clean up packet labels on expiry, removal, viewer changes, and shutdown; see `docs/area-markers.md`.
 - In Starlark geometry, coordinates use `+X` east, `+Y` up, and `+Z` south, and region maxima are exclusive. Components should draw within `min_size`; preserve the compiler's structure/carve/fixture phase ordering.
 
 ## Testing Guidelines
@@ -73,6 +81,8 @@
 - When touching the Starlark service, run its service tests. When changing the compiler submodule or `lib/*.star`, also follow its nested `AGENTS.md` and run the relevant compiler tests, including rotation/library coverage for reusable components.
 - Isometric preview changes should add focused tests under `src/test/java/ca/waltermiller/mcpapi/preview`; prefer small deterministic grids over live-world tests.
 - Cover reservation, survey, and snapshot logic in their matching Java test packages and affected MCP tests (`test_area_locks.py`, `test_survey_site.py`, `test_undo_dry_run.py`).
+- Cover operation/retry behavior and queue transactions in the Java `operation`, `buildtask`, and endpoint test packages and `mcp/test_operations.py`. Keep delayed completion, idempotent retry, redaction, and shutdown coverage intact.
+- Terrain and marker changes have matching Java `terrain`/`marker` tests and MCP tests (`test_smooth_terrain.py`, `test_terrain_map.py`, `test_markers.py`). Use deterministic grids/geometry for logic tests; document live-client visual checks separately.
 - `scripts/verify_undo_redo.py` is a live regression harness for a separately configured disposable server on port 7071. Run it from `starlark-service/` with `uv run ../scripts/verify_undo_redo.py --snapshot-dir ../build/redo-smoke/build-snapshots`; its server-properties guard must pass. Restart that disposable server and rerun with `--resume` for persistence coverage.
 
 ## Configuration Notes
@@ -80,7 +90,9 @@
 - Database environment variables: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`.
 - The MCP server reads `BASE_URL` from `mcp/.env`; it defaults to `http://localhost:7070`.
 - Optional MCP service URLs are `SCHEMATIC_SERVICE_URL` (default `http://localhost:7080`) and `STARLARK_SERVICE_URL` (default `http://localhost:7090`).
+- Rail tools are disabled by default. Set `ENABLE_RAIL_TOOLS=true` in the process environment or `mcp/.env` and restart MCP to expose them; Compose forwards the setting from the shell/root `.env`. Preserve discovery and call gating in `mcp/test_rail_feature_flag.py`.
 - The schematic service uses `SCHEMATIC_DATA_DIR` and `ELASTICSEARCH_URL`; the Starlark service uses `STARLARK_TOOL_DIR`, `STARLARK_CACHE_DIR`, and `STARLARK_LIBRARY_DIR`, with resource-limit settings prefixed `STARLARK_`.
+- Starlark build memory defaults to 2048 MB. Keep `STARLARK_BUILD_MEMORY_MB` at least 1024: the Rust runtime reserves about 1 GB up front. See `starlark-service/starlark_service/config.py` for timeout, volume, concurrency, cache, and preview limits.
 - `AREA_LOCK_IDLE_SECONDS` defaults to 900. `BUILD_SNAPSHOT_DIR` defaults to `build-snapshots` under the server run directory; `BUILD_SNAPSHOT_MAX_VOLUME` defaults to 2,000,000 voxels.
 - Compose mounts `starlark-library/` read/write separately from the artifact cache. Its schematic profile mounts the self-contained `schematic-service-data/` directory, including copied images and metadata in `schematic-images/` for IDs with matching NBT files.
 - Accept the Minecraft EULA before running a server (`cp eula.txt.example eula.txt`, then set `eula=true`).
