@@ -1,4 +1,4 @@
-# python:3.13-slim (not the 3.12 used elsewhere): starlark-pyo3 ships cp313 wheels
+# python:3.13-slim (not the 3.12 used elsewhere): starlark-to-nbt requires Python >= 3.13
 
 # starlark-to-nbt includes a Rust extension (starlark_to_nbt._core, built by
 # maturin), so its wheel is compiled in a throwaway stage with a Rust toolchain.

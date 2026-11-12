@@ -22,7 +22,7 @@ jobs:
             # pytest is not a declared dependency of this project
             pytest: uv run --locked --with pytest python -m pytest
           - project: starlark-service
-            # starlark-pyo3 wheels need Python >= 3.13
+            # starlark-to-nbt requires Python >= 3.13 (its Rust core is built by maturin on the runner)
             python: '3.13'
             # starlark-to-nbt and nbt-image-gen are vendored as submodules
             submodules: true
