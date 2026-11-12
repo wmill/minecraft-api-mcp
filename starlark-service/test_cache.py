@@ -69,3 +69,16 @@ def test_lib_fingerprint_tracks_compiler_source(tmp_path):
     assert first == cache.lib_fingerprint(tmp_path)
     (package / "starlark_runtime.py").write_text("X = 2\n", encoding="utf-8")
     assert first != cache.lib_fingerprint(tmp_path)
+
+
+def test_lib_fingerprint_tracks_compiled_core(tmp_path, monkeypatch):
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib" / "a.star").write_text("A = 1\n", encoding="utf-8")
+    monkeypatch.setattr(cache, "_core_fingerprint", lambda: None)
+    without_core = cache.lib_fingerprint(tmp_path)
+    monkeypatch.setattr(cache, "_core_fingerprint", lambda: "rust-0.1.0-0123456789abcdef")
+    first = cache.lib_fingerprint(tmp_path)
+    assert first != without_core
+    assert first == cache.lib_fingerprint(tmp_path)
+    monkeypatch.setattr(cache, "_core_fingerprint", lambda: "rust-0.1.0-fedcba9876543210")
+    assert first != cache.lib_fingerprint(tmp_path)

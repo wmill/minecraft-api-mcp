@@ -17,11 +17,23 @@ from typing import Any
 ARTIFACT_ID_PATTERN = re.compile(r"^slk_[0-9a-f]{16}$")
 
 
+def _core_fingerprint() -> str | None:
+    """The installed compiler's own fingerprint: its active engine and a hash of
+    the compiled Rust core, which lives outside src/ and so isn't covered by the
+    source globs below. None for compiler versions that predate the Rust core."""
+    try:
+        from starlark_to_nbt import build_fingerprint
+    except ImportError:
+        return None
+    return build_fingerprint()
+
+
 def lib_fingerprint(tool_dir: Path) -> str:
-    """Hash of the component library and compiler source; busts the cache when either changes.
+    """Hash of the component library and compiler; busts the cache when either changes.
 
     The compiler is included because builtins and lowering live there (e.g. math functions),
-    so a submodule bump can change output for an unchanged script and lib/.
+    so a submodule bump can change output for an unchanged script and lib/. Its Python sources
+    are hashed here; its Rust core reports its own fingerprint.
     """
     digest = hashlib.sha256()
     for root, pattern in ((tool_dir / "lib", "*.star"), (tool_dir / "src" / "starlark_to_nbt", "**/*.py")):
@@ -29,6 +41,9 @@ def lib_fingerprint(tool_dir: Path) -> str:
             for path in sorted(root.glob(pattern)):
                 digest.update(path.relative_to(tool_dir).as_posix().encode("utf-8"))
                 digest.update(path.read_bytes())
+    core = _core_fingerprint()
+    if core is not None:
+        digest.update(b"\0core\0" + core.encode("utf-8"))
     return digest.hexdigest()[:16]
 
 

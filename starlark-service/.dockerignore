@@ -8,3 +8,5 @@ starlark-to-nbt/.venv/
 starlark-to-nbt/.git
 starlark-to-nbt/build/
 starlark-to-nbt/training-samples/
+starlark-to-nbt/target/
+starlark-to-nbt/src/starlark_to_nbt/*.so
