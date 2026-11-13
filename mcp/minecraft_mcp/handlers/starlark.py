@@ -23,7 +23,7 @@ ORIENTATION_NOTE = ("Top view has north up and east right; side views are elevat
                     "(south = the +Z face, the default front); iso is viewed from the south-east.")
 
 BUILD_FIELDS = ("artifact_id", "size", "block_count", "entity_count", "ground_level",
-                "y_offset", "cached", "build_ms", "nbt_bytes", "palette")
+                "y_offset", "cached", "build_ms", "nbt_bytes", "palette", "stages", "stage_delay_ticks")
 
 
 def _starlark_client() -> StarlarkServiceClient:
@@ -72,7 +72,9 @@ def _build_summary(result: dict[str, Any]) -> str:
     size = "x".join(str(n) for n in result["size"])
     return (f"Compiled {result['artifact_id']}{' (cached)' if result.get('cached') else ''}: "
             f"{size}, {result['block_count']} blocks, {result.get('entity_count', 0)} entities, "
-            f"ground_level={result.get('ground_level', 0)}, {result.get('build_ms', 0)} ms.")
+            f"ground_level={result.get('ground_level', 0)}, {result.get('build_ms', 0)} ms."
+            + (f" {len(result['stages'])} install stages, {result.get('stage_delay_ticks')} ticks apart"
+               " (placement installs them in order)." if result.get("stages") else ""))
 
 
 async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
@@ -82,8 +84,11 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
     position = {**requested, "y": placement.y + (metadata.get("y_offset", 0) if placement.apply_y_offset else 0)}
     outcome = {"status": "failed", "requested_position": requested, "position": position,
                "world": placement.world, "rotation": placement.rotation}
+    # A staged build is placed stage by stage; a dry run only needs the finished structure.
+    stage_ids = [] if placement.dry_run else [s["stage"] for s in metadata.get("stages") or []]
     try:
         nbt = await client.get_artifact_nbt(artifact_id)
+        stages = [await client.get_artifact_nbt(artifact_id, stage) for stage in stage_ids]
     except PendingOperation as pending:
         return pending_result(pending)
     except Exception as exc:
@@ -91,7 +96,8 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
     try:
         result = await api_client.place_nbt_structure_bytes(
             nbt, f"{artifact_id}.nbt", position["x"], position["y"], position["z"],
-            placement.world, placement.rotation, placement.include_entities, True, placement.dry_run)
+            placement.world, placement.rotation, placement.include_entities, True, placement.dry_run,
+            **({"stages": stages, "stage_delay_ticks": metadata.get("stage_delay_ticks")} if stages else {}))
     except PendingOperation as pending:
         return pending_result(pending)
     except Exception as exc:
@@ -121,10 +127,13 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
                          + format_dry_run(result))
     outcome.update(status="placed", build_id=result.get("build_id"),
                    undo_available=result.get("undo_available"),
-                   undo_unavailable_reason=result.get("undo_unavailable_reason"))
+                   undo_unavailable_reason=result.get("undo_unavailable_reason"),
+                   stages=result.get("stages"), stages_placed=result.get("stages_placed"))
+    staged = (f" Installed in {result['stages_placed']} stages, {result.get('stage_delay_ticks')} ticks apart."
+              if result.get("stages_placed") else "")
     return _response({"ok": True, "artifact_id": artifact_id, "placement": outcome},
                      f"Placed {artifact_id} at ({position['x']}, {position['y']}, {position['z']}) "
-                     f"in {placement.world}, rotation {placement.rotation}."
+                     f"in {placement.world}, rotation {placement.rotation}.{staged}"
                      + (f" Build ID: {result['build_id']}" if result.get("build_id") else "")
                      + (f" {undo_hint(result)}" if undo_hint(result) else ""))
 

@@ -719,8 +719,13 @@ class MinecraftAPIClient:
         rotation: str = "NONE",
         include_entities: bool = True,
         replace_blocks: bool = True,
-        dry_run: bool = False
+        dry_run: bool = False,
+        stages: Optional[list[bytes]] = None,
+        stage_delay_ticks: Optional[int] = None,
     ) -> dict:
+        """Place structure NBT. With `stages` (a staged build's per-stage NBTs, in
+        install order), the server places them on successive ticks instead of
+        pasting `nbt_file`, which still describes the finished structure."""
         data = {
             "x": x,
             "y": y,
@@ -734,9 +739,13 @@ class MinecraftAPIClient:
         if dry_run:
             data["dry_run"] = "true"
 
-        files = {
-            "nbt_file": (filename, nbt_file_data, "application/octet-stream")
-        }
+        files = [("nbt_file", (filename, nbt_file_data, "application/octet-stream"))]
+        if stages:
+            stem = filename.removesuffix(".nbt")
+            files += [("stage_nbt_file", (f"{stem}.stage{i}.nbt", stage, "application/octet-stream"))
+                      for i, stage in enumerate(stages)]
+            if stage_delay_ticks is not None:
+                data["stage_delay_ticks"] = str(stage_delay_ticks)
         
         # The server allows 30 seconds for world placement.
         async with self._http_client(timeout=40.0) as client:

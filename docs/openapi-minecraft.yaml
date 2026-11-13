@@ -889,6 +889,14 @@ paths:
         With `dry_run=true` nothing is written: the response is an `NbtStructureDryRunResponse`
         describing what would be overwritten. A dry run never loads chunks (400 `unloaded_chunks`)
         and never renews the area lock.
+
+        Staged placement: send each install stage as a repeated `stage_nbt_file` part (in order,
+        every one the same size as `nbt_file`). Stage 0 is placed in place of `nbt_file`, under the
+        snapshot, and recorded as the build; each later stage is placed `stage_delay_ticks` server
+        ticks after the previous one, re-checking (and renewing) the area lock and writing with full
+        block updates. The response arrives after the last stage (202 if that takes longer than the
+        wait window). If a later stage fails or the server stops, the response is an error that
+        names how many stages were placed and the build id whose undo restores the area.
       operationId: placeNbtStructure
       requestBody:
         required: true
@@ -2908,6 +2916,21 @@ components:
           enum: ["true", "false"]
           default: "false"
           description: Report what would be overwritten without changing the world
+        stage_nbt_file:
+          type: array
+          maxItems: 64
+          items:
+            type: string
+            format: binary
+          description: >-
+            Install stages in order (repeat the part). When present they are placed instead of
+            nbt_file, which still describes the finished structure for bounds and dry runs.
+        stage_delay_ticks:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 2
+          description: Server ticks between install stages
       required: [nbt_file]
 
     NbtStructurePlaceResponse:
@@ -2941,6 +2964,15 @@ components:
         undo_unavailable_reason:
           type: string
           enum: [snapshots_disabled, snapshot_too_large, snapshot_unavailable, build_not_recorded, snapshot_write_failed]
+        stages:
+          type: integer
+          description: Staged placements only - number of install stages sent
+        stages_placed:
+          type: integer
+          description: Staged placements only - stages written (equals stages on success)
+        stage_delay_ticks:
+          type: integer
+          description: Staged placements only
 
     NbtStructureDryRunResponse:
       type: object

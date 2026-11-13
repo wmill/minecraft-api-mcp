@@ -50,6 +50,22 @@ def test_eviction_removes_oldest_first(tmp_path):
     assert cache.load_metadata(tmp_path, identifiers[2]) is not None
 
 
+def test_install_stages_are_counted_and_evicted_with_their_artifact(tmp_path):
+    identifier = cache.artifact_id("staged", "build", {}, None, "fp")
+    nbt = cache.nbt_path(tmp_path, identifier)
+    nbt.parent.mkdir(parents=True, exist_ok=True)
+    nbt.write_bytes(b"x" * 100)
+    cache.store_metadata(tmp_path, identifier, {})
+    stage = cache.stage_nbt_path(tmp_path, identifier, 1)
+    stage.parent.mkdir()
+    stage.write_bytes(b"y" * 50)
+
+    stats = cache.stats(tmp_path)
+    assert stats["artifacts"] == 1  # stage files are not artifacts of their own
+    cache.evict(tmp_path, stats["bytes"] - 1)
+    assert not stage.parent.exists() and not nbt.exists()
+
+
 def test_lib_fingerprint_tracks_lib_contents(tmp_path):
     (tmp_path / "lib").mkdir()
     (tmp_path / "lib" / "a.star").write_text("A = 1\n", encoding="utf-8")

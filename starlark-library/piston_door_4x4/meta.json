@@ -1,0 +1,99 @@
+{
+  "author": null,
+  "created_at": "2026-11-13T03:03:38Z",
+  "description": "Slimeless Java 4\u00d74 piston door based on Shaweyy's circuit. Staged build: stage 0 places the open door with glass observer placeholders, then stages 1-22 install one observer each, 2 ticks apart, so place_starlark_structure sets it up in one call. Walking plane is local Y=4.",
+  "latest": 2,
+  "name": "piston_door_4x4",
+  "tags": [
+    "redstone",
+    "piston",
+    "door",
+    "4x4"
+  ],
+  "title": "4\u00d74 Piston Door",
+  "updated_at": "2026-11-13T03:54:04Z",
+  "versions": [
+    {
+      "artifact_id": "slk_909a0d95bd3c02fe",
+      "author": null,
+      "block_count": 308,
+      "created_at": "2026-11-13T03:03:38Z",
+      "entry": "build",
+      "exports": [
+        "PistonDoor4x4"
+      ],
+      "ground_level": 4,
+      "loads": [],
+      "notes": "Confirmed a close and reopen cycle in game after ordered observer installation. Single-paste initialization triggered the circuit prematurely.",
+      "palette_top": [
+        "minecraft:air",
+        "minecraft:quartz_block",
+        "minecraft:white_stained_glass",
+        "minecraft:sticky_piston",
+        "minecraft:cyan_wool",
+        "minecraft:redstone_wire",
+        "minecraft:repeater",
+        "minecraft:iron_door"
+      ],
+      "params": [
+        {
+          "default": true,
+          "name": "stage_observers"
+        }
+      ],
+      "parent": null,
+      "props": {},
+      "root_size": null,
+      "sha256": "1d33675302e7beb42031dc417f040f6c8787a962d09a94990186c7467258c8fc",
+      "signatures": {
+        "PistonDoor4x4": "PistonDoor4x4(stage_observers=True)"
+      },
+      "size": [
+        8,
+        11,
+        7
+      ],
+      "version": 1,
+      "y_offset": -4
+    },
+    {
+      "artifact_id": "slk_a9dd5e3c2a251b9e",
+      "author": null,
+      "block_count": 308,
+      "created_at": "2026-11-13T03:54:04Z",
+      "entry": "build",
+      "exports": [
+        "PistonDoor4x4"
+      ],
+      "ground_level": 4,
+      "loads": [],
+      "notes": "Observers moved from manual set_blocks installation into stage= 1..22 (same order as v1's comment). Finished state matches v1 with stage_observers=False. Needs in-game confirmation of a close/reopen cycle after staged placement.",
+      "palette_top": [
+        "minecraft:air",
+        "minecraft:quartz_block",
+        "minecraft:white_stained_glass",
+        "minecraft:observer",
+        "minecraft:sticky_piston",
+        "minecraft:cyan_wool",
+        "minecraft:redstone_wire",
+        "minecraft:repeater"
+      ],
+      "params": [],
+      "parent": "piston_door_4x4@1",
+      "props": {},
+      "root_size": null,
+      "sha256": "443a216bf120516e6de60eed7cd59d33f8fa7c72b09c823e5e9261210843d6b1",
+      "signatures": {
+        "PistonDoor4x4": "PistonDoor4x4()"
+      },
+      "size": [
+        8,
+        11,
+        7
+      ],
+      "stages": 23,
+      "version": 2,
+      "y_offset": -4
+    }
+  ]
+}

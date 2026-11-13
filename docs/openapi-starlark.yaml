@@ -98,9 +98,19 @@ paths:
     get:
       tags: [artifacts]
       summary: Download the gzipped structure NBT for a built artifact
+      description: >-
+        Without `stage`, the finished structure. With `stage`, one install stage of a staged build
+        (see `stages` on the artifact): just the cells that stage writes, at the full structure size.
       operationId: getArtifactNbt
       parameters:
         - $ref: "#/components/parameters/ArtifactId"
+        - name: stage
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+          description: Install stage id; 404 when the artifact has no such stage
       responses:
         "200":
           description: Gzipped Minecraft structure NBT
@@ -289,6 +299,23 @@ components:
                 type: string
               count:
                 type: integer
+        stages:
+          type: array
+          description: >-
+            Present only when the script uses more than one `stage=` value. Install stages in
+            order; place each (GET /artifacts/{id}/nbt?stage=N) stage_delay_ticks apart.
+          items:
+            type: object
+            properties:
+              stage:
+                type: integer
+              block_count:
+                type: integer
+              nbt_bytes:
+                type: integer
+        stage_delay_ticks:
+          type: integer
+          description: Server ticks between install stages (staged builds only; default 2)
 
     BuildFailure:
       type: object

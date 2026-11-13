@@ -40,6 +40,9 @@ class PlacementResult(BaseModel):
     build_id: str | None = None
     undo_available: bool | None = None
     undo_unavailable_reason: str | None = None
+    # Staged builds: stages sent and stages placed (equal on success).
+    stages: int | None = None
+    stages_placed: int | None = None
     overwrite: dict[str, Any] | None = None
     lock_check: dict[str, Any] | None = None
     reservations: dict[str, Any] | None = None
@@ -59,6 +62,9 @@ class StarlarkResult(BaseModel):
     build_ms: int | None = None
     nbt_bytes: int | None = None
     palette: list[dict[str, Any]] | None = None
+    # Staged builds only (`stage=` in the script): install stages in order, ticks between them.
+    stages: list[dict[str, Any]] | None = None
+    stage_delay_ticks: int | None = None
     placement: PlacementResult | None = None
     error_kind: str | None = None
     lock_error: dict[str, Any] | None = None

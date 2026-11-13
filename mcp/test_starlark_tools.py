@@ -434,3 +434,41 @@ async def test_failed_build_never_renders(clients):
     result = await starlark.handle_build_starlark_structure(api, "source", include_preview=True)
     assert result.isError
     service.get_artifact_image.assert_not_called()
+
+
+STAGED = {**BUILT, "stages": [{"stage": 0, "block_count": 90, "nbt_bytes": 80},
+                              {"stage": 1, "block_count": 1, "nbt_bytes": 20},
+                              {"stage": 4, "block_count": 1, "nbt_bytes": 20}],
+          "stage_delay_ticks": 3}
+
+
+async def test_staged_artifact_sends_every_stage_in_order(clients):
+    api, service = clients
+    service.get_artifact.return_value = deepcopy(STAGED)
+    service.get_artifact_nbt.side_effect = lambda artifact_id, stage=None: b"final" if stage is None else f"s{stage}".encode()
+    api.place_nbt_structure_bytes.return_value = {"success": True, "build_id": "recorded",
+                                                  "stages": 3, "stages_placed": 3, "stage_delay_ticks": 3}
+    result = await starlark.handle_place_starlark_structure(api, BUILT["artifact_id"], 10, 64, 20)
+    data = checked(result)
+    args, kwargs = api.place_nbt_structure_bytes.await_args
+    assert args[0] == b"final"
+    assert kwargs == {"stages": [b"s0", b"s1", b"s4"], "stage_delay_ticks": 3}
+    assert data["placement"]["stages_placed"] == 3
+    assert "Installed in 3 stages, 3 ticks apart" in result.content[0].text
+
+
+async def test_staged_dry_run_skips_stage_downloads(clients):
+    api, service = clients
+    service.get_artifact.return_value = deepcopy(STAGED)
+    api.place_nbt_structure_bytes.return_value = {"success": True, "dry_run": True}
+    await starlark.handle_place_starlark_structure(api, BUILT["artifact_id"], 10, 64, 20, dry_run=True)
+    service.get_artifact_nbt.assert_awaited_once_with(BUILT["artifact_id"])
+    assert "stages" not in api.place_nbt_structure_bytes.await_args.kwargs
+
+
+async def test_staged_build_summary_mentions_stages(clients):
+    api, service = clients
+    service.build.return_value = deepcopy(STAGED)
+    result = await starlark.handle_build_starlark_structure(api, "source")
+    assert checked(result)["stages"] == STAGED["stages"]
+    assert "3 install stages, 3 ticks apart" in result.content[0].text

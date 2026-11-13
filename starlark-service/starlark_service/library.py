@@ -208,6 +208,7 @@ def save_version(library_dir: Path, name: str, source: str, build: dict[str, Any
         "ground_level": build["ground_level"],
         "y_offset": build["y_offset"],
         "palette_top": [item["block"] for item in build["palette"][:PALETTE_TOP]],
+        **({"stages": len(build["stages"])} if build.get("stages") else {}),
     }
 
     entry_dir.mkdir(parents=True, exist_ok=True)

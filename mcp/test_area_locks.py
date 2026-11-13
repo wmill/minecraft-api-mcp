@@ -147,6 +147,23 @@ async def test_multipart_and_queued_execution_forward_token(monkeypatch):
     assert [r.url.path for r in requests[1:]] == ["/api/builds/build/execute", "/api/builds/build/replay"]
 
 
+async def test_staged_multipart_sends_stage_files_in_order(monkeypatch):
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json={"success": True})
+
+    mock_http(monkeypatch, respond)
+    client = MinecraftAPIClient("http://minecraft").with_area_lock("owner")
+    await client.place_nbt_structure_bytes(b"final", "door.nbt", 1, 60, 2, stages=[b"zero", b"one"], stage_delay_ticks=4)
+    body = requests[0].content
+    assert requests[0].headers["X-Area-Lock-Id"] == "owner"
+    assert body.index(b'name="nbt_file"') < body.index(b'filename="door.stage0.nbt"') < body.index(b'filename="door.stage1.nbt"')
+    assert body.count(b'name="stage_nbt_file"') == 2
+    assert b'name="stage_delay_ticks"\r\n\r\n4' in body
+
+
 async def test_starlark_preserves_lock_details_and_artifact_for_retry(monkeypatch):
     api = AsyncMock()
     api.place_nbt_structure_bytes.side_effect = conflict_exception()

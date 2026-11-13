@@ -15,6 +15,8 @@ public class McpApiMod implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		ca.waltermiller.mcpapi.endpoints.StructureReveal.initialize();
+		// Before APIServer's SERVER_STOPPING hook, so pending stages are cancelled first.
+		ca.waltermiller.mcpapi.endpoints.StagedPlacement.initialize();
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> {
 			if (APIServer.markers != null) APIServer.markers.tick(server);
 		});

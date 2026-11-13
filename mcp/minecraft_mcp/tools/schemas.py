@@ -2238,7 +2238,9 @@ TOOL_PLACE_STARLARK_STRUCTURE = Tool(
     name="place_starlark_structure",
     description=(
         "Place a compiled artifact into the world, replacing blocks and optionally spawning entities. "
-        "The ground offset is applied automatically. Inspect the world before retrying an unknown outcome."
+        "The ground offset is applied automatically. Artifacts built with stage= (e.g. redstone that "
+        "misfires when pasted at once) are installed stage by stage, a few ticks apart, in one call. "
+        "Inspect the world before retrying an unknown outcome."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False),
     outputSchema=StarlarkResult.model_json_schema(),

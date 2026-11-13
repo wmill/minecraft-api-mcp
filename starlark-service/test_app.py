@@ -192,3 +192,42 @@ def test_component_catalog_covers_public_library_constructors(config):
         focused = catalog_view(config.tool_dir, component=name)
         assert signatures[name] in focused
         assert "load(" in focused
+
+
+STAGED_SOURCE = (
+    "def build():\n"
+    '    glass = block("minecraft:glass")\n'
+    '    observer = block("minecraft:observer", {"facing": "down"})\n'
+    '    return component(name="Staged", props={}, min_size=[2, 2, 1], metadata={"stage_delay_ticks": 3},\n'
+    "        body=group([\n"
+    '            fill_region([0, 0, 0], [2, 1, 1], block("minecraft:stone")),\n'
+    "            place_block([0, 1, 0], glass),\n"
+    "            place_block([0, 1, 0], observer, stage=1),\n"
+    "            place_block([1, 1, 0], observer, stage=2),\n"
+    "        ]))\n"
+)
+
+
+def test_staged_build_serves_each_stage(config):
+    client = client_for(config)
+    built = client.post("/build", json={"source": STAGED_SOURCE}).json()
+    assert built["ok"] is True
+    assert [s["stage"] for s in built["stages"]] == [0, 1, 2]
+    assert [s["block_count"] for s in built["stages"]] == [3, 1, 1]
+    assert built["stage_delay_ticks"] == 3
+    identifier = built["artifact_id"]
+    assert client.get(f"/artifacts/{identifier}").json()["stages"] == built["stages"]
+
+    stage = client.get(f"/artifacts/{identifier}/nbt", params={"stage": 1})
+    assert stage.status_code == 200
+    assert len(stage.content) == built["stages"][1]["nbt_bytes"]
+    assert stage.content != client.get(f"/artifacts/{identifier}/nbt").content
+    assert client.get(f"/artifacts/{identifier}/nbt", params={"stage": 7}).status_code == 404
+    assert client.get(f"/artifacts/{identifier}/nbt", params={"stage": "x"}).status_code == 422
+
+
+def test_unstaged_build_has_no_stages(config):
+    client = client_for(config)
+    built = client.post("/build", json={"source": SIMPLE_SOURCE, "root_size": [1, 1, 1]}).json()
+    assert "stages" not in built and "stage_delay_ticks" not in built
+    assert client.get(f"/artifacts/{built['artifact_id']}/nbt", params={"stage": 0}).status_code == 404

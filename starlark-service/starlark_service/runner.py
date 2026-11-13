@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import shutil
 import sys
 from collections import Counter
 from pathlib import Path
@@ -23,6 +24,15 @@ from typing import Any
 from starlark_to_nbt.model import BuildError, Diagnostic, Point
 from starlark_to_nbt.pipeline import build_source
 from starlark_to_nbt.serialize import write_structure_nbt
+
+# Matches starlark_to_nbt.DEFAULT_STAGE_DELAY_TICKS; kept local so older
+# compilers without staging still import.
+DEFAULT_STAGE_DELAY_TICKS = 2
+
+
+def stages_dir(output_path: Path) -> Path:
+    """Where a staged build's per-stage NBTs go: `<output_path>.stages/stage<N>.nbt`."""
+    return Path(f"{output_path}.stages")
 
 
 def _apply_memory_limit(memory_mb: int) -> None:
@@ -104,20 +114,39 @@ def run(request: dict[str, Any]) -> dict[str, Any]:
             f"{limits['max_root_volume']} blocks; build a smaller structure"
         )
 
+    stages = getattr(result, "stages", [])
+    stage_dir = stages_dir(output_path)
+    stage_info = []
     try:
         write_structure_nbt(result.volume, output_path)
+        if stages:
+            stage_dir.mkdir(parents=True, exist_ok=True)
+            for stage in stages:
+                path = stage_dir / f"stage{stage.stage}.nbt"
+                result.write_stage_nbt(stage.stage, path)
+                stage_info.append({"stage": stage.stage, "block_count": stage.block_count,
+                                   "nbt_bytes": path.stat().st_size})
     except BuildError as exc:
+        output_path.unlink(missing_ok=True)
+        shutil.rmtree(stage_dir, ignore_errors=True)
         return _failure("build_error", [_diagnostic_dict(d) for d in exc.diagnostics])
-    nbt_bytes = output_path.stat().st_size
+    nbt_bytes = output_path.stat().st_size + sum(item["nbt_bytes"] for item in stage_info)
     if nbt_bytes > limits["max_nbt_bytes"]:
         output_path.unlink(missing_ok=True)
+        shutil.rmtree(stage_dir, ignore_errors=True)
         return _limit_failure(
             f"structure NBT is {nbt_bytes} bytes, exceeding the maximum of "
             f"{limits['max_nbt_bytes']}; build a smaller or less varied structure"
         )
 
     counts = Counter(voxel.block.block_type for voxel in result.volume.voxels.values())
+    staging: dict[str, Any] = {}
+    if stage_info:
+        delay = result.metadata.stage_delay_ticks
+        staging = {"stages": stage_info,
+                   "stage_delay_ticks": DEFAULT_STAGE_DELAY_TICKS if delay is None else delay}
     return {
+        **staging,
         "ok": True,
         "size": size.to_list(),
         "block_count": len(result.volume.voxels),
