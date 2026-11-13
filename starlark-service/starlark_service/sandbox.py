@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,12 @@ HINTS = {
 
 class BuildQueueFull(Exception):
     pass
+
+
+def _discard(output_path: Path) -> None:
+    """Remove a failed build's partial NBT and install stages (runner.stages_dir)."""
+    output_path.unlink(missing_ok=True)
+    shutil.rmtree(f"{output_path}.stages", ignore_errors=True)
 
 
 def _failure(error_kind: str, message: str) -> dict[str, Any]:
@@ -92,15 +99,15 @@ class Sandbox:
         except TimeoutError:
             process.kill()
             await process.wait()
-            output_path.unlink(missing_ok=True)
+            _discard(output_path)
             return _failure("timeout", f"build exceeded the {cfg.build_timeout_s:g}s time limit")
 
         if process.returncode != 0:
-            output_path.unlink(missing_ok=True)
+            _discard(output_path)
             detail = stderr.decode("utf-8", errors="replace").strip().splitlines()
             return _failure("crash", detail[-1] if detail else "build worker exited abnormally")
         try:
             return json.loads(stdout.decode("utf-8"))
         except ValueError:
-            output_path.unlink(missing_ok=True)
+            _discard(output_path)
             return _failure("crash", "build worker produced unreadable output")

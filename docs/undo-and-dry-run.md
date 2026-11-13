@@ -76,6 +76,16 @@ Reverted placement records cannot be edited or translated before redo.
 Unrecorded edits that happen after the placement, such as players or `set_blocks`,
 are overwritten by undo/redo without warning, but saved in the reverse snapshot.
 
+### Staged NBT placements
+
+A staged placement (repeated `stage_nbt_file` parts, used for Starlark builds with `stage=`)
+is one build with one snapshot: the full cuboid is captured inside the lock check right before
+stage 0, and the later stages land on later ticks without further snapshots. Undo therefore
+restores the area as it was before stage 0. If a later stage fails or the server stops
+part-way, the error response names the build id, and its snapshot is still persisted, so
+`undo_build` can clear the partial door. A dry run scans the finished structure (`nbt_file`),
+not the individual stages.
+
 ## Storage
 
 Snapshots are gzipped structure NBT files, `{build_id}.nbt` (undo) and

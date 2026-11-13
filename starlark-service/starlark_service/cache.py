@@ -60,6 +60,18 @@ def nbt_path(cache_dir: Path, identifier: str) -> Path:
     return cache_dir / identifier[4:6] / f"{identifier}.nbt"
 
 
+def stages_dir(nbt: Path) -> Path:
+    """Install-stage NBTs of a staged build (`stage<N>.nbt`), beside its main NBT.
+
+    A directory, not `slk_*.stage<N>.nbt` files, so the `*/slk_*.nbt` globs
+    below keep matching one file per artifact."""
+    return nbt.with_suffix(".stages")
+
+
+def stage_nbt_path(cache_dir: Path, identifier: str, stage: int) -> Path:
+    return stages_dir(nbt_path(cache_dir, identifier)) / f"stage{stage}.nbt"
+
+
 def meta_path(cache_dir: Path, identifier: str) -> Path:
     return cache_dir / identifier[4:6] / f"{identifier}.json"
 
@@ -89,10 +101,13 @@ def store_source(cache_dir: Path, identifier: str, source: str) -> None:
     path.write_text(source, encoding="utf-8")
 
 
+def _dir_bytes(directory: Path) -> int:
+    return sum(p.stat().st_size for p in directory.iterdir()) if directory.is_dir() else 0
+
+
 def _previews_bytes(path: Path) -> int:
-    """Size of an artifact's rendered preview directory (see previews.py), if any."""
-    previews = path.with_suffix(".previews")
-    return sum(p.stat().st_size for p in previews.iterdir()) if previews.is_dir() else 0
+    """Size of an artifact's rendered previews (see previews.py) and install stages, if any."""
+    return _dir_bytes(path.with_suffix(".previews")) + _dir_bytes(stages_dir(path))
 
 
 def stats(cache_dir: Path) -> dict[str, int]:
@@ -125,6 +140,7 @@ def evict(cache_dir: Path, max_bytes: int) -> None:
         for companion in companions:
             companion.unlink(missing_ok=True)
         shutil.rmtree(path.with_suffix(".previews"), ignore_errors=True)
+        shutil.rmtree(stages_dir(path), ignore_errors=True)
         total -= size
 
 

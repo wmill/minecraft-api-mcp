@@ -34,9 +34,11 @@ class StarlarkServiceClient:
             response.raise_for_status()
             return response.json()
 
-    async def get_artifact_nbt(self, artifact_id: str) -> bytes:
+    async def get_artifact_nbt(self, artifact_id: str, stage: Optional[int] = None) -> bytes:
+        """The artifact's structure NBT, or one install stage of a staged build."""
+        params = {"stage": stage} if stage is not None else None
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{self.base_url}/artifacts/{artifact_id}/nbt")
+            response = await client.get(f"{self.base_url}/artifacts/{artifact_id}/nbt", params=params)
             response.raise_for_status()
             return response.content
 

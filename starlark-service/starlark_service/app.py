@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import shutil
 import time
 import uuid
 from collections.abc import Iterator
@@ -89,10 +90,16 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         except BuildQueueFull as exc:
             raise HTTPException(status_code=429, detail=str(exc)) from exc
 
+        tmp_stages = Path(f"{tmp_path}.stages")
         if not result["ok"]:
             tmp_path.unlink(missing_ok=True)
+            shutil.rmtree(tmp_stages, ignore_errors=True)
             return result
 
+        final_stages = cache.stages_dir(final_path)
+        shutil.rmtree(final_stages, ignore_errors=True)
+        if tmp_stages.is_dir():
+            tmp_stages.replace(final_stages)
         tmp_path.replace(final_path)
         metadata = {
             "ok": True,
@@ -104,6 +111,8 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             **{key: result[key] for key in
                ("size", "block_count", "entity_count", "ground_level", "y_offset",
                 "nbt_bytes", "palette")},
+            # Staged builds only: install stages in order and the ticks between them.
+            **{key: result[key] for key in ("stages", "stage_delay_ticks") if key in result},
         }
         cache.store_source(cfg.cache_dir, identifier, request.source)
         cache.store_metadata(cfg.cache_dir, identifier, metadata)
@@ -188,12 +197,18 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         return metadata
 
     @app.get("/artifacts/{artifact_id}/nbt")
-    async def get_artifact_nbt(artifact_id: str) -> FileResponse:
-        path = cache.nbt_path(cfg.cache_dir, valid_artifact_id(artifact_id))
+    async def get_artifact_nbt(artifact_id: str, stage: int | None = None) -> FileResponse:
+        identifier = valid_artifact_id(artifact_id)
+        path = cache.nbt_path(cfg.cache_dir, identifier)
         if not path.exists():
             raise HTTPException(status_code=404, detail="artifact not found (evicted or never built); rebuilding the same source yields the same id")
-        cache.touch(cfg.cache_dir, artifact_id)
-        return FileResponse(path, media_type="application/octet-stream", filename=path.name)
+        if stage is not None:
+            path = cache.stage_nbt_path(cfg.cache_dir, identifier, stage)
+            if stage < 0 or not path.exists():
+                raise HTTPException(status_code=404, detail=f"artifact has no install stage {stage}; see its 'stages'")
+        cache.touch(cfg.cache_dir, identifier)
+        filename = path.name if stage is None else f"{identifier}.stage{stage}.nbt"
+        return FileResponse(path, media_type="application/octet-stream", filename=filename)
 
     @app.get("/artifacts/{artifact_id}/images/{view}")
     async def get_artifact_image(artifact_id: str, view: str, max_px: int | None = None,

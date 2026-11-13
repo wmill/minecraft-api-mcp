@@ -15,6 +15,7 @@ import ca.waltermiller.mcpapi.survey.SurveyOccupancy;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.javalin.http.UploadedFile;
+import net.minecraft.block.Block;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtSizeTracker;
@@ -32,8 +33,10 @@ import net.minecraft.world.World;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -152,22 +155,31 @@ public class NBTStructureEndpoint extends APIEndpoint {
                 ctx.status(500).json(Map.of("error", "Failed to read NBT file: " + e.getMessage()));
                 return;
             }
-            ByteArrayInputStream inputStream = new ByteArrayInputStream(nbtData);
-
-            NbtCompound nbtCompound;
-
-            // Check if gzipped and follow appropriate reading method
-            if (isGzipped(nbtData)) {
-                // Read compressed NBT file (e.g., .nbt.gz)
-                nbtCompound = NbtIo.readCompressed(inputStream, NbtSizeTracker.ofUnlimitedBytes());
-            } else {
-                // Read uncompressed NBT file (e.g., .nbt)
-                nbtCompound = NbtIo.readCompound(new DataInputStream(inputStream), NbtSizeTracker.ofUnlimitedBytes());
-            }
+            NbtCompound nbtCompound = readNbt(nbtData);
 
             // Create structure template from NBT data
             StructureTemplateManager structureManager = server.getStructureTemplateManager();
             StructureTemplate template = structureManager.createTemplate(nbtCompound);
+
+            // Staged builds also send each install stage, in order. nbt_file stays the finished
+            // structure (bounds, dry run); the stages are what actually gets placed.
+            int stageDelay = StagedPlacement.parseDelay(ctx.formParam("stage_delay_ticks"));
+            List<StructureTemplate> stageTemplates = new ArrayList<>();
+            List<int[]> stageSizes = new ArrayList<>();
+            for (UploadedFile stageFile : ctx.uploadedFiles("stage_nbt_file")) {
+                StructureTemplate stage = structureManager.createTemplate(readNbt(stageFile.content().readAllBytes()));
+                stageTemplates.add(stage);
+                stageSizes.add(new int[]{stage.getSize().getX(), stage.getSize().getY(), stage.getSize().getZ()});
+            }
+            Vec3i mainSize = template.getSize();
+            String stageError = StagedPlacement.validateStages(
+                new int[]{mainSize.getX(), mainSize.getY(), mainSize.getZ()}, stageSizes);
+            if (stageError != null) {
+                ctx.status(400).json(Map.of("error", stageError));
+                return;
+            }
+            boolean staged = !stageTemplates.isEmpty();
+            int stageCount = stageTemplates.size();
 
             // Create placement data with settings
             StructurePlacementData placementData = new StructurePlacementData()
@@ -199,18 +211,14 @@ public class NBTStructureEndpoint extends APIEndpoint {
             // Execute on server thread
             OperationHttp.dispatch(server::execute, () -> {
                 try {
+                    StructureTemplate first = staged ? stageTemplates.get(0) : template;
                     boolean success = locks.execute(worldId, bounds, lockId, () -> {
                         if (snapshots != null && snapshots.fits(bounds)) snapshot.set(RegionSnapshot.capture(world, bounds));
-                        return template.place(world, pos, pos, placementData, Random.create(), 2);
+                        return first.place(world, pos, pos, placementData, Random.create(), 2);
                     }, Boolean.TRUE::equals);
 
                     if (success) {
-                        try {
-                            StructurePlacementEffect.emit(world, bounds);
-                            StructureReveal.start(world, bounds);
-                        } catch (Exception e) {
-                            LOGGER.warn("Failed to emit NBT placement effect", e);
-                        }
+                        if (!staged) emitEffects(world, bounds);
                         // Get structure size for response
                         Vec3i size = template.getSize();
 
@@ -226,6 +234,10 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         response.put("structure_size", Map.of("x", size.getX(), "y", size.getY(), "z", size.getZ()));
                         response.put("rotation", rotation.toString());
                         response.put("include_entities", includeEntities);
+                        if (staged) {
+                            response.put("stages", stageCount);
+                            response.put("stage_delay_ticks", stageDelay);
+                        }
 
                         if (buildService != null) {
                             try {
@@ -240,7 +252,36 @@ public class NBTStructureEndpoint extends APIEndpoint {
                             }
                         }
 
-                        future.complete(response);
+                        if (!staged) {
+                            future.complete(response);
+                        } else {
+                            // Later stages run on later ticks; each re-checks the area lock (renewing it)
+                            // and writes with full block updates, as a hand-placed block would.
+                            List<StagedPlacement.Stage> rest = new ArrayList<>();
+                            for (StructureTemplate stage : stageTemplates.subList(1, stageCount)) {
+                                rest.add(() -> locks.execute(worldId, bounds, lockId,
+                                    () -> stage.place(world, pos, pos, placementData, Random.create(), Block.NOTIFY_ALL),
+                                    Boolean.TRUE::equals));
+                            }
+                            StagedPlacement.instance().start(rest, stageDelay, 1).whenComplete((placed, failure) -> {
+                                if (failure == null) {
+                                    emitEffects(world, bounds);
+                                    response.put("stages_placed", placed);
+                                    future.complete(response);
+                                    return;
+                                }
+                                int done = failure instanceof StagedPlacement.StageFailure stop ? stop.placed : 0;
+                                Object buildId = response.get("build_id");
+                                LOGGER.warn("Staged placement of '{}' stopped after {} of {} stages: {}",
+                                    filename, done, stageCount, failure.getMessage());
+                                response.put("success", false);
+                                response.put("stages_placed", done);
+                                response.put("error", "Staged placement stopped after " + done + " of " + stageCount
+                                    + " stages (" + failure.getMessage() + ")"
+                                    + (buildId != null ? "; undo_build " + buildId + " restores the area" : ""));
+                                future.complete(response);
+                            });
+                        }
                     } else {
                         LOGGER.warn("Failed to place NBT structure '{}' at ({}, {}, {})",
                             filename, x, y, z);
@@ -260,7 +301,10 @@ public class NBTStructureEndpoint extends APIEndpoint {
             }, future);
 
             CompletableFuture<Map<String, Object>> persisted = future.thenApplyAsync(result -> {
-                if (Boolean.TRUE.equals(result.get("success"))) persistSnapshot(result, snapshot.get(), bounds);
+                // A staged run that stopped part-way still wrote blocks, so its snapshot is kept for undo.
+                if (Boolean.TRUE.equals(result.get("success")) || result.get("build_id") != null) {
+                    persistSnapshot(result, snapshot.get(), bounds);
+                }
                 return result;
             }, OperationHttp.persistenceExecutor(ctx));
 
@@ -272,6 +316,23 @@ public class NBTStructureEndpoint extends APIEndpoint {
         } catch (Exception e) {
             LOGGER.error("Error processing structure placement request: ", e);
             ctx.status(400).json(Map.of("error", "Invalid request: " + e.getMessage()));
+        }
+    }
+
+    private NbtCompound readNbt(byte[] data) throws IOException {
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(data);
+        if (isGzipped(data)) {
+            return NbtIo.readCompressed(inputStream, NbtSizeTracker.ofUnlimitedBytes());
+        }
+        return NbtIo.readCompound(new DataInputStream(inputStream), NbtSizeTracker.ofUnlimitedBytes());
+    }
+
+    private void emitEffects(ServerWorld world, AreaBounds bounds) {
+        try {
+            StructurePlacementEffect.emit(world, bounds);
+            StructureReveal.start(world, bounds);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to emit NBT placement effect", e);
         }
     }
 
