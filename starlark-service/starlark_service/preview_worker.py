@@ -20,7 +20,6 @@ from pathlib import Path
 
 from nbt_image_gen.loader import load_structure
 from nbt_image_gen.metadata import build_metadata
-from nbt_image_gen.renderer import render_side, render_top
 
 from . import render
 from .previews import PREVIEW_VERSION
@@ -50,13 +49,12 @@ def _save(img, path: Path) -> None:
     os.replace(tmp, path)
 
 
-def render_base(structure, out: Path) -> None:
+def render_base(structure, out: Path, shapes=None) -> None:
     out.mkdir(parents=True)
     ortho = _ortho_scale(structure)
-    views = {"top": render_top(structure, scale=ortho)}
-    for direction in ("north", "south", "east", "west"):
-        views[direction] = render_side(structure, direction, scale=ortho)
-    views["iso"] = render.render_iso(structure, structure.grid, scale=_iso_scale(structure))
+    views = {view: render.render_ortho(structure, view, scale=ortho, shapes=shapes)
+             for view in ("top", "north", "south", "east", "west")}
+    views["iso"] = render.render_iso(structure, structure.grid, scale=_iso_scale(structure), shapes=shapes)
     for view, img in views.items():
         img.save(out / f"{view}.png")
 
@@ -67,13 +65,14 @@ def render_base(structure, out: Path) -> None:
     (out / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
-def _section(structure, out: Path, axis: str, at: int, background) -> None:
+def _section(structure, out: Path, axis: str, at: int, background, shapes) -> None:
     target = out / f"section_{axis}{at}.png"
     if not target.exists():
-        _save(render.render_section(structure, axis, at, background, scale=_ortho_scale(structure)), target)
+        _save(render.render_section(structure, axis, at, background, scale=_ortho_scale(structure), shapes=shapes),
+              target)
 
 
-def render_variant(structure, out: Path, spec: str) -> None:
+def render_variant(structure, out: Path, spec: str, shapes=None) -> None:
     meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
     background = tuple(meta["background"]["rgb"])
     kind, _, rest = spec.partition(":")
@@ -81,7 +80,7 @@ def render_variant(structure, out: Path, spec: str) -> None:
         height = structure.size[1]
         floors = [{"floor": y, "cut": render.floor_cut(y, height)} for y in render.detect_floors(structure.grid)]
         for entry in floors:
-            _section(structure, out, "y", entry["cut"], background)
+            _section(structure, out, "y", entry["cut"], background, shapes)
         tmp = out / f".floors.json.{os.getpid()}.tmp"
         tmp.write_text(json.dumps(floors), encoding="utf-8")
         os.replace(tmp, out / "floors.json")
@@ -92,19 +91,21 @@ def render_variant(structure, out: Path, spec: str) -> None:
         raise ValueError(f"cut {axis}={at} is outside the artifact")
     if kind == "iso":
         grid = render.cutaway(structure.grid, axis, at)
-        _save(render.render_iso(structure, grid, scale=_iso_scale(structure)), out / f"iso_{axis}{at}.png")
+        _save(render.render_iso(structure, grid, scale=_iso_scale(structure), shapes=shapes),
+              out / f"iso_{axis}{at}.png")
     elif kind == "section":
-        _section(structure, out, axis, at, background)
+        _section(structure, out, axis, at, background, shapes)
     else:
         raise ValueError(f"unknown variant: {spec}")
 
 
 def main(argv: list[str]) -> None:
     structure = load_structure(argv[0])
+    shapes = render.block_shapes(structure, render.load_block_states(argv[0]))
     if len(argv) == 2:
-        render_base(structure, Path(argv[1]))
+        render_base(structure, Path(argv[1]), shapes)
     else:
-        render_variant(structure, Path(argv[1]), argv[2])
+        render_variant(structure, Path(argv[1]), argv[2], shapes)
 
 
 if __name__ == "__main__":

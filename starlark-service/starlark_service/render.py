@@ -6,16 +6,26 @@ that remove the part of the structure facing the camera, orthographic sections
 with depth fading, per-storey floor detection, and a background colour chosen
 per artifact to contrast with its visible blocks.
 
+Stairs and slabs are drawn with their real shape: nbt-image-gen's loader keeps
+only block names, so block states are read separately (`load_block_states`) and
+any build containing them is rendered on a grid refined to half-block resolution
+(`refine`), where each keeps only the octants Minecraft's collision shape fills.
+That makes a stair's `facing` (the side of the tall back step), `half` and corner
+`shape`, and a slab's `type` (bottom/top), visible in every view.
+
 Grids are indexed [x, y, z] in structure-local coordinates, AIR where empty.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import nbtlib
 import numpy as np
 from PIL import Image, ImageDraw
 
-from nbt_image_gen.loader import AIR, Structure
-from nbt_image_gen.renderer import _build_palette_rgb
+from nbt_image_gen.loader import AIR, Structure, _unwrap
+from nbt_image_gen.renderer import _build_palette_rgb, render_side, render_top
 
 AXES = ("x", "y", "z")
 
@@ -33,10 +43,153 @@ EDGE_SHADE = 0.6
 SECTION_FADE_LAYERS = 6
 SECTION_FADE_MAX = 0.75
 MAX_FLOORS = 9
+# Ortho views and sections darken the half of a stair or slab cell that lies further from the viewer.
+RECESS_SHADE = 0.7
+
+# Horizontal directions as (dx, dz), and Minecraft's rotateYCounterclockwise / rotateYClockwise.
+HORIZONTAL = {"north": (0, -1), "south": (0, 1), "west": (-1, 0), "east": (1, 0)}
+CCW = {"north": "west", "west": "south", "south": "east", "east": "north"}
+CW = {after: before for before, after in CCW.items()}
+
+Shapes = dict[int, np.ndarray]
 
 
 def palette_rgb(structure: Structure) -> np.ndarray:
     return _build_palette_rgb(structure)
+
+
+def load_block_states(path: Path | str) -> list[dict[str, str]]:
+    """Block-state properties for each palette entry of a vanilla structure .nbt."""
+    root = _unwrap(nbtlib.load(str(path)), "size")
+    return [{str(k): str(v) for k, v in entry.get("Properties", {}).items()} for entry in root["palette"]]
+
+
+def _quarters(direction: str) -> set[tuple[int, int]]:
+    """The (x, z) quarters of a block on the given horizontal side."""
+    dx, dz = HORIZONTAL[direction]
+    return {(qx, qz) for qx in (0, 1) for qz in (0, 1)
+            if (dx == 0 or qx == (dx > 0)) and (dz == 0 or qz == (dz > 0))}
+
+
+def stair_octants(props: dict[str, str]) -> np.ndarray | None:
+    """[x, y, z] 2x2x2 occupancy of a stair, matching StairsBlock's outline shape (1.21).
+
+    A full half-slab (`half`), plus a step on the `facing` side: straight is that half,
+    outer_left/right only its corner towards facing's counter-clockwise/clockwise
+    neighbour, inner_left/right that half joined with the neighbour's half.
+    """
+    facing = props.get("facing", "north")
+    if facing not in HORIZONTAL:
+        return None
+    shape = props.get("shape", "straight")
+    step = _quarters(facing)
+    if shape == "outer_left":
+        step &= _quarters(CCW[facing])
+    elif shape == "outer_right":
+        step &= _quarters(CW[facing])
+    elif shape == "inner_left":
+        step |= _quarters(CCW[facing])
+    elif shape == "inner_right":
+        step |= _quarters(CW[facing])
+    slab, raised = (1, 0) if props.get("half") == "top" else (0, 1)
+    mask = np.zeros((2, 2, 2), dtype=bool)
+    mask[:, slab, :] = True
+    for qx, qz in step:
+        mask[qx, raised, qz] = True
+    return mask
+
+
+def slab_octants(props: dict[str, str]) -> np.ndarray | None:
+    """[x, y, z] 2x2x2 occupancy of a slab; None for `double`, which is a full block."""
+    kind = props.get("type", "bottom")
+    if kind not in ("bottom", "top"):
+        return None
+    mask = np.zeros((2, 2, 2), dtype=bool)
+    mask[:, 1 if kind == "top" else 0, :] = True
+    return mask
+
+
+def block_shapes(structure: Structure, states: list[dict[str, str]]) -> Shapes:
+    """Palette index -> octant mask for every palette entry drawn at sub-block detail."""
+    shapes: Shapes = {}
+    for index, (name, props) in enumerate(zip(structure.palette, states)):
+        if name.endswith("_stairs"):
+            mask = stair_octants(props)
+        elif name.endswith("_slab"):
+            mask = slab_octants(props)
+        else:
+            continue
+        if mask is not None:
+            shapes[index] = mask
+    return shapes
+
+
+def _shapes_in(grid: np.ndarray, shapes: Shapes | None) -> Shapes:
+    if not shapes:
+        return {}
+    present = np.unique(grid)
+    return {i: m for i, m in shapes.items() if i in present}
+
+
+def refine(grid: np.ndarray, shapes: Shapes) -> np.ndarray:
+    """Double the resolution: full blocks fill 2x2x2 octants, shaped blocks only their mask."""
+    fine = grid.repeat(2, axis=0).repeat(2, axis=1).repeat(2, axis=2)
+    for index, mask in shapes.items():
+        fine[np.kron(grid == index, ~mask)] = AIR
+    return fine
+
+
+# Ortho view -> (scan axis, viewer on the high side), as nbt-image-gen's render_top/render_side.
+_ORTHO_SCAN = {"top": (1, True), "north": (2, False), "south": (2, True), "east": (0, True), "west": (0, False)}
+
+
+def _orient(image: np.ndarray, view: str) -> np.ndarray:
+    """Turn a [a, b, ...] first-hit image into rows/cols with nbt-image-gen's view orientation."""
+    t = image.transpose(1, 0, *range(2, image.ndim))
+    if view == "top":
+        return t                  # rows z (north first), cols x (west first)
+    if view == "north":
+        return t[::-1, ::-1]      # rows y (top first), cols x (east first)
+    if view == "south":
+        return t[::-1, :]         # rows y, cols x (west first)
+    if view == "east":
+        return image[::-1, ::-1]  # [y, z] -> rows y, cols z (north first)
+    if view == "west":
+        return image[::-1, :]     # rows y, cols z (south first)
+    raise ValueError(f"unknown direction: {view}")
+
+
+def render_ortho(structure: Structure, view: str, scale: int = 8, shapes: Shapes | None = None) -> Image.Image:
+    """Top or side view; nbt-image-gen's flat render unless shaped blocks are present.
+
+    With stairs or slabs, the view is taken at half-block resolution: profiles show
+    against whatever lies behind, and the half of a shaped cell further from the viewer
+    (a stair's tread or a bottom slab seen from above, a recessed riser seen from the
+    front) is darkened.
+    """
+    present = _shapes_in(structure.grid, shapes)
+    if not present:
+        return render_top(structure, scale=scale) if view == "top" else render_side(structure, view, scale=scale)
+    fine = refine(structure.grid, present)
+    axis, high_side = _ORTHO_SCAN[view]
+    scan = np.flip(fine, axis=axis) if high_side else fine
+    solid = scan != AIR
+    first = solid.argmax(axis=axis)
+    hit = solid.any(axis=axis)
+    values = np.take_along_axis(scan, np.expand_dims(first, axis), axis=axis).squeeze(axis)
+    # Fine-grid index of the hit along the scan: the near half of a cell is odd from the high side.
+    index = fine.shape[axis] - 1 - first if high_side else first
+    far = (index % 2 == 0) if high_side else (index % 2 == 1)
+    recessed = hit & far & np.isin(values, list(present))
+
+    rgb = palette_rgb(structure).astype(np.float32)[np.where(hit, values, 0)]
+    rgb[recessed] *= RECESS_SHADE
+    rgba = np.zeros(values.shape + (4,), dtype=np.uint8)
+    rgba[..., :3] = rgb.astype(np.uint8)
+    rgba[..., 3] = np.where(hit, 255, 0)
+    img = Image.fromarray(np.ascontiguousarray(_orient(rgba, view)), "RGBA")
+    cell = max(1, scale // 2)
+    return img.resize((img.width * cell, img.height * cell), Image.NEAREST)
 
 
 def cutaway(grid: np.ndarray, axis: str, at: int) -> np.ndarray:
@@ -81,15 +234,24 @@ def _neighbour(grid: np.ndarray, axis: int, step: int) -> np.ndarray:
 _FACES = (("top", 1, 1, (0, 2)), ("south", 2, 1, (0, 1)), ("east", 0, 1, (1, 2)))
 
 
-def render_iso(structure: Structure, grid: np.ndarray, scale: int = 6, crop: bool = True) -> Image.Image:
+def render_iso(structure: Structure, grid: np.ndarray, scale: int = 6, crop: bool = True,
+               shapes: Shapes | None = None) -> Image.Image:
     """2:1 isometric from the south-east with material-edge outlines, on a transparent background.
 
     Same projection as nbt-image-gen: +X right-and-down, +Z left-and-down, +Y up.
     A face edge is outlined unless the neighbouring block across that edge is the same
     material and shows the same face, so flat runs of one block read as one shape while
     silhouettes, material changes and depth steps get a darker line.
+
+    With `shapes` and any of those blocks present, the grid is drawn at half-block
+    resolution so stairs show their step and slabs their height; the image size is unchanged.
     """
     rgb = palette_rgb(structure)
+    present = _shapes_in(grid, shapes)
+    unit: float = scale
+    if present:
+        grid = refine(grid, present)
+        unit = scale / 2
     W, H, D = grid.shape
     solid = grid != AIR
     air = ~solid
@@ -98,13 +260,13 @@ def render_iso(structure: Structure, grid: np.ndarray, scale: int = 6, crop: boo
         visible[name] = solid & _shift(air, axis, step, True)
     drawn = visible["top"] | visible["south"] | visible["east"]
 
-    img = Image.new("RGBA", (max(1, 2 * (W + D) * scale), max(1, (W + D + 2 * H) * scale)), (0, 0, 0, 0))
+    img = Image.new("RGBA", (max(1, round(2 * (W + D) * unit)), max(1, round((W + D + 2 * H) * unit))), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     if not drawn.any():
         return img
 
-    def project(px: int, py: int, pz: int) -> tuple[int, int]:
-        return (((px - pz) * 2 + 2 * D) * scale, ((px + pz) - 2 * py + 2 * H) * scale)
+    def project(px: int, py: int, pz: int) -> tuple[float, float]:
+        return (((px - pz) * 2 + 2 * D) * unit, ((px + pz) - 2 * py + 2 * H) * unit)
 
     # Edge visibility per face and in-plane direction: (face, axis, step) -> mask of "draw this edge".
     edges = {}
@@ -170,33 +332,47 @@ def _section_volume(grid: np.ndarray, axis: str, at: int) -> np.ndarray:
 
 
 def render_section(structure: Structure, axis: str, at: int, background: tuple[int, int, int],
-                   scale: int = 8) -> Image.Image:
+                   scale: int = 8, shapes: Shapes | None = None) -> Image.Image:
     """Orthographic section looking at the cut face of the kept half.
 
     Blocks on the cut plane are full colour with outlines along material boundaries;
-    blocks seen further back fade toward the background with depth.
+    blocks seen further back fade toward the background with depth. Stairs and slabs are
+    cut at half-block resolution, their far half darkened (in a plan: the lower tread, or
+    a bottom slab).
     """
     rgb = palette_rgb(structure).astype(np.float32)
-    volume = _section_volume(structure.grid, axis, at)
+    grid = structure.grid
+    present = _shapes_in(grid, shapes)
+    k = 2 if present else 1
+    if present:
+        grid = refine(grid, present)
+        at = 2 * at + 1
+    volume = _section_volume(grid, axis, at)
     rows, cols, _ = volume.shape
     solid = volume != AIR
     hit = solid.any(axis=2)
     depth = solid.argmax(axis=2)
     values = np.take_along_axis(volume, depth[..., None], axis=2)[..., 0]
+    # Depth 0 is the near half of the cut cell, so odd depths are far halves.
+    recessed = hit & (depth % 2 == 1) & np.isin(values, list(present)) if present else np.zeros_like(hit)
     colour = rgb[np.where(hit, values, 0)]
-    fade = np.clip(depth / SECTION_FADE_LAYERS, 0, 1)[..., None] * SECTION_FADE_MAX
+    colour[recessed] *= RECESS_SHADE
+    fade = np.clip((depth // k) / SECTION_FADE_LAYERS, 0, 1)[..., None] * SECTION_FADE_MAX
     bg = np.array(background, dtype=np.float32)
     colour = colour * (1 - fade) + bg * fade
     colour[~hit] = bg
+    cell = scale / k
     img = Image.fromarray(colour.astype(np.uint8), "RGB")
-    img = img.resize((max(1, cols * scale), max(1, rows * scale)), Image.NEAREST)
+    img = img.resize((max(1, round(cols * cell)), max(1, round(rows * cell))), Image.NEAREST)
 
     draw = ImageDraw.Draw(img)
-    cut = hit & (depth == 0)
-    material = np.where(cut, values, AIR - 1)
+    cut = hit & (depth // k == 0)
+    # Recessed halves count as their own material so a stair's step gets outlined.
+    material = np.where(cut, values.astype(np.int32) * 2 + recessed, -1)
     width = max(1, scale // 6)
     for r, c in zip(*np.nonzero(cut)):
-        x0, y0, x1, y1 = c * scale, r * scale, (c + 1) * scale - 1, (r + 1) * scale - 1
+        x0, y0 = round(c * cell), round(r * cell)
+        x1, y1 = round((c + 1) * cell) - 1, round((r + 1) * cell) - 1
         here = material[r, c]
         if r == 0 or material[r - 1, c] != here:
             draw.line([(x0, y0), (x1, y0)], fill=(0, 0, 0), width=width)
