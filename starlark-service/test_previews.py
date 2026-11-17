@@ -251,3 +251,111 @@ def test_background_avoids_silhouette_colours():
     assert render.choose_background([blob((120, 80, 40))])[0] == "slate"
     # Pale blue glass blends into slate, so it moves to another background.
     assert render.choose_background([blob((175, 188, 205))])[0] != "slate"
+
+
+# StairsBlock's pre-1.21 lookup: SHAPE_INDICES[shape * 4 + horizontal facing] is a bitmask of
+# raised quarters (1=NW, 2=NE, 4=SW, 8=SE); shapes and facings in their enum orders.
+_MC_SHAPES = ("straight", "inner_left", "inner_right", "outer_left", "outer_right")
+_MC_FACINGS = ("south", "west", "north", "east")
+_MC_SHAPE_INDICES = (12, 5, 3, 10, 14, 13, 7, 11, 13, 7, 11, 14, 8, 4, 1, 2, 4, 1, 2, 8)
+_QUARTER_BITS = {(0, 0): 1, (1, 0): 2, (0, 1): 4, (1, 1): 8}
+
+
+@pytest.mark.parametrize("half", ["bottom", "top"])
+@pytest.mark.parametrize("shape", _MC_SHAPES)
+@pytest.mark.parametrize("facing", _MC_FACINGS)
+def test_stair_octants_match_minecraft(facing, shape, half):
+    mask = render.stair_octants({"facing": facing, "shape": shape, "half": half})
+    slab, raised = (1, 0) if half == "top" else (0, 1)
+    assert mask[:, slab, :].all()
+    bits = sum(bit for (qx, qz), bit in _QUARTER_BITS.items() if mask[qx, raised, qz])
+    assert bits == _MC_SHAPE_INDICES[_MC_SHAPES.index(shape) * 4 + _MC_FACINGS.index(facing)]
+
+
+def test_refine_cuts_stairs_and_keeps_full_blocks():
+    grid = np.array([[[0]], [[1]]], dtype=np.int16)  # stone at x=0, stair at x=1
+    shapes = {1: render.stair_octants({"facing": "east"})}
+    fine = render.refine(grid, shapes)
+    assert fine.shape == (4, 2, 2)
+    assert (fine[:2] == 0).all()
+    assert (fine[2:, 0, :] == 1).all()                               # slab
+    assert (fine[3, 1, :] == 1).all() and (fine[2, 1, :] == AIR).all()  # step on the east half
+    # Blocks without a shape are left alone.
+    assert render._shapes_in(np.zeros((1, 1, 1), np.int16), shapes) == {}
+
+
+@pytest.mark.parametrize("facing, expected_face", [("north", "top"), ("south", "south")])
+def test_iso_shows_the_stair_step(facing, expected_face):
+    # Screen point of (0.5, 0.5, 0.75): on the tread's top when the step is north,
+    # on the step's south face when it is south (a full cube shows its south face there too).
+    grid = np.zeros((1, 1, 1), dtype=np.int16)
+    structure = Structure(grid.shape, ["minecraft:oak_stairs"], grid)
+    shapes = {0: render.stair_octants({"facing": facing})}
+    scale = 12
+    img = render.render_iso(structure, grid, scale=scale, crop=False, shapes=shapes)
+    pixel = img.getpixel((int(1.5 * scale), int(2.25 * scale)))
+    shade = render.FACE_SHADE[expected_face]
+    assert pixel == tuple(int(v * shade) for v in render.palette_rgb(structure)[0]) + (255,)
+
+
+STAIR_SOURCE = (
+    "def build():\n"
+    '    return component(name="Step", props={}, body=place_block([0, 0, 0],\n'
+    '        block("minecraft:oak_stairs", {"facing": "north", "half": "bottom", "shape": "straight"})))\n'
+)
+
+
+def test_stair_previews_show_facing(config):
+    # Seen from above, a north-facing stair's raised step (north half) is lighter than its tread.
+    client = TestClient(create_app(config))
+    artifact = build(client, STAIR_SOURCE)
+    top = png(client.get(f"/artifacts/{artifact}/images/top", params={"max_px": 64}))
+    north, south = top.getpixel((32, 8)), top.getpixel((32, 56))
+    assert sum(north) > sum(south)
+    # The plan section through the stair outlines the step, and the cut sheet still renders.
+    section = png(client.get(f"/artifacts/{artifact}/images/section", params={"cut_y": 0, "max_px": 64}))
+    assert sum(section.getpixel((32, 16))) > sum(section.getpixel((32, 48)))
+    png(client.get(f"/artifacts/{artifact}/images/sheet", params={"cut_x": 0}))
+
+
+@pytest.mark.parametrize("kind, layer", [("bottom", 0), ("top", 1), ("double", None)])
+def test_slab_octants(kind, layer):
+    mask = render.slab_octants({"type": kind})
+    if layer is None:
+        assert mask is None  # a double slab is a full block
+    else:
+        assert mask[:, layer, :].all() and not mask[:, 1 - layer, :].any()
+
+
+def test_block_shapes_picks_stairs_and_slabs():
+    grid = np.zeros((1, 1, 1), dtype=np.int16)
+    palette = ["minecraft:oak_stairs", "minecraft:stone_slab", "minecraft:stone_slab", "minecraft:stone"]
+    states = [{"facing": "north"}, {"type": "bottom"}, {"type": "double"}, {}]
+    assert sorted(render.block_shapes(Structure(grid.shape, palette, grid), states)) == [0, 1]
+
+
+SLAB_SOURCE = (
+    "def build():\n"
+    '    return component(name="Slabs", props={}, min_size=[2, 1, 1], body=group([\n'
+    '        place_block([0, 0, 0], block("minecraft:stone_slab", {"type": "bottom"})),\n'
+    '        place_block([1, 0, 0], block("minecraft:stone_slab", {"type": "top"})),\n'
+    "    ]))\n"
+)
+
+
+def test_slab_previews_show_height(config):
+    # From the south: the bottom slab (west, left) fills only the lower half, the top slab only the upper.
+    client = TestClient(create_app(config))
+    result = client.post("/build", json={"source": SLAB_SOURCE}).json()
+    assert result["ok"] is True, result
+    artifact = result["artifact_id"]
+    south = png(client.get(f"/artifacts/{artifact}/images/south", params={"max_px": 64}))
+    w, h = south.size
+    bg = south.getpixel((0, 0))  # letterboxed: the 2x1 view leaves background rows above and below
+    upper, lower = h // 2 - 4, h // 2 + 4
+    assert south.getpixel((w // 4, upper)) == bg and south.getpixel((w // 4, lower)) != bg
+    assert south.getpixel((3 * w // 4, upper)) != bg and south.getpixel((3 * w // 4, lower)) == bg
+    # From above, the bottom slab is the lower surface, so it is darker.
+    top = png(client.get(f"/artifacts/{artifact}/images/top", params={"max_px": 64}))
+    tw, th = top.size
+    assert sum(top.getpixel((tw // 4, th // 2))) < sum(top.getpixel((3 * tw // 4, th // 2)))
