@@ -255,12 +255,13 @@ public class NBTStructureEndpoint extends APIEndpoint {
                         if (!staged) {
                             future.complete(response);
                         } else {
-                            // Later stages run on later ticks; each re-checks the area lock (renewing it)
-                            // and writes with full block updates, as a hand-placed block would.
+                            // NOTIFY_ALL sends normal updates from each write. Skip the template's
+                            // additional shape update pass, which can pulse newly placed observers.
+                            StructurePlacementData stagePlacementData = placementData.copy().setUpdateNeighbors(true);
                             List<StagedPlacement.Stage> rest = new ArrayList<>();
                             for (StructureTemplate stage : stageTemplates.subList(1, stageCount)) {
                                 rest.add(() -> locks.execute(worldId, bounds, lockId,
-                                    () -> stage.place(world, pos, pos, placementData, Random.create(), Block.NOTIFY_ALL),
+                                    () -> stage.place(world, pos, pos, stagePlacementData, Random.create(), Block.NOTIFY_ALL),
                                     Boolean.TRUE::equals));
                             }
                             StagedPlacement.instance().start(rest, stageDelay, 1).whenComplete((placed, failure) -> {

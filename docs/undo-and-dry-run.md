@@ -86,6 +86,9 @@ part-way, the error response names the build id, and its snapshot is still persi
 `undo_build` can clear the partial door. A dry run scans the finished structure (`nbt_file`),
 not the individual stages.
 
+Later stages send normal block updates for each write and skip the template's extra shape
+update pass. This lets a stage install an observer without pulsing it during placement.
+
 ## Storage
 
 Snapshots are gzipped structure NBT files, `{build_id}.nbt` (undo) and

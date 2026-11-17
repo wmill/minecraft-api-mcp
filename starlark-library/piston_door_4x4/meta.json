@@ -1,8 +1,8 @@
 {
   "author": null,
   "created_at": "2026-11-13T03:03:38Z",
-  "description": "Slimeless Java 4\u00d74 piston door based on Shaweyy's circuit. Staged build: stage 0 places the open door with glass observer placeholders, then stages 1-22 install one observer each, 2 ticks apart, so place_starlark_structure sets it up in one call. Walking plane is local Y=4.",
-  "latest": 2,
+  "description": "Slimeless Java 4\u00d74 piston door based on Shaweyy's circuit. Places the door and installs its 22 observers in 23 stages. Requires the server fix that skips the extra structure template shape update pass after stage 0. Walking plane is local Y=4.",
+  "latest": 3,
   "name": "piston_door_4x4",
   "tags": [
     "redstone",
@@ -11,7 +11,7 @@
     "4x4"
   ],
   "title": "4\u00d74 Piston Door",
-  "updated_at": "2026-11-13T03:54:04Z",
+  "updated_at": "2026-11-13T04:56:31Z",
   "versions": [
     {
       "artifact_id": "slk_909a0d95bd3c02fe",
@@ -93,6 +93,45 @@
       ],
       "stages": 23,
       "version": 2,
+      "y_offset": -4
+    },
+    {
+      "artifact_id": "slk_e1a352d5e411cdd0",
+      "author": null,
+      "block_count": 308,
+      "created_at": "2026-11-13T04:56:31Z",
+      "entry": "build",
+      "exports": [
+        "PistonDoor4x4"
+      ],
+      "ground_level": 4,
+      "loads": [],
+      "notes": "Verified all 23 stages and a full close/reopen cycle on a patched Java 1.21.7 test server.",
+      "palette_top": [
+        "minecraft:air",
+        "minecraft:quartz_block",
+        "minecraft:white_stained_glass",
+        "minecraft:observer",
+        "minecraft:sticky_piston",
+        "minecraft:cyan_wool",
+        "minecraft:redstone_wire",
+        "minecraft:repeater"
+      ],
+      "params": [],
+      "parent": "piston_door_4x4@2",
+      "props": {},
+      "root_size": null,
+      "sha256": "8a367a052eb1fcecf4525ac5a1f87901630c20eee819da1e93dea33848166943",
+      "signatures": {
+        "PistonDoor4x4": "PistonDoor4x4()"
+      },
+      "size": [
+        8,
+        11,
+        7
+      ],
+      "stages": 23,
+      "version": 3,
       "y_offset": -4
     }
   ]
