@@ -8,6 +8,7 @@ Each schema defines the tool's name, description, and input parameters.
 from mcp.types import Tool, ToolAnnotations
 from ..utils.starlark_models import Placement, StarlarkResult
 from ..utils.survey_models import SurveyResult
+from ..utils.access_models import AccessResult
 from .area_locks import AREA_LOCK_TOOLS, LOCK_ID_SCHEMA, LOCK_WRITE_TOOLS
 from .markers import MARKER_TOOLS
 
@@ -347,6 +348,64 @@ TOOL_SURVEY_SITE = Tool(
         "additionalProperties": False,
     },
     outputSchema=SurveyResult.model_json_schema(),
+)
+
+_ACCESS_POINT = {"type": "object", "properties": {k: {"type": "integer"} for k in ("x", "y", "z")}, "required": ["x", "y", "z"], "additionalProperties": False}
+
+TOOL_CHECK_ACCESS = Tool(
+    name="check_access",
+    description=(
+        "Read-only path check for placed structures: can a player walk from a start position (e.g. a road or path "
+        "outside) to named targets (inside the door, the second floor, a balcony), and which standing areas of a "
+        "region are reachable. Positions are FEET positions (the air block a player stands in, one above the floor "
+        "block); a floor-block Y is adjusted up automatically. Give a target a 'via' (the doorway's lower block) to "
+        "require the route to use that entrance. 'map' (a build_id or a cuboid) floods from the start and reports "
+        "reachable positions per Y level plus unreached groups, indoor first: an indoor group on an upper level "
+        "means that floor has no working stairs/ladder. The default player profile walks, jumps 1 block, climbs "
+        "stairs, slabs and ladders/vines/scaffolding, drops up to 3, swims, and opens wooden doors/trapdoors/gates "
+        "(doors='all' also iron, 'none' only already-open ones). profile='villager' uses vanilla mob pathfinding "
+        "(no ladders; targets only). 'unknown' means the search ran out of nodes or hit unloaded chunks. "
+        "Chunks holding the start, targets and map must be loaded. An estimate, not a guarantee."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "start": {**_ACCESS_POINT, "description": "Feet position to start from, outside the building"},
+            "targets": {
+                "type": "array", "maxItems": 16,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Label, e.g. 'front door', 'floor 2'"},
+                        "x": {"type": "integer"}, "y": {"type": "integer"}, "z": {"type": "integer"},
+                        "via": {**_ACCESS_POINT, "description": "Doorway (lower door block) the route must pass through"},
+                    },
+                    "required": ["x", "y", "z"],
+                    "additionalProperties": False,
+                },
+            },
+            "map": {
+                "type": "object",
+                "description": "Reachability map region: {build_id} of a recorded build, or inclusive x1,y1,z1,x2,y2,z2 "
+                               "(at most 256 per side and 250000 cells). Player profile only.",
+                "properties": {"build_id": {"type": "string"},
+                               **{k: {"type": "integer"} for k in ("x1", "y1", "z1", "x2", "y2", "z2")}},
+                "additionalProperties": False,
+            },
+            "profile": {"type": "string", "enum": ["player", "villager"], "default": "player"},
+            "doors": {"type": "string", "enum": ["wooden", "all", "none"], "default": "wooden"},
+            "max_nodes": {"type": "integer", "minimum": 1, "maximum": 200000, "default": 50000},
+            "margin": {"type": "integer", "minimum": 0, "maximum": 64, "default": 16,
+                       "description": "Blocks of padding around start/targets/map that the search may use"},
+            "include_route": {"type": "boolean", "default": False,
+                              "description": "Return each reachable target's route as turn points"},
+            "world": {"type": "string", "default": "minecraft:overworld"},
+        },
+        "required": ["start"],
+        "additionalProperties": False,
+    },
+    outputSchema=AccessResult.model_json_schema(),
 )
 
 TOOL_GET_HEIGHTMAP = Tool(
@@ -2521,6 +2580,7 @@ TOOL_SCHEMAS = [
     TOOL_FILL_BOX,
     TOOL_GET_HEIGHTMAP,
     TOOL_SURVEY_SITE,
+    TOOL_CHECK_ACCESS,
     TOOL_SUMMARIZE_HEIGHTMAP,
     TOOL_PREVIEW_HEIGHTMAP,
     TOOL_MAP_TERRAIN,

@@ -146,6 +146,7 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 - `AreaLockEndpoint` - Acquire/renew/resize/release/list area reservations (`/api/area-locks`)
 - `TerrainSmoothEndpoint` - Ground smoothing (`POST /api/world/terrain/smooth`, MCP `smooth_terrain`): gaussian/median/bilateral filters or a flat pad, vegetation cleared, built/fluid columns masked; `dry_run` returns before/after relief and change maps; writes are lock-checked, snapshotted and recorded as an undoable `TERRAIN_SMOOTH` build (logic in `terrain/`)
 - `SiteSurveyEndpoint` - Read-only footprint assessment (`POST /api/world/blocks/survey`): walking-plane heights, slope, water/lava/vegetation coverage, cut/fill grading suggestion, overlapping reservations and builds (logic in `survey/`)
+- `AccessCheckEndpoint` - Read-only path check (`POST /api/world/access/check`, MCP `check_access`): start → named targets (optional `via` doorway) and an optional reachability map (`build_id` or cuboid) with per-level reachable counts and unreached indoor/outdoor groups; `player` profile is our own movement search, `villager` runs vanilla `PathNodeNavigator` with an unspawned villager (no ladders). `build_id` bounds come from a `BuildLookup` set in `APIServer.initializeBuildTaskSystem` (logic in `access/`)
 - `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, undo/redo, clone, translate, preview, rail planning, and location query routes
 - `TaskExecutor` - Executes queued build tasks on the Minecraft server thread; generic `executeAsync`/`dispatch` helpers parse task data and route it to the endpoint cores
 - `RailRenderInspectionService` - Dry-run rail placement inspection used by the audit route
@@ -192,6 +193,11 @@ Top-down terrain maps for LLM site reading (`POST /api/world/blocks/heightmap/ma
 **Location**: `src/main/java/ca/waltermiller/mcpapi/survey/`
 
 `SiteSurvey` (pure measurement), `WorldSurveyTerrain` (column scans from `WORLD_SURFACE`, only already-loaded chunks, max 10,000 columns) and `SurveyOccupancy` (overlapping reservations and recorded builds). Never modifies blocks or renews locks. See `docs/site-survey.md`.
+
+#### Access Check
+**Location**: `src/main/java/ca/waltermiller/mcpapi/access/`
+
+`PlayerAccessSearch` (pure BFS over ground/climb/swim feet positions: 0.6 steps, 1.25 jumps with headroom, stairs, drops ≤3 or into water, ladders, doors per `Doors` policy, hazards avoided; reads only loaded chunks in the search box via per-column caches), `ReachabilityMap` (per-Y counts and unreached groups), `AccessCheck` (orchestration, statuses `reachable`/`unreachable`/`unknown`/`invalid_target`), `AccessRequest` (validation and search box), `WorldAccessTerrain` (server-thread `AccessCell` per block state), `VanillaAccessProbe` (villager profile). See `docs/access-check.md`.
 
 #### Build Task System
 **Location**: `src/main/java/ca/waltermiller/mcpapi/buildtask/`
@@ -275,6 +281,7 @@ DB_PASSWORD=your_password
   - `operations.py` - `get_operation` (poll an edit that came back `pending`)
   - `revisions.py` - `get_build_source`, `verify_build`, `revise_build` (recompile the recorded Starlark script with changes, or swap the schematic, and replace in place)
   - `survey.py` - `survey_site`
+  - `access.py` - `check_access` (text summary of targets, floors and unreached indoor areas)
   - `terrain.py` - `smooth_terrain` (dry-run before/after/change images plus summary)
   - `schematics.py` - Optional schematic search, tags, metadata lookup, preview images, and NBT placement orchestration
   - `starlark.py` - Optional Starlark build/preview/place, docs, examples, and script library tools
@@ -289,6 +296,7 @@ DB_PASSWORD=your_password
   - `helpers.py` - General helper utilities
   - `starlark_diagnostics.py`, `starlark_models.py` - Starlark diagnostic formatting and structured result/placement models
   - `survey_models.py` - Structured output model for `survey_site`
+  - `access_models.py` - Structured output model for `check_access`
 
 ### Optional Schematic Service Architecture
 
@@ -470,6 +478,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `BuildTaskTest`, `BoundingBoxTest`, `TaskDataValidatorTest`, `TaskDataTranslatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`, `AtomicQueueIntegrationTest` (queue atomicity, execution claims and the interrupted-execution sweep; gated behind `DB_TEST` and requires a `DB_NAME` containing `test`)
 - Area lock tests: `AreaLockServiceTest`, `AreaLockEndpointTest`
 - Site survey tests: `SiteSurveyTest`, `SiteSurveyEndpointTest`, `SurveyOccupancyTest`
+- Access check tests: `PlayerAccessSearchTest` (fake `GridTerrain`: jumps, stairs, drops, ladders, trapdoors, door policies, via, limits, map), `AccessCheckEndpointTest`
 - Terrain smoothing tests: `TerrainSmootherTest`, `TerrainRewriterTest`, `TerrainSmoothEndpointTest`
 - Preview tests: `BlockGridTest`, `IsoRendererTest`, `PaletteTest`, `TerrainHeightmapGridAdapterTest`, `TerrainMapRendererTest`, `SurfaceCategoryTest`
 - Snapshot tests: `SnapshotStoreTest`, `SnapshotRestorerTest`, `OverwriteTallyTest`, `TemplateDriftTest`, `BuildUndoEndpointTest` (incl. source/verify routes), `NBTStructureEndpointTest` (provenance/revision request validation)
@@ -488,6 +497,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_build_revisions.py` - provenance sent with placements, `get_build_source`, `verify_build`, `revise_build` (Starlark and schematic)
 - `test_area_locks.py` - Lock tools, `lock_id` forwarding (incl. multipart), concurrent calls
 - `test_survey_site.py` - `survey_site` handler
+- `test_check_access.py` - `check_access` registration, summary text and errors
 - `test_preview_heightmap.py` - `preview_heightmap` image output
 - `test_teleport_player.py` - `teleport_player` handler
 - `test_spawn_entity.py` - `spawn_entity` options schema, passenger payload conversion, tree summary and 400 messages
@@ -530,7 +540,7 @@ Minecraft uses a right-handed 3D coordinate system:
 - Optional schematic service runs on port 7080 when started
 - Optional Starlark build service runs on port 7090 when started; its artifact cache in `starlark-service-data/` is git-ignored and safe to delete (artifacts regenerate deterministically); its script library in `starlark-library/` is durable and meant to be committed
 - Database schema auto-creates on first server start
-- Design docs and OpenAPI contracts live in `docs/` (`area-locks.md`, `operations-and-queues.md`, `site-survey.md`, `terrain-smoothing.md`, `undo-and-dry-run.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
+- Design docs and OpenAPI contracts live in `docs/` (`access-check.md`, `area-locks.md`, `operations-and-queues.md`, `site-survey.md`, `terrain-smoothing.md`, `undo-and-dry-run.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
 - Mod-side environment variables beyond the DB settings: `AREA_LOCK_IDLE_SECONDS`, `BUILD_SNAPSHOT_DIR`, `BUILD_SNAPSHOT_MAX_VOLUME`
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
 - Build tasks are executed asynchronously and can be queried by location for spatial awareness

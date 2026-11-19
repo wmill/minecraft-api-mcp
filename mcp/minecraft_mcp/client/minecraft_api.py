@@ -364,6 +364,12 @@ class MinecraftAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def check_access(self, payload: dict) -> dict:
+        async with self._http_client(timeout=40.0) as client:
+            response = await client.post(f"{self.base_url}/api/world/access/check", json=payload)
+            response.raise_for_status()
+            return response.json()
+
     async def get_heightmap(
         self,
         x1: int,

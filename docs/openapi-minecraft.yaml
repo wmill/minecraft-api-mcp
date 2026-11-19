@@ -551,6 +551,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/SiteSurveyError"
 
+  /api/world/access/check:
+    post:
+      tags: [blocks]
+      summary: Check whether players can reach targets in a structure, and map reachable floors
+      operationId: checkAccess
+      description: >-
+        Read-only and untracked. Positions are feet positions; a target one block low (a floor
+        block) is adjusted up. The player profile is a breadth-first search over standing, climbing
+        and swimming positions (walk, 1.25 jump with headroom, stairs, 0.6 steps, drops of up to 3 or
+        any height into water, ladders/vines/scaffolding, doors/trapdoors/gates per the doors policy;
+        lava and damaging blocks avoided). The villager profile runs vanilla land pathfinding with an
+        unspawned villager (no ladders) and does not support map. The search stays inside the union of
+        start, targets and map padded by margin (at most 512x512 columns) and reads only loaded chunks.
+        "unknown" means the search hit max_nodes or unloaded chunks; "unreachable" with
+        no_route_exists means the reachable area was fully explored without touching the box edge.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccessCheckRequest"
+      responses:
+        "200":
+          description: Per-target status, optional reachability map and search statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessCheckResponse"
+        "400":
+          description: >-
+            Invalid request (invalid_request, map_too_large, search_box_too_large), unloaded
+            chunks holding the start, targets or map (chunks_not_loaded), or a map build_id
+            that can't be used (build_lookup_unavailable, build_not_found, build_removed, build_has_no_bounds)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteSurveyError"
+        "504":
+          description: Timed out waiting for the server thread (access_timeout)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteSurveyError"
+
   /api/world/blocks/heightmap:
     post:
       tags: [blocks]
@@ -1771,6 +1815,137 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    AccessPoint:
+      type: object
+      required: [x, y, z]
+      properties:
+        x: {type: integer}
+        y: {type: integer}
+        z: {type: integer}
+    AccessCheckRequest:
+      type: object
+      required: [start]
+      description: At least one of targets or map is required.
+      properties:
+        world: {type: string, default: "minecraft:overworld"}
+        start: {$ref: "#/components/schemas/AccessPoint"}
+        targets:
+          type: array
+          maxItems: 16
+          items:
+            type: object
+            required: [x, y, z]
+            properties:
+              name: {type: string, maxLength: 40}
+              x: {type: integer}
+              y: {type: integer}
+              z: {type: integer}
+              via:
+                $ref: "#/components/schemas/AccessPoint"
+        map:
+          type: object
+          description: "{build_id} or inclusive x1..z2; at most 256 per side and 250000 cells"
+          properties:
+            build_id: {type: string, format: uuid}
+            x1: {type: integer}
+            y1: {type: integer}
+            z1: {type: integer}
+            x2: {type: integer}
+            y2: {type: integer}
+            z2: {type: integer}
+        profile: {type: string, enum: [player, villager], default: player}
+        doors: {type: string, enum: [wooden, all, none], default: wooden}
+        max_nodes: {type: integer, minimum: 1, maximum: 200000, default: 50000}
+        margin: {type: integer, minimum: 0, maximum: 64, default: 16}
+        include_route: {type: boolean, default: false}
+    AccessCheckResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        world: {type: string}
+        profile: {type: string}
+        doors: {type: string}
+        start:
+          type: object
+          properties:
+            requested: {$ref: "#/components/schemas/AccessPoint"}
+            valid: {type: boolean}
+            position: {$ref: "#/components/schemas/AccessPoint"}
+            adjusted: {type: boolean}
+            reason: {type: string}
+            suggestion: {$ref: "#/components/schemas/AccessPoint"}
+        targets:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {type: string}
+              requested: {$ref: "#/components/schemas/AccessPoint"}
+              position: {$ref: "#/components/schemas/AccessPoint"}
+              adjusted: {type: boolean}
+              via: {$ref: "#/components/schemas/AccessPoint"}
+              status: {type: string, enum: [reachable, unreachable, unknown, invalid_target]}
+              reason:
+                type: string
+                description: >-
+                  node_limit, unloaded_chunks, no_route_within_search_box, no_route_exists,
+                  via_unreachable, target_unreachable_from_via, via_door_cannot_be_opened,
+                  no_route_within_limits (villager), invalid_target, invalid_via, invalid_start
+              search_result: {type: string}
+              route_length: {type: integer}
+              via_crossed: {type: boolean}
+              route:
+                type: array
+                maxItems: 200
+                items: {$ref: "#/components/schemas/AccessPoint"}
+              route_truncated: {type: boolean}
+              nearest_reached:
+                type: object
+                properties:
+                  position: {$ref: "#/components/schemas/AccessPoint"}
+                  distance: {type: number}
+              suggestion: {$ref: "#/components/schemas/AccessPoint"}
+        map:
+          type: object
+          properties:
+            region: {type: object, additionalProperties: {type: integer}}
+            standable: {type: integer}
+            reachable: {type: integer}
+            complete: {type: boolean}
+            floors:
+              type: array
+              maxItems: 64
+              items:
+                type: object
+                properties:
+                  y: {type: integer}
+                  standable: {type: integer}
+                  reachable: {type: integer}
+                  outdoor: {type: integer}
+                  fraction: {type: number}
+            floors_truncated: {type: boolean}
+            unreached_region_count: {type: integer}
+            unreached_regions:
+              type: array
+              maxItems: 10
+              items:
+                type: object
+                properties:
+                  cells: {type: integer}
+                  outdoor: {type: boolean}
+                  bounds: {type: object, additionalProperties: {type: integer}}
+                  sample: {$ref: "#/components/schemas/AccessPoint"}
+        search:
+          type: object
+          properties:
+            box: {type: object, additionalProperties: {type: integer}}
+            max_nodes: {type: integer}
+            expanded_nodes: {type: integer}
+            reached_positions: {type: integer}
+            node_limit_hit: {type: boolean}
+            touched_box_edge: {type: boolean}
+            touched_unloaded_chunks: {type: boolean}
+        limitations: {type: string}
     PendingOperation:
       type: object
       required: [operation_id, status, status_url]
