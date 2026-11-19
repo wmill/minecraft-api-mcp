@@ -20,6 +20,8 @@
 - `mcp/`: Python MCP server package (`minecraft_mcp`) that wraps the REST API and optional services as MCP tools; supports stdio, SSE, and streamable HTTP transports.
 - `schematic-service/`: Optional FastAPI schematic catalog/search service on port 7080. Its local catalog, converted NBT, and image metadata live in the git-ignored `schematic-service-data/` directory.
 - `starlark-service/`: Default-stack FastAPI build/cache, saved script library, and artifact preview service on port 7090. Compiler `starlark-to-nbt/` and renderer `nbt-image-gen/` are git submodules installed as editable dependencies. Follow the compiler's nested `AGENTS.md` for compiler or component-library changes. Cached artifacts live in git-ignored `starlark-service-data/`.
+- `starlark-service/starlark-to-nbt/crates/`: Rust compiler core, PyO3 binding, and native CLI. The Python package is a maturin-built API over Rust; compiler behavior changes usually belong in the Rust pipeline rather than the Python wrapper.
+- `starlark-service/starlark_service/render.py`, `previews.py`, and `preview_worker.py`: Block-state-aware isometric and orthographic rendering, lazy preview caching, and subprocess workers. These are separate from the Java live-world preview renderer.
 - `starlark-library/`: Git-tracked saved scripts, with `<name>/meta.json` and immutable `v<N>.star` versions. Never edit or delete published versions; save a new version because imports and cached artifacts depend on their contents.
 - `docs/`: OpenAPI specifications and guides for area locks, markers, site surveys, terrain smoothing, operations/queues, and undo/redo. Keep affected API documentation synchronized with behavior changes.
 - `scripts/`: PostgreSQL snapshot helpers and the disposable-server undo/redo regression harness.
@@ -37,6 +39,7 @@
 - `./gradlew runServer`: Start the dev Minecraft server with the mod loaded. `./gradlew runClient` starts a client.
 - `docker compose up -d postgres`: Start the local PostgreSQL dependency used by build-task persistence.
 - `docker compose up -d`: Start the composed services. The compose stack includes PostgreSQL, Minecraft, MCP, Starlark, nginx, and certbot.
+- After Java changes, use `./gradlew dockerCompose` to stage the current remapped jar, rebuild local images, and start services. If invoking Compose builds directly, run `./gradlew prepareDocker` first; the Minecraft image consumes `build/docker/mcpapi.jar`.
 - `docker compose --profile schematics up -d elasticsearch schematic-service`: Start schematic search and its Elasticsearch dependency.
 - `docker compose up -d starlark-service`: Start the Starlark build service.
 - Gradle Docker tasks: `./gradlew prepareDocker` stages the remapped jar; `dockerBuild`, `dockerRun`, `dockerLogs`, `dockerStop`, and `dockerCompose` support local containers. `dockerBake` builds the Bake targets and `dockerPush` publishes them; only publish when requested.
@@ -44,6 +47,7 @@
 - Schematic service: from `schematic-service/`, run `uv sync`, then `uv run schematic-service` or `uv run uvicorn schematic_service.app:app --host 0.0.0.0 --port 7080`.
 - Starlark service: initialize both submodules from the repository root with `git submodule update --init --recursive`, then from `starlark-service/` run `uv sync`, `uv run starlark-service`, and `uv run pytest`.
 - Starlark compiler/library: from `starlark-service/starlark-to-nbt/`, run `uv sync --dev` and `uv run pytest`; use `./scripts/rebuild_examples.sh` only when example artifacts need regeneration.
+- Rust compiler changes: from the compiler submodule, run `cargo test --workspace` and `cargo clippy --workspace --all-targets` as well as the relevant Python tests. `uv sync`/`uv run` rebuild the extension after Rust source changes; follow the submodule's pinned toolchain. `uv run pytest -m "not parity"` skips the native-binary golden gate when iterating; the full suite includes it.
 - Root integration smoke test: with the API running at `localhost:7070`, run `uv run ../test_api.py` from `mcp/` to use its dependencies. This script can spawn entities near online players; use a test world.
 - Python MCP tests live in `mcp/`; run `uv run pytest` from that directory or target a focused file such as `uv run pytest test_starlark_tools.py`.
 - Schematic tests: from `schematic-service/`, run `uv sync` and `uv run --with pytest pytest`; pytest is not declared in that project's dependencies.
@@ -65,9 +69,12 @@
 - Validate bounds and overflow before allocation, dispatch, or world access. Preserve the 100,000-block fill cap, 10,000-point heightmap cap, and 64-block per-dimension chunk cap; see `docs/operations-and-queues.md`.
 - Preserve area-lock authorization in world mutation paths. Follow `GuardedPlacement` and existing endpoint patterns; `force` on undo/redo must not bypass reservations. See `docs/area-locks.md`.
 - NBT dry runs must remain read-only: no chunk loading/generation or lock renewal. Snapshot capture, restoration, and build-status persistence must retain their server-thread and locking guarantees. Preserve undo/redo snapshots and pending recovery markers; see `docs/undo-and-dry-run.md`.
+- Staged Starlark placement must carry ordered stage NBTs and `stage_delay_ticks` through the service, MCP client, and Java endpoint. Dry runs use the final structure only. Preserve shared stage dimensions, the 64-stage limit, and the 1..100-tick delay range (default 2). Later stages run on server ticks; complete the operation only after they finish, and retain partial-failure reporting and undo recovery if interrupted.
 - Terrain smoothing must sample loaded chunks, plan outside the server thread, then revalidate and snapshot inside the guarded write. Preserve built/fluid masks, undo/redo recording, and rejection of execute/replay/clone for `TERRAIN_SMOOTH` builds. Heights are standing Y (first air above ground); see `docs/terrain-smoothing.md`.
 - Markers use inclusive cuboids and must remain temporary: no block edits, chunk loading, reservation acquisition/renewal, or saved entities. Clean up packet labels on expiry, removal, viewer changes, and shutdown; see `docs/area-markers.md`.
 - In Starlark geometry, coordinates use `+X` east, `+Y` up, and `+Z` south, and region maxima are exclusive. Components should draw within `min_size`; preserve the compiler's structure/carve/fixture phase ordering.
+- Starlark artifact cache keys include the component library, Python compiler sources, and the installed Rust core fingerprint. Preserve compiler cache invalidation, stage artifact cleanup/accounting, and immutable saved-library versions when changing build output.
+- Starlark previews read NBT block states to render stair facing/shape/half and slab heights. Preserve those shapes across isometric, orthographic, cutaway, and floor views. Bump `PREVIEW_VERSION` in `previews.py` when rendering changes require cached previews to regenerate; keep rendering in the bounded subprocess workflow.
 
 ## Testing Guidelines
 - Add focused JUnit tests under `src/test/java/ca/waltermiller/mcpapi`, mirroring the production package, and name tests `*Test`.
@@ -79,6 +86,8 @@
 - When touching the MCP server, validate affected tools with `uv run` from `mcp/` and keep handler schemas in sync with Java endpoint payloads.
 - When touching schematic search/catalog behavior, run the focused `schematic-service/test_*.py` tests and avoid tests that depend on the large local data directory when pure fixtures are sufficient.
 - When touching the Starlark service, run its service tests. When changing the compiler submodule or `lib/*.star`, also follow its nested `AGENTS.md` and run the relevant compiler tests, including rotation/library coverage for reusable components.
+- Staged builds span `starlark-service/test_app.py`, `test_cache.py`, `mcp/test_starlark_tools.py`, and Java `StagedPlacementTest`/`PrefabEndpointCoreTest`. Cover stage ordering, dry runs, delayed completion, interruption, and snapshot recovery in the affected layer.
+- Starlark preview changes belong in `starlark-service/test_previews.py`; preserve coverage of all stair facing/shape/half combinations, slab heights, view orientation, cutaways, stale-cache regeneration, and worker failure/timeout handling.
 - Isometric preview changes should add focused tests under `src/test/java/ca/waltermiller/mcpapi/preview`; prefer small deterministic grids over live-world tests.
 - Cover reservation, survey, and snapshot logic in their matching Java test packages and affected MCP tests (`test_area_locks.py`, `test_survey_site.py`, `test_undo_dry_run.py`).
 - Cover operation/retry behavior and queue transactions in the Java `operation`, `buildtask`, and endpoint test packages and `mcp/test_operations.py`. Keep delayed completion, idempotent retry, redaction, and shutdown coverage intact.

@@ -359,7 +359,7 @@ Compiles Starlark build scripts submitted by MCP users into placeable structure 
 - `docs.py` - focused views of the component catalog plus the `library` usage topic
 - `previews.py` - lazy per-artifact preview rendering (bounded concurrency, per-artifact lock), on-demand cut/floor variants, downscaled views and labelled tile sheets
 - `preview_worker.py` - in-subprocess render of all six views plus `meta.json` (with the chosen background), or one cut/floors variant
-- `render.py` - outlined iso renderer, cutaways, sections, floor detection, background choice (on top of nbt-image-gen's loader and palette)
+- `render.py` - outlined iso renderer, top/side views (`render_ortho`), cutaways, sections, floor detection, background choice (on top of nbt-image-gen's loader and palette); reads block states from the NBT (`load_block_states`) and draws stairs/slabs as half-block octant shapes (`stair_octants`, `slab_octants`, `refine`)
 
 **Configuration via environment variables (or `.env` in `starlark-service/`):**
 ```bash
@@ -499,7 +499,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_cache.py` - Artifact id hashing, LRU eviction, lib fingerprint
 - `test_sandbox.py` - Timeout kill, resource-limit rejections, queue-full 429
 - `test_library.py` - Save/version immutability, failed-build rejection, save by artifact id, loading saved versions, search filters
-- `test_previews.py` - Preview views/sheet, orientation, cutaways/sections/floors, cut validation, background choice, stale preview re-render, render failure/timeout 503, eviction of preview dirs
+- `test_previews.py` - Preview views/sheet, orientation, cutaways/sections/floors, cut validation, background choice, stale preview re-render, render failure/timeout 503, eviction of preview dirs, stair shapes (all facing/shape/half combinations against Minecraft's table) and slab heights
 
 **Testing Best Practices** (see TESTING.md):
 - Extract pure logic from endpoints into testable helper methods
