@@ -107,6 +107,7 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             "build_ms": int((time.monotonic() - started) * 1000),
             "entry": request.entry,
             "props": request.props,
+            "root_size": request.root_size,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             **{key: result[key] for key in
                ("size", "block_count", "entity_count", "ground_level", "y_offset",
@@ -195,6 +196,15 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         if metadata is None:
             raise HTTPException(status_code=404, detail="artifact not found (evicted or never built); rebuilding the same source yields the same id")
         return metadata
+
+    @app.get("/artifacts/{artifact_id}/source")
+    async def get_artifact_source(artifact_id: str) -> PlainTextResponse:
+        """The script an artifact was compiled from, so placements can record and revise it."""
+        identifier = valid_artifact_id(artifact_id)
+        path = cache.source_path(cfg.cache_dir, identifier)
+        if cache.load_metadata(cfg.cache_dir, identifier) is None or not path.exists():
+            raise HTTPException(status_code=404, detail="artifact source not found (evicted or never built); rebuilding the same source yields the same id")
+        return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/plain")
 
     @app.get("/artifacts/{artifact_id}/nbt")
     async def get_artifact_nbt(artifact_id: str, stage: int | None = None) -> FileResponse:

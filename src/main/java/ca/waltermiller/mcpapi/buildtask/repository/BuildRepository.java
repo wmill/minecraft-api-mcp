@@ -42,4 +42,9 @@ public interface BuildRepository {
      * Requirements: 4.1, 4.4
      */
     List<Build> findByLocationIntersection(String world, BoundingBox boundingBox) throws SQLException;
+
+    /**
+     * Builds that revised {@code parentId} in place, oldest first.
+     */
+    List<Build> findChildren(UUID parentId) throws SQLException;
 }

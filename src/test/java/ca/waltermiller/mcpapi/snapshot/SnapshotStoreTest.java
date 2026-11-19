@@ -39,6 +39,32 @@ class SnapshotStoreTest {
     }
 
     @Test
+    void templatesAndRevisionBasesAreSeparateFiles() throws Exception {
+        var store = new SnapshotStore(dir, 100);
+        UUID id = UUID.randomUUID();
+        NbtCompound undo = new NbtCompound();
+        undo.putString("marker", "undo");
+        NbtCompound template = new NbtCompound();
+        template.putString("marker", "template");
+        NbtCompound base = new NbtCompound();
+        base.putString("marker", "base");
+
+        assertThat(store.templateExists(id)).isFalse();
+        assertThat(store.baseExists(id)).isFalse();
+        store.save(id, undo);
+        store.saveTemplate(id, template);
+        store.saveBase(id, base);
+
+        assertThat(store.loadTemplate(id)).hasValueSatisfying(n -> assertThat(n.getString("marker", "")).isEqualTo("template"));
+        assertThat(store.loadBase(id)).hasValueSatisfying(n -> assertThat(n.getString("marker", "")).isEqualTo("base"));
+        assertThat(store.load(id)).hasValueSatisfying(n -> assertThat(n.getString("marker", "")).isEqualTo("undo"));
+        try (var files = Files.list(dir)) {
+            assertThat(files.map(p -> p.getFileName().toString()))
+                .containsExactlyInAnyOrder(id + ".nbt", id + ".template.nbt", id + ".base.nbt");
+        }
+    }
+
+    @Test
     void volumeCapIsInclusive() {
         var store = new SnapshotStore(dir, 27);
         assertThat(store.fits(new AreaBounds(0, 0, 0, 2, 2, 2))).isTrue();

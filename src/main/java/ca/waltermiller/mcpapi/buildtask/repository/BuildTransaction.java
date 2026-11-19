@@ -14,18 +14,34 @@ public final class BuildTransaction {
         T run(BuildRepository builds, TaskRepository tasks) throws SQLException;
     }
 
+    @FunctionalInterface
+    public interface SourceWork<T> {
+        T run(BuildRepository builds, TaskRepository tasks, BuildSourceRepository sources) throws SQLException;
+    }
+
     public static <T> T run(DatabaseConfig config, UUID id, Work<T> work) throws SQLException {
+        return runWithSources(config, id, (builds, tasks, sources) -> work.run(builds, tasks));
+    }
+
+    /**
+     * One transaction over builds, tasks and build sources. {@code id} non-null locks that build row
+     * first (404-style IllegalArgumentException when missing); null runs without a row lock.
+     */
+    public static <T> T runWithSources(DatabaseConfig config, UUID id, SourceWork<T> work) throws SQLException {
         try (Connection connection = config.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                try (var statement = connection.prepareStatement("SELECT id FROM builds WHERE id = ? FOR UPDATE")) {
-                    statement.setObject(1, id);
-                    try (var rows = statement.executeQuery()) {
-                        if (!rows.next()) throw new IllegalArgumentException("Build not found: " + id);
+                if (id != null) {
+                    try (var statement = connection.prepareStatement("SELECT id FROM builds WHERE id = ? FOR UPDATE")) {
+                        statement.setObject(1, id);
+                        try (var rows = statement.executeQuery()) {
+                            if (!rows.next()) throw new IllegalArgumentException("Build not found: " + id);
+                        }
                     }
                 }
                 T result = work.run(new PostgreSQLBuildRepository(config, connection),
-                    new PostgreSQLTaskRepository(config, connection));
+                    new PostgreSQLTaskRepository(config, connection),
+                    new PostgreSQLBuildSourceRepository(config, connection));
                 connection.commit();
                 return result;
             } catch (SQLException | RuntimeException | Error failure) {

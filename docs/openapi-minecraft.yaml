@@ -897,6 +897,22 @@ paths:
         block updates. The response arrives after the last stage (202 if that takes longer than the
         wait window). If a later stage fails or the server stops, the response is an error that
         names how many stages were placed and the build id whose undo restores the area.
+
+        Provenance: an optional `provenance` JSON field (Starlark script and props, or schematic id)
+        is stored with the recorded build (`GET /api/builds/{id}/source`). The placed template is
+        also saved beside the undo snapshot for `GET /api/builds/{id}/verify`.
+
+        Revision: `replaces_build_id` names a COMPLETED NBT placement to replace in place. On the
+        server thread, inside one area-lock check over the union of the old cuboid and the new
+        structure, the union is snapshotted (the new build's undo, which brings the old build
+        back), the old cuboid is restored to its saved terrain (the old build's undo snapshot, or
+        its own saved base if it is itself a revision), that cleared state is saved as the new
+        build's base, and the new structure is placed. If placement fails the old build is put
+        back. The new build records `parent_build_id` and the old one becomes SUPERSEDED in the
+        same transaction. Later unremoved builds overlapping the old cuboid give 409
+        `revision_conflict` unless `force=true`. The old build must be in the same world and the
+        union must fit the snapshot volume cap. A dry run with `replaces_build_id` compares the
+        new structure with the cleared terrain and adds a `revision` object.
       operationId: placeNbtStructure
       requestBody:
         required: true
@@ -910,7 +926,7 @@ paths:
         "503":
           $ref: "#/components/responses/OperationUnavailable"
         "409":
-          $ref: "#/components/responses/AreaLockConflict"
+          description: Area-lock conflict, `revision_conflict` (later builds overlap the replaced build), or the replaced build is not COMPLETED
         "200":
           description: Structure placed
           content:
@@ -1334,6 +1350,134 @@ paths:
           description: Not reverted, unresolved restore, `redo_conflict` with overlapping later builds, or an area-lock conflict
         "500":
           $ref: "#/components/responses/ServerError"
+        "503":
+          description: Snapshots are not configured
+
+  /api/builds/{id}/source:
+    get:
+      tags: [builds]
+      summary: Provenance, placement, lineage and stored snapshots of a recorded placement
+      description: |
+        Works for NBT placements and terrain smoothing in any status. `source` is null when the
+        placement sent no provenance. `revisable` is true for a COMPLETED NBT placement with
+        provenance and the terrain snapshot a revision needs.
+      operationId: getBuildSource
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: Placement record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: {type: boolean}
+                  build: {type: object}
+                  placement:
+                    type: object
+                    properties:
+                      type: {type: string, enum: [NBT_STRUCTURE, TERRAIN_SMOOTH]}
+                      filename: {type: string}
+                      origin: {$ref: "#/components/schemas/Position3D"}
+                      size: {$ref: "#/components/schemas/Position3D"}
+                      rotation: {type: string}
+                      structure_bounds: {$ref: "#/components/schemas/AreaBounds"}
+                      snapshot_bounds: {$ref: "#/components/schemas/AreaBounds"}
+                  source:
+                    type: object
+                    nullable: true
+                    description: The stored provenance fields, including `source` (script text)
+                  lineage:
+                    type: object
+                    properties:
+                      parent_build_id: {type: string, format: uuid}
+                      parent_status: {$ref: "#/components/schemas/BuildStatus"}
+                      children:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            build_id: {type: string, format: uuid}
+                            status: {$ref: "#/components/schemas/BuildStatus"}
+                            created_at: {type: string}
+                  stored:
+                    type: object
+                    properties:
+                      undo_snapshot: {type: boolean}
+                      redo_snapshot: {type: boolean}
+                      placed_template: {type: boolean}
+                      revision_base: {type: boolean}
+                  undo_available: {type: boolean}
+                  redo_available: {type: boolean}
+                  revisable: {type: boolean}
+        "400":
+          description: Not a recorded placement (a task-queue build) or malformed ID
+        "404":
+          description: Build not found
+
+  /api/builds/{id}/verify:
+    get:
+      tags: [builds]
+      summary: Compare a placement's saved template with the world
+      description: |
+        Read-only. Compares block ids (states ignored) of every template cell except structure
+        voids with the world. Never loads chunks (400 `unloaded_chunks`). Builds that are not
+        COMPLETED are still compared, with a `note`.
+      operationId: verifyBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: Drift report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: {type: boolean}
+                  build_id: {type: string, format: uuid}
+                  status: {$ref: "#/components/schemas/BuildStatus"}
+                  note: {type: string}
+                  bounds: {$ref: "#/components/schemas/AreaBounds"}
+                  rotation: {type: string}
+                  report:
+                    type: object
+                    properties:
+                      template_blocks: {type: integer}
+                      matching: {type: integer}
+                      missing: {type: integer, description: Template blocks now air}
+                      extra: {type: integer, description: Template air cells now filled}
+                      changed: {type: integer, description: A different non-air block}
+                      match_pct: {type: number}
+                      solid_template_blocks: {type: integer}
+                      solid_matching: {type: integer}
+                      solid_match_pct: {type: number}
+                      top_differences:
+                        type: array
+                        maxItems: 10
+                        items:
+                          type: object
+                          properties:
+                            expected: {type: string}
+                            found: {type: string}
+                            count: {type: integer}
+                      samples:
+                        type: array
+                        maxItems: 20
+                        items:
+                          type: object
+                          properties:
+                            x: {type: integer}
+                            y: {type: integer}
+                            z: {type: integer}
+                            expected: {type: string}
+                            found: {type: string}
+                  compared: {type: string}
+        "400":
+          description: No saved template, not an NBT structure placement, or unloaded chunks
+        "404":
+          description: Build not found
         "503":
           description: Snapshots are not configured
 
@@ -1997,7 +2141,7 @@ components:
 
     BuildStatus:
       type: string
-      enum: [CREATED, IN_PROGRESS, COMPLETED, FAILED, REVERTED]
+      enum: [CREATED, IN_PROGRESS, COMPLETED, FAILED, REVERTED, SUPERSEDED]
 
     TaskStatus:
       type: string
@@ -2931,6 +3075,22 @@ components:
           maximum: 100
           default: 2
           description: Server ticks between install stages
+        provenance:
+          type: string
+          description: >-
+            JSON object stored with the recorded build: `kind` (starlark, schematic, upload),
+            `artifact_id`, `schematic_id`, `source` (script, max 1 MiB), `entry`, `props` (object),
+            `root_size` ([x, y, z]), `y_offset` (ground offset applied), `target` ({x, y, z} as
+            requested, before the offset) and `details` (object). Unknown keys are rejected.
+        replaces_build_id:
+          type: string
+          format: uuid
+          description: COMPLETED NBT placement to revise in place (see the operation description)
+        force:
+          type: string
+          enum: ["true", "false"]
+          default: "false"
+          description: With replaces_build_id, revise even though later overlapping builds would be erased
       required: [nbt_file]
 
     NbtStructurePlaceResponse:
@@ -2973,6 +3133,31 @@ components:
         stage_delay_ticks:
           type: integer
           description: Staged placements only
+        revision:
+          $ref: "#/components/schemas/NbtRevision"
+        warning:
+          type: string
+          description: The placement succeeded but its record or revision base could not be saved
+
+    NbtRevision:
+      type: object
+      description: Present when the request had replaces_build_id
+      properties:
+        replaces_build_id: {type: string, format: uuid}
+        cleared_bounds:
+          $ref: "#/components/schemas/AreaBounds"
+        bounds:
+          $ref: "#/components/schemas/AreaBounds"
+        overwrote_later_builds: {type: integer}
+        parent_status:
+          type: string
+          enum: [SUPERSEDED]
+        vs_current:
+          type: object
+          description: Dry runs only - the overwrite tally against what stands there now
+        conflicts:
+          type: object
+          description: "Dry runs only - `{total, builds, blocking}`; blocking means a real revision would get 409 without force"
 
     NbtStructureDryRunResponse:
       type: object
@@ -3030,6 +3215,8 @@ components:
         undo_snapshot:
           type: boolean
           description: Whether a real placement would be small enough to snapshot for undo
+        revision:
+          $ref: "#/components/schemas/NbtRevision"
 
     BuildRestoreResponse:
       type: object
@@ -3054,6 +3241,12 @@ components:
           type: boolean
         message:
           type: string
+        parent_build_id:
+          type: string
+          format: uuid
+          description: Revisions only - undo brings this build back (COMPLETED), redo supersedes it again
+        parent_status:
+          $ref: "#/components/schemas/BuildStatus"
 
     BuildUndoResponse:
       allOf:

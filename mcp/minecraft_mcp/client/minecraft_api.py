@@ -7,6 +7,7 @@ Provides typed methods for each API endpoint with error handling.
 
 from .operations import OperationClient, forget_pending_key, pending_key
 import base64
+import json
 from urllib.parse import quote
 
 import httpx
@@ -722,10 +723,18 @@ class MinecraftAPIClient:
         dry_run: bool = False,
         stages: Optional[list[bytes]] = None,
         stage_delay_ticks: Optional[int] = None,
+        provenance: Optional[dict] = None,
+        replaces_build_id: Optional[str] = None,
+        force: bool = False,
     ) -> dict:
         """Place structure NBT. With `stages` (a staged build's per-stage NBTs, in
         install order), the server places them on successive ticks instead of
-        pasting `nbt_file`, which still describes the finished structure."""
+        pasting `nbt_file`, which still describes the finished structure.
+
+        `provenance` (kind, source, props, schematic_id, ...) is stored with the
+        recorded build so it can be inspected and revised later. `replaces_build_id`
+        clears that build back to its saved terrain and places this structure in
+        the same locked step; `force` lets that erase later overlapping builds."""
         data = {
             "x": x,
             "y": y,
@@ -738,6 +747,12 @@ class MinecraftAPIClient:
             data["world"] = world
         if dry_run:
             data["dry_run"] = "true"
+        if provenance:
+            data["provenance"] = json.dumps(provenance, separators=(",", ":"))
+        if replaces_build_id:
+            data["replaces_build_id"] = replaces_build_id
+        if force:
+            data["force"] = "true"
 
         files = [("nbt_file", (filename, nbt_file_data, "application/octet-stream"))]
         if stages:
@@ -1351,6 +1366,20 @@ class MinecraftAPIClient:
                 f"{self.base_url}/api/builds/{quote(build_id, safe='')}/undo",
                 json={"force": force}
             )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_build_source(self, build_id: str) -> dict:
+        """Provenance, placement, lineage and stored snapshots of a recorded placement."""
+        async with self._http_client() as client:
+            response = await client.get(f"{self.base_url}/api/builds/{quote(build_id, safe='')}/source")
+            response.raise_for_status()
+            return response.json()
+
+    async def verify_build(self, build_id: str) -> dict:
+        """Compare a placement's saved template with the world (read-only)."""
+        async with self._http_client(timeout=40.0) as client:
+            response = await client.get(f"{self.base_url}/api/builds/{quote(build_id, safe='')}/verify")
             response.raise_for_status()
             return response.json()
 

@@ -43,4 +43,18 @@ class SurveyOccupancyTest {
         assertThat(service.builds("world", bounds).total()).isNull();
         assertThat(service.builds("world", bounds).status()).isEqualTo("unavailable");
     }
+
+    @Test void removedAndExcludedBuildsAreLeftOut() throws Exception {
+        var service = new SurveyOccupancy();
+        var repository = mock(BuildRepository.class);
+        Build revised = new Build("revised", "", "world");
+        Build superseded = new Build("superseded", "", "world");
+        superseded.setStatus(ca.waltermiller.mcpapi.buildtask.model.BuildStatus.SUPERSEDED);
+        Build neighbour = new Build("neighbour", "", "world");
+        when(repository.findByLocationIntersection(eq("world"), any())).thenReturn(java.util.List.of(revised, superseded, neighbour));
+        service.setBuildRepository(repository);
+        var result = service.builds("world", new AreaBounds(0, 0, 0, 1, 1, 1), revised.getId());
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.entries().getFirst().get("name")).isEqualTo("neighbour");
+    }
 }

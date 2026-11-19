@@ -74,7 +74,12 @@ async def test_combined_placement_reuses_metadata_and_applies_offset_once(client
     service.build.assert_awaited_once_with("source", entry="build", props=None, root_size=None)
     api.place_nbt_structure_bytes.assert_awaited_once_with(
         b"nbt", BUILT["artifact_id"] + ".nbt", 10, 63 if offset else 64, 20,
-        "minecraft:overworld", "NONE", True, True, False)
+        "minecraft:overworld", "NONE", True, True, False,
+        provenance={"kind": "starlark", "artifact_id": BUILT["artifact_id"], "entry": "build", "props": {},
+                    "y_offset": -1 if offset else 0, "target": {"x": 10, "y": 64, "z": 20}, "source": "source",
+                    "details": {"apply_y_offset": offset, "library_loads": []}})
+    # The script was in hand, so it was not refetched from the service.
+    service.get_artifact_source.assert_not_called()
 
 
 async def test_standalone_placement_reuses_artifact(clients):
@@ -452,7 +457,9 @@ async def test_staged_artifact_sends_every_stage_in_order(clients):
     data = checked(result)
     args, kwargs = api.place_nbt_structure_bytes.await_args
     assert args[0] == b"final"
+    provenance = kwargs.pop("provenance")
     assert kwargs == {"stages": [b"s0", b"s1", b"s4"], "stage_delay_ticks": 3}
+    assert provenance["kind"] == "starlark" and provenance["artifact_id"] == BUILT["artifact_id"]
     assert data["placement"]["stages_placed"] == 3
     assert "Installed in 3 stages, 3 ticks apart" in result.content[0].text
 

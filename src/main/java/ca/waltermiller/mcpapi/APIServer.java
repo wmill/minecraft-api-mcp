@@ -130,7 +130,9 @@ public class APIServer {
         TaskExecutor taskExecutor = new TaskExecutor(server, locks);
         
         // Create services
-        buildService = new BuildService(buildRepository, taskRepository, taskExecutor);
+        buildService = new BuildService(buildRepository, taskRepository,
+            new ca.waltermiller.mcpapi.buildtask.repository.PostgreSQLBuildSourceRepository(databaseManager.getDatabaseConfig()),
+            taskExecutor);
         LocationQueryService locationQueryService = new LocationQueryService(buildRepository, taskRepository);
         railPlanningService = new RailPlanningService(
             buildRepository, buildService, railPlanningJobRepository, server);

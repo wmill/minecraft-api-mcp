@@ -840,6 +840,10 @@ async def _restore_build(api_client: MinecraftAPIClient, build_id: str, force: b
     if result.get("overwrote_later_builds"):
         text += f" Forced over {result['overwrote_later_builds']} later overlapping build(s)."
     text += " Entities were not changed."
+    if result.get("parent_build_id"):
+        parent, status = result["parent_build_id"], result.get("parent_status")
+        text += (f" This was a revision: build {parent} is back in the world ({status})." if status == "COMPLETED" and not redo
+                 else f" Build {parent}, which this revision replaced, is {status}.")
     if result.get("undo_available"):
         text += f' Undo with undo_build(build_id="{build_id}").'
     if result.get("redo_available"):
@@ -930,8 +934,14 @@ async def handle_query_builds_by_location(
                 response_text += f"- Created: {build.get('createdAt', 'N/A')}\n"
                 if build.get('completedAt'):
                     response_text += f"- Completed: {build['completedAt']}\n"
+                if build.get('source'):
+                    response_text += f"- Source: {source_label(build['source'])}\n"
+                if build.get('parentBuildId'):
+                    response_text += f"- Revision of: {build['parentBuildId']}\n"
                 response_text += f"- Intersecting Tasks: {len(intersecting_tasks)}\n"
                 response_text += f"- World: {build['world']}\n\n"
+            if any(b['build'].get('source') for b in builds):
+                response_text += "get_build_source shows a placement's script; revise_build changes it in place.\n"
             
             return format_success_response(response_text)
         else:
@@ -977,6 +987,10 @@ async def handle_get_build_status(
             response_text += f"- Created: {build.get('created_at', 'N/A')}\n"
             if build.get('completed_at'):
                 response_text += f"- Completed: {build['completed_at']}\n"
+            if build.get('parent_build_id'):
+                response_text += f"- Revision of: {build['parent_build_id']}\n"
+            if result.get('source'):
+                response_text += f"- Source: {source_label(result['source'])} (get_build_source shows details)\n"
 
             response_text += f"\n**Task Queue ({len(tasks)} tasks):**\n"
             if not tasks:
@@ -1022,6 +1036,16 @@ async def handle_get_build_status(
         return pending_result(pending)
     except Exception as e:
         return format_error_response(e, "getting build status")
+
+
+def source_label(source: dict) -> str:
+    """One-line provenance of a recorded placement."""
+    kind = source.get("kind")
+    if kind == "starlark":
+        return f"Starlark {source.get('artifact_id')}" + ("" if source.get("has_source", True) else " (script not recorded)")
+    if kind == "schematic":
+        return f"schematic {source.get('schematic_id')}"
+    return str(kind)
 
 
 async def handle_audit_build(

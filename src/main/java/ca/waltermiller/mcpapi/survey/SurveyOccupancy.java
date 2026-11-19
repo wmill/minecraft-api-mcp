@@ -26,12 +26,17 @@ public final class SurveyOccupancy {
     }
 
     public Overlaps builds(String world, AreaBounds bounds) {
+        return builds(world, bounds, null);
+    }
+
+    /** As {@link #builds(String, AreaBounds)}, leaving out {@code exclude} (a build being revised). */
+    public Overlaps builds(String world, AreaBounds bounds, java.util.UUID exclude) {
         var repository = builds;
         if (repository == null) return new Overlaps("unavailable", null, false, List.of());
         try {
             var matches = repository.findByLocationIntersection(world, new BoundingBox(
                 bounds.min_x(), bounds.min_y(), bounds.min_z(), bounds.max_x(), bounds.max_y(), bounds.max_z()))
-                .stream().filter(b -> b.getStatus() != BuildStatus.REVERTED).toList();
+                .stream().filter(b -> !b.getStatus().removedFromWorld() && !b.getId().equals(exclude)).toList();
             var entries = matches.stream().sorted(Comparator.comparing(b -> b.getId().toString())).limit(5)
                 .map(b -> Map.<String, Object>of("build_id", b.getId().toString(), "name", compact(b.getName()),
                     "status", b.getStatus().name())).toList();

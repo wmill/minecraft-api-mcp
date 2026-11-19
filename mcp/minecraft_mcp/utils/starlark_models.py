@@ -47,6 +47,9 @@ class PlacementResult(BaseModel):
     lock_check: dict[str, Any] | None = None
     reservations: dict[str, Any] | None = None
     builds: dict[str, Any] | None = None
+    # revise_build: the build this placement replaced in place, and its new status.
+    revision: dict[str, Any] | None = None
+    warning: str | None = None
 
 
 class StarlarkResult(BaseModel):

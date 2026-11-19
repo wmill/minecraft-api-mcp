@@ -175,6 +175,80 @@ class BuildUndoEndpointTest {
         verify(buildService, never()).markRestored(any());
     }
 
+    @Test
+    void revisionUndoChecksConflictsOverItsWholeSnapshotCuboid() throws Exception {
+        SnapshotStore store = start(true);
+        UUID id = UUID.randomUUID();
+        Build child = new Build("NBT: v2", "", "minecraft:overworld");
+        child.setId(id);
+        child.setParentBuildId(UUID.randomUUID());
+        BuildService.NbtPlacement placement = new BuildService.NbtPlacement(child, 10, 64, 20, 3, 4, 5, "NONE",
+            new BoundingBox(0, 60, 15, 14, 70, 30), ca.waltermiller.mcpapi.buildtask.model.TaskType.NBT_STRUCTURE, "v2.nbt");
+        store.save(id, new NbtCompound());
+        when(buildService.getNbtPlacement(id)).thenReturn(Optional.of(placement));
+        ArgumentCaptor<BoundingBox> box = ArgumentCaptor.forClass(BoundingBox.class);
+        when(buildService.findLaterOverlappingBuilds(eq(child), box.capture())).thenReturn(List.of(new Build("later", "")));
+
+        assertThat(undo(id, null).statusCode()).isEqualTo(409);
+        assertThat(List.of(box.getValue().getMinX(), box.getValue().getMinY(), box.getValue().getMaxZ()))
+            .containsExactly(0, 60, 30);
+    }
+
+    private HttpResponse<String> get(String path) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + path)).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void sourceReportsProvenanceLineageAndStoredSnapshots() throws Exception {
+        SnapshotStore store = start(true);
+        UUID id = UUID.randomUUID();
+        BuildService.NbtPlacement placement = placement(id);
+        placement.build().setStatus(ca.waltermiller.mcpapi.buildtask.model.BuildStatus.COMPLETED);
+        store.save(id, new NbtCompound());
+        store.saveTemplate(id, new NbtCompound());
+        Build child = new Build("NBT: v2", "", "minecraft:overworld");
+        child.setStatus(ca.waltermiller.mcpapi.buildtask.model.BuildStatus.REVERTED);
+        var provenance = ca.waltermiller.mcpapi.buildtask.model.BuildSource.fromJson(json.readTree(
+            "{\"kind\": \"starlark\", \"artifact_id\": \"slk_1\", \"source\": \"def build(): pass\", \"props\": {\"h\": 3}}"))
+            .withBuildId(id);
+        when(buildService.getPlacementRecord(id)).thenReturn(Optional.of(placement));
+        when(buildService.getSource(id)).thenReturn(Optional.of(provenance));
+        when(buildService.getChildren(id)).thenReturn(List.of(child));
+
+        HttpResponse<String> response = get("/api/builds/" + id + "/source");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode body = json.readTree(response.body());
+        assertThat(body.at("/source/source").asText()).isEqualTo("def build(): pass");
+        assertThat(body.at("/source/props/h").asInt()).isEqualTo(3);
+        assertThat(body.at("/placement/rotation").asText()).isEqualTo("CLOCKWISE_90");
+        assertThat(body.at("/placement/snapshot_bounds/min_x").asInt()).isEqualTo(6);
+        assertThat(body.at("/lineage/children/0/status").asText()).isEqualTo("REVERTED");
+        assertThat(body.at("/stored/placed_template").asBoolean()).isTrue();
+        assertThat(body.at("/stored/redo_snapshot").asBoolean()).isFalse();
+        assertThat(body.get("undo_available").asBoolean()).isTrue();
+        assertThat(body.get("revisable").asBoolean()).isTrue();
+    }
+
+    @Test
+    void sourceOfAnUnknownBuildIs404() throws Exception {
+        start(true);
+        UUID id = UUID.randomUUID();
+        when(buildService.getPlacementRecord(id)).thenReturn(Optional.empty());
+        assertThat(get("/api/builds/" + id + "/source").statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void verifyNeedsASavedTemplate() throws Exception {
+        start(true);
+        UUID id = UUID.randomUUID();
+        when(buildService.getPlacementRecord(id)).thenReturn(Optional.of(placement(id)));
+        HttpResponse<String> response = get("/api/builds/" + id + "/verify");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(json.readTree(response.body()).get("error").asText()).contains("No placed template");
+    }
+
     private HttpResponse<String> redo(UUID id) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/api/builds/" + id + "/redo"))
             .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());

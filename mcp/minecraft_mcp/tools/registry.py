@@ -9,7 +9,7 @@ from typing import Callable, Optional
 from mcp.types import CallToolResult
 
 from ..handlers import area_locks, world, blocks, messages, prefabs, builds, system, effects, schematics, starlark, survey, terrain
-from ..handlers import markers, operations
+from ..handlers import markers, operations, revisions
 
 
 # Tool handler type
@@ -77,6 +77,9 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "replay_build": builds.handle_replay_build,
     "undo_build": builds.handle_undo_build,
     "redo_build": builds.handle_redo_build,
+    "get_build_source": revisions.handle_get_build_source,
+    "verify_build": revisions.handle_verify_build,
+    "revise_build": revisions.handle_revise_build,
     "clone_build": builds.handle_clone_build,
     "query_builds_by_location": builds.handle_query_builds_by_location,
     "get_build_status": builds.handle_get_build_status,

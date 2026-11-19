@@ -82,6 +82,16 @@ final class PlacementBounds {
         return bounds;
     }
 
+    /** The cuboid a recorded placement's snapshots cover: its stored restore bounds, else the rotated structure. */
+    static AreaBounds recorded(ca.waltermiller.mcpapi.buildtask.service.BuildService.NbtPlacement placement) {
+        var box = placement.restoreBounds();
+        if (box != null) {
+            return new AreaBounds(box.getMinX(), box.getMinY(), box.getMinZ(), box.getMaxX(), box.getMaxY(), box.getMaxZ());
+        }
+        return structure(placement.x(), placement.y(), placement.z(), placement.sizeX(), placement.sizeY(),
+            placement.sizeZ(), placement.rotation());
+    }
+
     static AreaBounds structure(int x, int y, int z, int sx, int sy, int sz, String rotation) {
         if (sx <= 0 || sy <= 0 || sz <= 0) throw new IllegalArgumentException("Invalid structure size");
         int dx = sx - 1, dz = sz - 1;

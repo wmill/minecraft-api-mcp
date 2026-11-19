@@ -9,6 +9,7 @@ import net.minecraft.block.PlantBlock;
 import net.minecraft.block.SugarCaneBlock;
 import net.minecraft.block.VineBlock;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtHelper;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.BlockTags;
@@ -20,8 +21,10 @@ import net.minecraft.util.math.Vec3i;
 import net.minecraft.util.math.random.Random;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 /** World-facing snapshot helpers. Every method must run on the server thread. */
 public final class RegionSnapshot {
@@ -60,25 +63,74 @@ public final class RegionSnapshot {
      */
     public static OverwriteTally.Report scan(ServerWorld world, NbtCompound templateNbt, BlockPos pos,
                                              StructurePlacementData placement) {
-        NbtList palette = templateNbt.getList("palettes")
-            .map(palettes -> palettes.getListOrEmpty(0))
-            .orElseGet(() -> templateNbt.getListOrEmpty("palette"));
-        List<String> names = new ArrayList<>(palette.size());
-        for (int i = 0; i < palette.size(); i++) names.add(palette.getCompoundOrEmpty(i).getString("Name", "minecraft:air"));
+        return scan(world, templateNbt, pos, placement, Map.of());
+    }
 
+    /**
+     * As {@link #scan(ServerWorld, NbtCompound, BlockPos, StructurePlacementData)}, but positions in
+     * {@code overlay} read from it instead of the world: a revision previews against the terrain its
+     * predecessor's undo snapshot would restore.
+     */
+    public static OverwriteTally.Report scan(ServerWorld world, NbtCompound templateNbt, BlockPos pos,
+                                             StructurePlacementData placement, Map<BlockPos, BlockState> overlay) {
         OverwriteTally tally = new OverwriteTally();
-        templateNbt.getListOrEmpty("blocks").streamCompounds().forEach(entry -> {
-            int index = entry.getInt("state", 0);
-            String incoming = index >= 0 && index < names.size() ? names.get(index) : "minecraft:air";
-            if ("minecraft:structure_void".equals(incoming)) return;
-            NbtList local = entry.getListOrEmpty("pos");
-            BlockPos target = StructureTemplate.transform(placement,
-                new BlockPos(local.getInt(0, 0), local.getInt(1, 0), local.getInt(2, 0))).add(pos);
-            BlockState existing = world.getBlockState(target);
+        forEachBlock(templateNbt, pos, placement, (target, incoming) -> {
+            BlockState existing = overlay.getOrDefault(target, null);
+            if (existing == null) existing = world.getBlockState(target);
             tally.record(Registries.BLOCK.getId(existing.getBlock()).toString(), categorize(world, target, existing),
                 incoming, OverwriteTally.isAirId(incoming));
         });
         return tally.report();
+    }
+
+    /** How much of a placed template is still in the world; block ids only. */
+    public static TemplateDrift.Report verify(ServerWorld world, NbtCompound templateNbt, BlockPos pos,
+                                              StructurePlacementData placement) {
+        TemplateDrift drift = new TemplateDrift();
+        forEachBlock(templateNbt, pos, placement, (target, expected) -> drift.record(target.getX(), target.getY(),
+            target.getZ(), expected, Registries.BLOCK.getId(world.getBlockState(target).getBlock()).toString()));
+        return drift.report();
+    }
+
+    /** A captured snapshot's block states by world position, given the bounds it was captured from. */
+    public static Map<BlockPos, BlockState> states(NbtCompound snapshot, AreaBounds bounds) {
+        NbtList palette = firstPalette(snapshot);
+        List<BlockState> states = new ArrayList<>(palette.size());
+        for (int i = 0; i < palette.size(); i++) {
+            states.add(NbtHelper.toBlockState(Registries.BLOCK, palette.getCompoundOrEmpty(i)));
+        }
+        BlockPos origin = min(bounds);
+        Map<BlockPos, BlockState> byPos = new HashMap<>();
+        snapshot.getListOrEmpty("blocks").streamCompounds().forEach(entry -> {
+            int index = entry.getInt("state", 0);
+            if (index < 0 || index >= states.size()) return;
+            NbtList local = entry.getListOrEmpty("pos");
+            byPos.put(origin.add(local.getInt(0, 0), local.getInt(1, 0), local.getInt(2, 0)), states.get(index));
+        });
+        return byPos;
+    }
+
+    private static NbtList firstPalette(NbtCompound templateNbt) {
+        return templateNbt.getList("palettes")
+            .map(palettes -> palettes.getListOrEmpty(0))
+            .orElseGet(() -> templateNbt.getListOrEmpty("palette"));
+    }
+
+    /** Each template block's world position and block id, skipping structure voids. */
+    private static void forEachBlock(NbtCompound templateNbt, BlockPos pos, StructurePlacementData placement,
+                                     BiConsumer<BlockPos, String> visit) {
+        NbtList palette = firstPalette(templateNbt);
+        List<String> names = new ArrayList<>(palette.size());
+        for (int i = 0; i < palette.size(); i++) names.add(palette.getCompoundOrEmpty(i).getString("Name", "minecraft:air"));
+        templateNbt.getListOrEmpty("blocks").streamCompounds().forEach(entry -> {
+            int index = entry.getInt("state", 0);
+            String block = index >= 0 && index < names.size() ? names.get(index) : "minecraft:air";
+            if ("minecraft:structure_void".equals(block)) return;
+            NbtList local = entry.getListOrEmpty("pos");
+            BlockPos target = StructureTemplate.transform(placement,
+                new BlockPos(local.getInt(0, 0), local.getInt(1, 0), local.getInt(2, 0))).add(pos);
+            visit.accept(target, block);
+        });
     }
 
     static OverwriteTally.Category categorize(ServerWorld world, BlockPos pos, BlockState state) {

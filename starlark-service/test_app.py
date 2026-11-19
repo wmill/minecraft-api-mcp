@@ -84,14 +84,22 @@ def test_artifact_metadata_and_nbt_roundtrip(config):
     metadata = client.get(f"/artifacts/{identifier}").json()
     assert metadata["block_count"] == 1
 
+    assert metadata["root_size"] == [1, 1, 1]
+
     nbt = client.get(f"/artifacts/{identifier}/nbt")
     assert nbt.status_code == 200
     assert nbt.content[:2] == b"\x1f\x8b"
+
+    source = client.get(f"/artifacts/{identifier}/source")
+    assert source.status_code == 200
+    assert source.text == SIMPLE_SOURCE
 
 
 def test_missing_artifact_is_404_and_bad_id_is_400(config):
     client = client_for(config)
     assert client.get("/artifacts/slk_0123456789abcdef").status_code == 404
+    assert client.get("/artifacts/slk_0123456789abcdef/source").status_code == 404
+    assert client.get("/artifacts/slk_BAD/source").status_code == 400
     assert client.get("/artifacts/../../etc/passwd").status_code in (400, 404)
     assert client.get("/artifacts/slk_BAD").status_code == 400
 

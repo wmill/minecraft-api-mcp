@@ -20,7 +20,7 @@ import java.util.UUID;
 public class PostgreSQLBuildRepository implements BuildRepository {
     private static final Logger LOGGER = LoggerFactory.getLogger(PostgreSQLBuildRepository.class);
 
-    private static final String BUILD_COLUMNS = "id, name, description, status, created_at, completed_at, world";
+    private static final String BUILD_COLUMNS = "id, name, description, status, created_at, completed_at, world, parent_build_id";
 
     private final DatabaseConfig databaseConfig;
     
@@ -40,8 +40,8 @@ public class PostgreSQLBuildRepository implements BuildRepository {
     @Override
     public Build create(Build build) throws SQLException {
         String sql = """
-            INSERT INTO builds (id, name, description, status, created_at, completed_at, world)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO builds (id, name, description, status, created_at, completed_at, world, parent_build_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
         
         try (Connection conn = connection();
@@ -55,6 +55,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
             stmt.setTimestamp(6, build.getCompletedAt() != null ? 
                 Timestamp.from(build.getCompletedAt()) : null);
             stmt.setString(7, build.getWorld());
+            stmt.setObject(8, build.getParentBuildId());
             
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected == 0) {
@@ -136,7 +137,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
     @Override
     public List<Build> findByLocationIntersection(String world, BoundingBox boundingBox) throws SQLException {
         String sql = """
-            SELECT DISTINCT b.id, b.name, b.description, b.status, b.created_at, b.completed_at, b.world
+            SELECT DISTINCT b.id, b.name, b.description, b.status, b.created_at, b.completed_at, b.world, b.parent_build_id
             FROM builds b
             INNER JOIN build_tasks bt ON b.id = bt.build_id
             WHERE b.world = ?
@@ -162,6 +163,22 @@ public class PostgreSQLBuildRepository implements BuildRepository {
         }
     }
     
+    @Override
+    public List<Build> findChildren(UUID parentId) throws SQLException {
+        String sql = "SELECT " + BUILD_COLUMNS + " FROM builds WHERE parent_build_id = ? ORDER BY created_at ASC";
+        try (Connection conn = connection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setObject(1, parentId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                List<Build> builds = new ArrayList<>();
+                while (rs.next()) {
+                    builds.add(mapResultSetToBuild(rs));
+                }
+                return builds;
+            }
+        }
+    }
+
     private Build mapResultSetToBuild(ResultSet rs) throws SQLException {
         Build build = new Build();
         build.setId((UUID) rs.getObject("id"));
@@ -180,6 +197,7 @@ public class PostgreSQLBuildRepository implements BuildRepository {
         }
         
         build.setWorld(rs.getString("world"));
+        build.setParentBuildId((UUID) rs.getObject("parent_build_id"));
         
         return build;
     }

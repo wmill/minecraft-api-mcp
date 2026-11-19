@@ -3,7 +3,10 @@ package ca.waltermiller.mcpapi.endpoints;
 import ca.waltermiller.mcpapi.operation.OperationHttp;
 import ca.waltermiller.mcpapi.operation.OperationRegistry;
 
+import ca.waltermiller.mcpapi.buildtask.Json;
+import ca.waltermiller.mcpapi.buildtask.model.BoundingBox;
 import ca.waltermiller.mcpapi.buildtask.model.Build;
+import ca.waltermiller.mcpapi.buildtask.model.BuildSource;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import ca.waltermiller.mcpapi.arealock.AreaBounds;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
@@ -107,6 +110,29 @@ public class NBTStructureEndpoint extends APIEndpoint {
             String rotationStr = Objects.requireNonNullElse(ctx.formParam("rotation"), "NONE");
             String includeEntitiesStr = Objects.requireNonNullElse(ctx.formParam("include_entities"), "true");
             boolean dryRun = Boolean.parseBoolean(ctx.formParam("dry_run"));
+            boolean force = Boolean.parseBoolean(ctx.formParam("force"));
+
+            BuildSource provenance;
+            UUID replacesId;
+            try {
+                String provenanceJson = ctx.formParam("provenance");
+                provenance = provenanceJson == null || provenanceJson.isBlank()
+                    ? null : BuildSource.fromJson(Json.MAPPER.readTree(provenanceJson));
+                String replaces = ctx.formParam("replaces_build_id");
+                replacesId = replaces == null || replaces.isBlank() ? null : UUID.fromString(replaces.trim());
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                ctx.status(400).json(Map.of("error", "Invalid provenance JSON: " + e.getOriginalMessage()));
+                return;
+            } catch (IllegalArgumentException e) {
+                String message = java.util.Objects.toString(e.getMessage(), "invalid value");
+                ctx.status(400).json(Map.of("error", message.startsWith("provenance")
+                    ? message : "Invalid replaces_build_id: " + message));
+                return;
+            }
+            if (replacesId != null && (buildService == null || snapshots == null)) {
+                ctx.status(503).json(Map.of("error", "Revisions need the build database and undo snapshots, which are not configured"));
+                return;
+            }
 
             // Parse coordinates
             int x, y, z;
@@ -202,18 +228,42 @@ public class NBTStructureEndpoint extends APIEndpoint {
             }
 
             if (dryRun) {
-                dryRun(ctx, world, worldId, worldName, nbtCompound, pos, placementData, bounds, dimensions, rotation, lockId);
+                dryRun(ctx, world, worldKey, worldName, nbtCompound, pos, placementData, bounds, dimensions, rotation, lockId,
+                    replacesId, force);
                 return;
             }
 
             // Captured inside the lock's critical section, immediately before the write it can undo.
             AtomicReference<NbtCompound> snapshot = new AtomicReference<>();
+            // A revision's cuboid after the replaced build is cleared back to terrain.
+            AtomicReference<NbtCompound> base = new AtomicReference<>();
+            AtomicReference<AreaBounds> written = new AtomicReference<>(bounds);
             // Execute on server thread
             OperationHttp.dispatch(server::execute, () -> {
                 try {
+                    // Checked on the server thread, which also serializes undo/redo of the replaced build.
+                    Revision revision = replacesId == null ? null : prepareRevision(replacesId, worldKey, bounds);
+                    if (revision != null && !revision.conflicts().isEmpty() && !force) {
+                        future.complete(revisionConflict(revision));
+                        return;
+                    }
+                    AreaBounds writeBounds = revision == null ? bounds : revision.union();
+                    written.set(writeBounds);
                     StructureTemplate first = staged ? stageTemplates.get(0) : template;
-                    boolean success = locks.execute(worldId, bounds, lockId, () -> {
-                        if (snapshots != null && snapshots.fits(bounds)) snapshot.set(RegionSnapshot.capture(world, bounds));
+                    boolean success = locks.execute(worldId, writeBounds, lockId, () -> {
+                        if (snapshots != null && snapshots.fits(writeBounds)) snapshot.set(RegionSnapshot.capture(world, writeBounds));
+                        if (revision != null) {
+                            StructureTemplateManager manager = server.getStructureTemplateManager();
+                            if (!RegionSnapshot.restore(world, manager.createTemplate(revision.base()), revision.baseBounds())) {
+                                throw new IllegalStateException("Clearing build " + replacesId + " back to terrain failed; "
+                                    + "inspect the world before retrying");
+                            }
+                            base.set(RegionSnapshot.capture(world, writeBounds));
+                            boolean placed = first.place(world, pos, pos, placementData, Random.create(), 2);
+                            // Never leave the area cleared: put the replaced build back.
+                            if (!placed) RegionSnapshot.restore(world, manager.createTemplate(snapshot.get()), writeBounds);
+                            return placed;
+                        }
                         return first.place(world, pos, pos, placementData, Random.create(), 2);
                     }, Boolean.TRUE::equals);
 
@@ -239,16 +289,33 @@ public class NBTStructureEndpoint extends APIEndpoint {
                             response.put("stage_delay_ticks", stageDelay);
                         }
 
+                        Map<String, Object> revised = new LinkedHashMap<>();
+                        if (revision != null) {
+                            revised.put("replaces_build_id", replacesId.toString());
+                            revised.put("cleared_bounds", revision.baseBounds());
+                            revised.put("bounds", writeBounds);
+                            revised.put("overwrote_later_builds", revision.conflicts().size());
+                            response.put("revision", revised);
+                        }
+
                         if (buildService != null) {
                             try {
-                                Build recorded = buildService.recordNbtPlacement(
+                                Build recorded = buildService.recordNbtPlacement(new BuildService.PlacementRecord(
                                     filename, worldName, x, y, z,
-                                    size.getX(), size.getY(), size.getZ(), rotation.toString());
+                                    size.getX(), size.getY(), size.getZ(), rotation.toString(), provenance, replacesId,
+                                    revision == null ? null : box(writeBounds)));
                                 response.put("build_id", recorded.getId().toString());
-                            } catch (AreaLockException | IllegalArgumentException e) {
-                    future.completeExceptionally(e);
-                } catch (Exception e) {
+                                if (revision != null) {
+                                    revised.put("parent_status", "SUPERSEDED");
+                                }
+                            } catch (AreaLockException e) {
+                                future.completeExceptionally(e);
+                            } catch (Exception e) {
                                 LOGGER.warn("Failed to record NBT placement in build system: {}", e.getMessage());
+                                if (revision != null) {
+                                    response.put("warning", "The revision was placed but not recorded (" + e.getMessage()
+                                        + "); build " + replacesId + " still shows as COMPLETED and cannot be undone from here");
+                                }
                             }
                         }
 
@@ -304,11 +371,16 @@ public class NBTStructureEndpoint extends APIEndpoint {
             CompletableFuture<Map<String, Object>> persisted = future.thenApplyAsync(result -> {
                 // A staged run that stopped part-way still wrote blocks, so its snapshot is kept for undo.
                 if (Boolean.TRUE.equals(result.get("success")) || result.get("build_id") != null) {
-                    persistSnapshot(result, snapshot.get(), bounds);
+                    persistSnapshot(result, snapshot.get(), written.get());
+                    persistExtras(result, nbtCompound, base.get());
                 }
                 return result;
             }, OperationHttp.persistenceExecutor(ctx));
 
+            if (replacesId != null) {
+                respondWithStatus(ctx, persisted);
+                return;
+            }
             respond(ctx, persisted, TIMEOUT_SECONDS, "structure placement",
                 result -> !result.containsKey("error"),
                 result -> (String) result.get("error"),
@@ -359,14 +431,117 @@ public class NBTStructureEndpoint extends APIEndpoint {
         if (reason != null) response.put("undo_unavailable_reason", reason);
     }
 
+    /** Saves the placed template (for verify_build) and a revision's base terrain beside the undo snapshot. */
+    private void persistExtras(Map<String, Object> response, NbtCompound template, NbtCompound revisionBase) {
+        Object buildId = response.get("build_id");
+        if (snapshots == null || buildId == null) return;
+        UUID id = UUID.fromString(buildId.toString());
+        try {
+            snapshots.saveTemplate(id, template);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to save placed template for build {}: {}", buildId, e.getMessage());
+        }
+        if (revisionBase == null) return;
+        try {
+            snapshots.saveBase(id, revisionBase);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to save revision base for build {}: {}", buildId, e.getMessage());
+            response.put("warning", "This revision cannot itself be revised in place: its base terrain was not saved ("
+                + e.getMessage() + "). Undo still works.");
+        }
+    }
+
+    /**
+     * The build a revision replaces: its recorded cuboid, the terrain to restore there before placing
+     * the new structure, and later builds that clearing it would erase.
+     */
+    private record Revision(UUID parentId, Build parent, AreaBounds baseBounds, AreaBounds union, NbtCompound base,
+                            List<Build> conflicts) {}
+
+    private Revision prepareRevision(UUID parentId, RegistryKey<World> worldKey, AreaBounds newBounds) throws Exception {
+        BuildService.NbtPlacement placement = buildService.getRevisablePlacement(parentId)
+            .orElseThrow(() -> new IllegalArgumentException("Build not found: " + parentId));
+        Build parent = placement.build();
+        if (!worldKey.equals(WorldResolver.resolveWorldKey(parent.getWorld()))) {
+            throw new IllegalArgumentException("Build " + parentId + " is in " + parent.getWorld()
+                + "; a revision must be placed in the same world");
+        }
+        if (snapshots.pending(parentId)) {
+            throw new IllegalStateException("An earlier restore of build " + parentId + " is unresolved; inspect the world first");
+        }
+        AreaBounds baseBounds = PlacementBounds.recorded(placement);
+        // A root placement's undo snapshot is the terrain; a revision's undo snapshot holds the build it
+        // replaced, so its own base is used instead.
+        NbtCompound base = (parent.getParentBuildId() == null ? snapshots.load(parentId) : snapshots.loadBase(parentId))
+            .orElseThrow(() -> new IllegalArgumentException("Build " + parentId + " has no saved "
+                + (parent.getParentBuildId() == null ? "undo snapshot" : "revision base")
+                + ", so it cannot be revised in place; undo_build it (or clear the area) and place the new structure instead"));
+        AreaBounds union = baseBounds.union(newBounds);
+        if (!snapshots.fits(union)) {
+            throw new IllegalArgumentException("Revision area " + SnapshotStore.volume(union) + " blocks exceeds the undo snapshot limit of "
+                + snapshots.maxVolume() + "; a revision must be undoable");
+        }
+        List<Build> conflicts = buildService.findLaterOverlappingBuilds(parent, box(baseBounds));
+        return new Revision(parentId, parent, baseBounds, union, base, conflicts);
+    }
+
+    private static Map<String, Object> revisionConflict(Revision revision) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", false);
+        body.put("code", "revision_conflict");
+        body.put("error", "Later builds overlap build " + revision.parentId() + " and would be erased when it is cleared; "
+            + "pass force=true to revise anyway");
+        body.put("total", revision.conflicts().size());
+        body.put("builds", conflictList(revision.conflicts()));
+        body.put("http_status", 409);
+        return body;
+    }
+
+    private static List<Map<String, Object>> conflictList(List<Build> conflicts) {
+        return conflicts.stream().limit(5).map(b -> Map.<String, Object>of(
+            "build_id", b.getId().toString(), "name", b.getName(), "status", b.getStatus().name())).toList();
+    }
+
+    private static BoundingBox box(AreaBounds b) {
+        return new BoundingBox(b.min_x(), b.min_y(), b.min_z(), b.max_x(), b.max_y(), b.max_z());
+    }
+
+    /** Like respond(), but honours an {@code http_status} in the result and maps exceptions like build routes. */
+    private void respondWithStatus(Context ctx, CompletableFuture<Map<String, Object>> future) {
+        java.util.function.Function<Map<String, Object>, OperationRegistry.Response> mapper = result -> {
+            Map<String, Object> body = new LinkedHashMap<>(result);
+            Object status = body.remove("http_status");
+            int code = status instanceof Integer i ? i : body.containsKey("error") ? 500 : 200;
+            return new OperationRegistry.Response(code, body);
+        };
+        try {
+            if (OperationHttp.tracked(ctx)) {
+                OperationHttp.respond(ctx, future, TIMEOUT_SECONDS, mapper);
+                return;
+            }
+            OperationRegistry.Response response = mapper.apply(future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+            ctx.status(response.status()).json(response.body());
+        } catch (TimeoutException e) {
+            ctx.status(504).json(Map.of("error", "Timed out waiting for the revision; inspect the build and the world before retrying"));
+        } catch (Exception e) {
+            OperationRegistry.Response response = OperationHttp.failure(e);
+            ctx.status(response.status()).json(response.body());
+        }
+    }
+
     /** Reports what a placement would overwrite without writing blocks, renewing locks, or loading chunks. */
-    private void dryRun(Context ctx, ServerWorld world, String worldId, String worldName, NbtCompound nbt, BlockPos pos,
-                        StructurePlacementData placementData, AreaBounds bounds, Vec3i size, BlockRotation rotation,
-                        String lockId) throws Exception {
+    private void dryRun(Context ctx, ServerWorld world, RegistryKey<World> worldKey, String worldName, NbtCompound nbt,
+                        BlockPos pos, StructurePlacementData placementData, AreaBounds structureBounds, Vec3i size,
+                        BlockRotation rotation, String lockId, UUID replacesId, boolean force) throws Exception {
+        String worldId = worldKey.getValue().toString();
         CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+        AtomicReference<AreaBounds> checked = new AtomicReference<>(structureBounds);
         OperationHttp.dispatch(server::execute, () -> {
             if (future.isCancelled()) return;
             try {
+                Revision revision = replacesId == null ? null : prepareRevision(replacesId, worldKey, structureBounds);
+                AreaBounds bounds = revision == null ? structureBounds : revision.union();
+                checked.set(bounds);
                 var missing = RegionSnapshot.missingChunks(world, bounds);
                 if (!missing.isEmpty()) {
                     future.complete(Map.of("success", false, "code", "unloaded_chunks",
@@ -383,7 +558,10 @@ public class NBTStructureEndpoint extends APIEndpoint {
                     lockCheck.remove("success");
                     lockCheck.put("ok", false);
                 }
-                OverwriteTally.Report overwrite = RegionSnapshot.scan(world, nbt, pos, placementData);
+                // A revision is compared with the terrain its predecessor will be cleared back to.
+                OverwriteTally.Report overwrite = revision == null
+                    ? RegionSnapshot.scan(world, nbt, pos, placementData)
+                    : RegionSnapshot.scan(world, nbt, pos, placementData, RegionSnapshot.states(revision.base(), revision.baseBounds()));
                 Map<String, Object> response = new LinkedHashMap<>();
                 response.put("success", true);
                 response.put("dry_run", true);
@@ -391,8 +569,19 @@ public class NBTStructureEndpoint extends APIEndpoint {
                 response.put("position", Map.of("x", pos.getX(), "y", pos.getY(), "z", pos.getZ()));
                 response.put("rotation", rotation.toString());
                 response.put("structure_size", Map.of("x", size.getX(), "y", size.getY(), "z", size.getZ()));
-                response.put("bounds", bounds);
+                response.put("bounds", structureBounds);
                 response.put("overwrite", overwrite);
+                if (revision != null) {
+                    Map<String, Object> revised = new LinkedHashMap<>();
+                    revised.put("replaces_build_id", replacesId.toString());
+                    revised.put("cleared_bounds", revision.baseBounds());
+                    revised.put("bounds", bounds);
+                    // How the new structure differs from what stands there now (mostly the old build).
+                    revised.put("vs_current", RegionSnapshot.scan(world, nbt, pos, placementData));
+                    revised.put("conflicts", Map.of("total", revision.conflicts().size(),
+                        "builds", conflictList(revision.conflicts()), "blocking", !force && !revision.conflicts().isEmpty()));
+                    response.put("revision", revised);
+                }
                 response.put("lock_check", lockCheck);
                 response.put("reservations", SurveyOccupancy.reservations(locks, worldId, bounds));
                 response.put("undo_snapshot", snapshots != null && snapshots.fits(bounds));
@@ -409,6 +598,11 @@ public class NBTStructureEndpoint extends APIEndpoint {
             ctx.status(504).json(Map.of("success", false, "code", "dry_run_timeout", "error", "Timed out waiting for dry run"));
             return;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof IllegalArgumentException || e.getCause() instanceof IllegalStateException) {
+                OperationRegistry.Response response = OperationHttp.failure(e.getCause());
+                ctx.status(response.status()).json(response.body());
+                return;
+            }
             LOGGER.error("Error during NBT dry run: ", e.getCause());
             ctx.status(500).json(Map.of("error", "Exception during dry run: " + e.getCause().getMessage()));
             return;
@@ -417,7 +611,7 @@ public class NBTStructureEndpoint extends APIEndpoint {
             ctx.status(400).json(result);
             return;
         }
-        if (occupancy != null) result.put("builds", occupancy.builds(worldName, bounds));
+        if (occupancy != null) result.put("builds", occupancy.builds(worldName, checked.get(), replacesId));
         ctx.json(result);
     }
 }

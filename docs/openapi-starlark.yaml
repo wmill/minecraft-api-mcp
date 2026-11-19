@@ -94,6 +94,28 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /artifacts/{artifact_id}/source:
+    get:
+      summary: The Starlark script an artifact was compiled from
+      description: >-
+        Evicted with the artifact. MCP placement tools record it with the placed build so the
+        mod can show and revise it later.
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema: {type: string, pattern: "^slk_[0-9a-f]{16}$"}
+      responses:
+        "200":
+          description: Script source
+          content:
+            text/plain:
+              schema: {type: string}
+        "400":
+          description: Malformed artifact id
+        "404":
+          description: Artifact not found (evicted or never built)
+
   /artifacts/{artifact_id}/nbt:
     get:
       tags: [artifacts]

@@ -3,6 +3,7 @@ package ca.waltermiller.mcpapi.buildtask.service;
 import ca.waltermiller.mcpapi.buildtask.Json;
 import ca.waltermiller.mcpapi.buildtask.model.*;
 import ca.waltermiller.mcpapi.buildtask.repository.BuildRepository;
+import ca.waltermiller.mcpapi.buildtask.repository.BuildSourceRepository;
 import ca.waltermiller.mcpapi.buildtask.repository.TaskRepository;
 import ca.waltermiller.mcpapi.endpoints.TaskExecutor;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -32,20 +33,29 @@ public class BuildService {
     
     private final BuildRepository buildRepository;
     private final TaskRepository taskRepository;
+    private final BuildSourceRepository sourceRepository;
     private final TaskExecutor taskExecutor;
     private final ExecutorService executorService;
     private volatile boolean stopping;
     private final java.util.Set<CompletableFuture<?>> executions = new HashSet<>();
 
     public BuildService(BuildRepository buildRepository, TaskRepository taskRepository, TaskExecutor taskExecutor) {
-        this(buildRepository, taskRepository, taskExecutor, Executors.newCachedThreadPool(), false);
+        this(buildRepository, taskRepository, null, taskExecutor);
+    }
+
+    /** {@code sourceRepository} null disables placement provenance (placements are still recorded). */
+    public BuildService(BuildRepository buildRepository, TaskRepository taskRepository,
+                        BuildSourceRepository sourceRepository, TaskExecutor taskExecutor) {
+        this(buildRepository, taskRepository, sourceRepository, taskExecutor, Executors.newCachedThreadPool(), false);
     }
     private final boolean inTransaction;
-    private BuildService(BuildRepository buildRepository, TaskRepository taskRepository, TaskExecutor taskExecutor,
+    private BuildService(BuildRepository buildRepository, TaskRepository taskRepository,
+                         BuildSourceRepository sourceRepository, TaskExecutor taskExecutor,
                          ExecutorService executor, boolean inTransaction) {
         this.inTransaction = inTransaction;
         this.buildRepository = buildRepository;
         this.taskRepository = taskRepository;
+        this.sourceRepository = sourceRepository;
         this.taskExecutor = taskExecutor;
         this.executorService = executor;
     }
@@ -56,7 +66,7 @@ public class BuildService {
         if (stopping) throw new ca.waltermiller.mcpapi.operation.OperationRegistry.Failure(503, "Build service is stopping");
         if (buildRepository instanceof PostgreSQLBuildRepository postgres) {
             return BuildTransaction.run(postgres.databaseConfig(), buildId,
-                (builds, tasks) -> change.run(new BuildService(builds, tasks, taskExecutor, executorService, true)));
+                (builds, tasks) -> change.run(new BuildService(builds, tasks, null, taskExecutor, executorService, true)));
         }
         synchronized (this) { return change.run(this); }
     }
@@ -83,28 +93,82 @@ public class BuildService {
     }
 
     /**
+     * A completed NBT placement to record. {@code provenance} (nullable) says where it came from;
+     * {@code parentId} (nullable) is the build it replaced in place, which becomes SUPERSEDED in the
+     * same transaction; {@code restoreBounds} (nullable) is the cuboid its undo snapshot covers when
+     * that is larger than the structure (a revision snapshots the union of old and new bounds).
+     */
+    public record PlacementRecord(String filename, String world, int x, int y, int z, int sizeX, int sizeY, int sizeZ,
+                                  String rotation, BuildSource provenance, UUID parentId, BoundingBox restoreBounds) {
+        public PlacementRecord(String filename, String world, int x, int y, int z, int sizeX, int sizeY, int sizeZ,
+                               String rotation) {
+            this(filename, world, x, y, z, sizeX, sizeY, sizeZ, rotation, null, null, null);
+        }
+    }
+
+    /**
      * Records a completed NBT structure placement as a build entry for spatial awareness.
      * The build and its single task are immediately marked COMPLETED — no execution needed.
      */
     public Build recordNbtPlacement(String filename, String world, int x, int y, int z,
                                     int sizeX, int sizeY, int sizeZ, String rotation) throws SQLException {
-        Build build = new Build("NBT: " + filename, "Auto-recorded NBT structure placement", world);
+        return recordNbtPlacement(new PlacementRecord(filename, world, x, y, z, sizeX, sizeY, sizeZ, rotation));
+    }
+
+    public Build recordNbtPlacement(PlacementRecord record) throws SQLException {
+        if (!inTransaction && buildRepository instanceof PostgreSQLBuildRepository postgres) {
+            return BuildTransaction.runWithSources(postgres.databaseConfig(), record.parentId(),
+                (builds, tasks, sources) -> new BuildService(builds, tasks, sources, taskExecutor, executorService, true)
+                    .recordPlacement(record));
+        }
+        synchronized (this) { return recordPlacement(record); }
+    }
+
+    private Build recordPlacement(PlacementRecord record) throws SQLException {
+        Build parent = null;
+        if (record.parentId() != null) {
+            parent = buildRepository.findById(record.parentId())
+                .orElseThrow(() -> new IllegalArgumentException("Build not found: " + record.parentId()));
+            if (parent.getStatus() != BuildStatus.COMPLETED) {
+                throw new IllegalStateException("Build " + parent.getId() + " is " + parent.getStatus() + ", not COMPLETED");
+            }
+        }
+        String filename = record.filename();
+        Build build = new Build("NBT: " + filename,
+            parent == null ? "Auto-recorded NBT structure placement" : "Revision of build " + parent.getId(), record.world());
+        build.setParentBuildId(record.parentId());
         Build savedBuild = buildRepository.create(build);
 
         ObjectNode taskData = Json.MAPPER.createObjectNode()
-            .put("x", x).put("y", y).put("z", z)
-            .put("size_x", sizeX).put("size_y", sizeY).put("size_z", sizeZ)
-            .put("filename", filename).put("rotation", rotation);
+            .put("x", record.x()).put("y", record.y()).put("z", record.z())
+            .put("size_x", record.sizeX()).put("size_y", record.sizeY()).put("size_z", record.sizeZ())
+            .put("filename", filename).put("rotation", record.rotation());
+        if (record.restoreBounds() != null) {
+            BoundingBox box = record.restoreBounds();
+            taskData.set("restore_bounds", Json.MAPPER.createObjectNode()
+                .put("min_x", box.getMinX()).put("min_y", box.getMinY()).put("min_z", box.getMinZ())
+                .put("max_x", box.getMaxX()).put("max_y", box.getMaxY()).put("max_z", box.getMaxZ()));
+        }
 
         BuildTask task = new BuildTask(savedBuild.getId(), 0, TaskType.NBT_STRUCTURE, taskData,
-            "NBT structure placement");
+            parent == null ? "NBT structure placement" : "NBT structure revision");
         task.markCompleted();
         taskRepository.create(task);
 
+        if (record.provenance() != null) {
+            if (sourceRepository != null) sourceRepository.create(record.provenance().withBuildId(savedBuild.getId()));
+            else LOGGER.warn("Placement provenance for build {} dropped: no source repository", savedBuild.getId());
+        }
+
         savedBuild.setStatus(BuildStatus.COMPLETED);
         buildRepository.update(savedBuild);
+        if (parent != null) {
+            parent.setStatus(BuildStatus.SUPERSEDED);
+            buildRepository.update(parent);
+        }
 
-        LOGGER.info("Recorded NBT placement '{}' at ({},{},{}) as build {}", filename, x, y, z, savedBuild.getId());
+        LOGGER.info("Recorded NBT placement '{}' at ({},{},{}) as build {}{}", filename, record.x(), record.y(), record.z(),
+            savedBuild.getId(), parent == null ? "" : " (revision of " + parent.getId() + ")");
         return savedBuild;
     }
 
@@ -142,7 +206,12 @@ public class BuildService {
     }
 
     /** Where a recorded NBT placement was written, as needed to rebuild its bounds. */
-    public record NbtPlacement(Build build, int x, int y, int z, int sizeX, int sizeY, int sizeZ, String rotation) {}
+    public record NbtPlacement(Build build, int x, int y, int z, int sizeX, int sizeY, int sizeZ, String rotation,
+                               BoundingBox restoreBounds, TaskType type, String filename) {
+        public NbtPlacement(Build build, int x, int y, int z, int sizeX, int sizeY, int sizeZ, String rotation) {
+            this(build, x, y, z, sizeX, sizeY, sizeZ, rotation, null, TaskType.NBT_STRUCTURE, null);
+        }
+    }
 
     /**
      * Loads the single NBT_STRUCTURE or TERRAIN_SMOOTH task of an auto-recorded placement. Empty when the build does not exist;
@@ -156,23 +225,80 @@ public class BuildService {
         Optional<Build> found = getBuild(buildId);
         if (found.isEmpty()) return Optional.empty();
         Build build = found.get();
+        if (build.getStatus() == BuildStatus.SUPERSEDED) {
+            throw new IllegalStateException("Build " + buildId + " was replaced by revision " + activeChildText(buildId)
+                + "; undo_build that revision to bring this build back");
+        }
         if (!redo && build.getStatus() == BuildStatus.REVERTED) {
             throw new IllegalStateException("Build " + buildId + " has already been reverted");
         }
         if (redo && build.getStatus() != BuildStatus.REVERTED) {
             throw new IllegalStateException("Only reverted builds can be redone");
         }
-        List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(buildId);
+        return Optional.of(readPlacement(build));
+    }
+
+    /** The recorded placement whatever its status; empty when the build does not exist. */
+    public Optional<NbtPlacement> getPlacementRecord(UUID buildId) throws SQLException {
+        Optional<Build> found = getBuild(buildId);
+        if (found.isEmpty()) return Optional.empty();
+        return Optional.of(readPlacement(found.get()));
+    }
+
+    private NbtPlacement readPlacement(Build build) throws SQLException {
+        List<BuildTask> tasks = taskRepository.findByBuildIdOrdered(build.getId());
         if (tasks.size() != 1 || !isSnapshotOnly(tasks.get(0).getTaskType())) {
-            throw new IllegalArgumentException("Only NBT structure placements and terrain smoothing can be undone");
+            throw new IllegalArgumentException("Only NBT structure placements and terrain smoothing have placement records "
+                + "(undo, redo, source, verify, revise); build " + build.getId() + " is a task-queue build");
         }
         JsonNode data = tasks.get(0).getTaskData();
         for (String field : new String[] {"x", "y", "z", "size_x", "size_y", "size_z"}) {
             if (!data.path(field).isInt()) throw new IllegalArgumentException("NBT placement record is missing " + field);
         }
-        return Optional.of(new NbtPlacement(build, data.get("x").intValue(), data.get("y").intValue(), data.get("z").intValue(),
+        JsonNode restore = data.path("restore_bounds");
+        BoundingBox restoreBounds = restore.isObject() ? new BoundingBox(restore.path("min_x").intValue(),
+            restore.path("min_y").intValue(), restore.path("min_z").intValue(), restore.path("max_x").intValue(),
+            restore.path("max_y").intValue(), restore.path("max_z").intValue()) : null;
+        return new NbtPlacement(build, data.get("x").intValue(), data.get("y").intValue(), data.get("z").intValue(),
             data.get("size_x").intValue(), data.get("size_y").intValue(), data.get("size_z").intValue(),
-            data.path("rotation").asText("NONE")));
+            data.path("rotation").asText("NONE"), restoreBounds, tasks.get(0).getTaskType(),
+            data.path("filename").asText(null));
+    }
+
+    /**
+     * The placement a revision would replace: a COMPLETED NBT structure placement (not terrain smoothing).
+     * Empty when the build does not exist.
+     */
+    public Optional<NbtPlacement> getRevisablePlacement(UUID buildId) throws SQLException {
+        Optional<NbtPlacement> found = getNbtPlacement(buildId);
+        if (found.isEmpty()) return found;
+        NbtPlacement placement = found.get();
+        if (placement.type() != TaskType.NBT_STRUCTURE) {
+            throw new IllegalArgumentException("Only NBT structure placements can be revised");
+        }
+        if (placement.build().getStatus() != BuildStatus.COMPLETED) {
+            throw new IllegalStateException("Build " + buildId + " is " + placement.build().getStatus() + "; only COMPLETED placements can be revised");
+        }
+        return found;
+    }
+
+    private String activeChildText(UUID buildId) throws SQLException {
+        return buildRepository.findChildren(buildId).stream()
+            .filter(child -> !child.getStatus().removedFromWorld())
+            .map(child -> child.getId().toString()).reduce((a, b) -> b).orElse("(unknown)");
+    }
+
+    public List<Build> getChildren(UUID buildId) throws SQLException {
+        return buildRepository.findChildren(buildId);
+    }
+
+    public Optional<BuildSource> getSource(UUID buildId) throws SQLException {
+        return sourceRepository == null ? Optional.empty() : sourceRepository.findByBuildId(buildId);
+    }
+
+    /** Provenance summaries (no source text) for list views; empty when provenance is not configured. */
+    public java.util.Map<UUID, BuildSource> getSourceSummaries(java.util.Collection<UUID> buildIds) throws SQLException {
+        return sourceRepository == null ? java.util.Map.of() : sourceRepository.findSummaries(buildIds);
     }
 
     private void requireNotReverted(Build build) {
@@ -180,26 +306,57 @@ public class BuildService {
         if (build.getStatus() == BuildStatus.REVERTED) {
             throw new IllegalStateException("Cannot edit a reverted build's placement history; use redo_build or create a new build");
         }
+        if (build.getStatus() == BuildStatus.SUPERSEDED) {
+            throw new IllegalStateException("Cannot edit a build that was replaced by a revision");
+        }
     }
 
     /** Unreverted builds created after {@code build} whose recorded tasks intersect {@code box}. */
     public List<Build> findLaterOverlappingBuilds(Build build, BoundingBox box) throws SQLException {
         return buildRepository.findByLocationIntersection(build.getWorld(), box).stream()
             .filter(other -> !other.getId().equals(build.getId()))
-            .filter(other -> other.getStatus() != BuildStatus.REVERTED)
+            .filter(other -> !other.getStatus().removedFromWorld())
             .filter(other -> other.getCreatedAt() != null && build.getCreatedAt() != null
                 && other.getCreatedAt().isAfter(build.getCreatedAt()))
             .toList();
     }
 
+    /**
+     * Undo committed. A revision's parent is back in the world (the revision's undo snapshot is the
+     * parent's placed state), so it returns to COMPLETED unless another revision of it is still active.
+     */
     public Build markReverted(Build build) throws SQLException {
-        build.setStatus(BuildStatus.REVERTED);
-        return buildRepository.update(build);
+        return lineageChange(build, BuildStatus.REVERTED);
     }
 
+    /** Redo committed. A redone revision supersedes its parent again. */
     public Build markRestored(Build build) throws SQLException {
-        build.setStatus(BuildStatus.COMPLETED);
-        return buildRepository.update(build);
+        return lineageChange(build, BuildStatus.COMPLETED);
+    }
+
+    private Build lineageChange(Build build, BuildStatus status) throws SQLException {
+        if (build.getParentBuildId() != null && !inTransaction && buildRepository instanceof PostgreSQLBuildRepository) {
+            return transaction(build.getId(), service -> service.lineageChange(build, status));
+        }
+        build.setStatus(status);
+        buildRepository.update(build);
+        UUID parentId = build.getParentBuildId();
+        if (parentId == null) return build;
+        Optional<Build> found = buildRepository.findById(parentId);
+        if (found.isEmpty()) return build;
+        Build parent = found.get();
+        if (status == BuildStatus.REVERTED && parent.getStatus() == BuildStatus.SUPERSEDED) {
+            boolean otherActive = buildRepository.findChildren(parentId).stream()
+                .anyMatch(child -> !child.getId().equals(build.getId()) && !child.getStatus().removedFromWorld());
+            if (!otherActive) {
+                parent.setStatus(BuildStatus.COMPLETED);
+                buildRepository.update(parent);
+            }
+        } else if (status == BuildStatus.COMPLETED && parent.getStatus() == BuildStatus.COMPLETED) {
+            parent.setStatus(BuildStatus.SUPERSEDED);
+            buildRepository.update(parent);
+        }
+        return build;
     }
 
     /** Reject unsupported operations before an endpoint reports asynchronous acceptance. */
@@ -210,7 +367,7 @@ public class BuildService {
     }
 
     private void validateTaskExecution(Build build, List<BuildTask> tasks, boolean replay) {
-        if (build.getStatus() == BuildStatus.REVERTED
+        if (build.getStatus().removedFromWorld()
             || tasks.stream().anyMatch(task -> isSnapshotOnly(task.getTaskType()))) {
             throw new IllegalStateException("NBT placements and terrain smoothing cannot be executed or replayed; use redo_build after undo_build");
         }

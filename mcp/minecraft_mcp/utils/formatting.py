@@ -78,6 +78,21 @@ def format_dry_run(result: dict) -> str:
             lines.append(f"{label}: {group['total']} ({names}).")
     if result.get("undo_snapshot") is False:
         lines.append("Note: this placement is too large for an undo snapshot.")
+    revision = result.get("revision")
+    if revision:
+        c = revision.get("cleared_bounds") or {}
+        lines.append(f"Revision of build {revision.get('replaces_build_id')}: it is first cleared back to its saved terrain "
+                     f"over ({c.get('min_x')}, {c.get('min_y')}, {c.get('min_z')}) to ({c.get('max_x')}, {c.get('max_y')}, "
+                     f"{c.get('max_z')}); the counts above compare with that terrain.")
+        current = revision.get("vs_current") or {}
+        if current:
+            lines.append(f"Compared with what stands there now: {current.get('unchanged', 0)} blocks stay the same, "
+                         f"{current.get('replaced', 0)} change, {current.get('placed_into_air', 0)} fill air.")
+        conflicts = revision.get("conflicts") or {}
+        if conflicts.get("total"):
+            names = ", ".join(f"{b.get('build_id')} ({b.get('name')})" for b in conflicts.get("builds", []))
+            lines.append(f"Later builds overlapping it would be erased: {conflicts['total']} ({names})."
+                         + (" The revision will be refused unless force=true." if conflicts.get("blocking") else ""))
     return "\n".join(lines)
 
 

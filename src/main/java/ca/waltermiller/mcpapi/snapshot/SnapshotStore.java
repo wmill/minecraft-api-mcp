@@ -50,8 +50,11 @@ public final class SnapshotStore {
     }
 
     public void save(UUID buildId, boolean redo, NbtCompound snapshot) throws IOException {
+        write(buildId, path(buildId, redo), snapshot);
+    }
+
+    private void write(UUID buildId, Path target, NbtCompound snapshot) throws IOException {
         Files.createDirectories(dir);
-        Path target = path(buildId, redo);
         Path temp = Files.createTempFile(dir, buildId + ".", ".tmp");
         try {
             NbtIo.writeCompressed(snapshot, temp);
@@ -65,14 +68,58 @@ public final class SnapshotStore {
         }
     }
 
+    /**
+     * The structure as placed (before rotation, as uploaded), kept so verification and revision
+     * still work after the source artifact is evicted from its compiler cache.
+     */
+    public void saveTemplate(UUID buildId, NbtCompound template) throws IOException {
+        write(buildId, templatePath(buildId), template);
+    }
+
+    public Optional<NbtCompound> loadTemplate(UUID buildId) throws IOException {
+        return read(templatePath(buildId));
+    }
+
+    public boolean templateExists(UUID buildId) {
+        return Files.isRegularFile(templatePath(buildId));
+    }
+
+    private Path templatePath(UUID buildId) {
+        return dir.resolve(buildId + ".template.nbt");
+    }
+
+    /**
+     * A revision's base: its cuboid after the replaced build was cleared back to terrain and before
+     * the revision was placed. Revising the revision again restores this, not its undo snapshot
+     * (which holds the replaced build). Root placements have no base; their undo snapshot is the terrain.
+     */
+    public void saveBase(UUID buildId, NbtCompound base) throws IOException {
+        write(buildId, basePath(buildId), base);
+    }
+
+    public Optional<NbtCompound> loadBase(UUID buildId) throws IOException {
+        return read(basePath(buildId));
+    }
+
+    public boolean baseExists(UUID buildId) {
+        return Files.isRegularFile(basePath(buildId));
+    }
+
+    private Path basePath(UUID buildId) {
+        return dir.resolve(buildId + ".base.nbt");
+    }
+
+    private static Optional<NbtCompound> read(Path file) throws IOException {
+        if (!Files.isRegularFile(file)) return Optional.empty();
+        return Optional.of(NbtIo.readCompressed(file, NbtSizeTracker.ofUnlimitedBytes()));
+    }
+
     public Optional<NbtCompound> load(UUID buildId) throws IOException {
         return load(buildId, false);
     }
 
     public Optional<NbtCompound> load(UUID buildId, boolean redo) throws IOException {
-        Path file = path(buildId, redo);
-        if (!Files.isRegularFile(file)) return Optional.empty();
-        return Optional.of(NbtIo.readCompressed(file, NbtSizeTracker.ofUnlimitedBytes()));
+        return read(path(buildId, redo));
     }
 
     public boolean exists(UUID buildId) {

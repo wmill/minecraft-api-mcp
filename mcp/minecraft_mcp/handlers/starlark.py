@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..client.operations import PendingOperation, pending_result
 
 import base64
+import re
 from typing import Any
 
 import httpx
@@ -77,13 +78,57 @@ def _build_summary(result: dict[str, Any]) -> str:
                " (placement installs them in order)." if result.get("stages") else ""))
 
 
+LIBRARY_LOAD = re.compile(r"""load\(\s*["']\.\./library/([A-Za-z0-9_.-]+)/v(\d+)\.star["']""")
+
+
+def library_loads(source: str | None) -> list[str]:
+    """Saved library versions a script loads, as name@N."""
+    return sorted({f"{name}@{version}" for name, version in LIBRARY_LOAD.findall(source or "")})
+
+
+def starlark_provenance(metadata: dict[str, Any], source: str | None, request: dict[str, Any],
+                        requested: dict[str, int], applied_offset: int, apply_y_offset: bool) -> dict[str, Any]:
+    """What the mod records with the build so revise_build can recompile it later."""
+    provenance: dict[str, Any] = {
+        "kind": "starlark", "artifact_id": metadata["artifact_id"], "entry": request.get("entry") or "build",
+        "props": request.get("props") or {}, "y_offset": applied_offset, "target": requested,
+        "details": {"apply_y_offset": apply_y_offset, "library_loads": library_loads(source)},
+    }
+    if request.get("root_size") is not None:
+        provenance["root_size"] = request["root_size"]
+    if source is not None:
+        provenance["source"] = source
+    return provenance
+
+
+def revision_conflict(exc: Exception) -> dict[str, Any] | None:
+    """The 409 body of a revision refused because later builds overlap the replaced build."""
+    if not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code != 409:
+        return None
+    try:
+        body = exc.response.json()
+    except ValueError:
+        return None
+    return body if isinstance(body, dict) and body.get("code") == "revision_conflict" else None
+
+
+def revision_conflict_text(body: dict[str, Any]) -> str:
+    names = ", ".join(f"{b.get('build_id')} ({b.get('name')})" for b in body.get("builds", []))
+    return f"{body.get('error')} Overlapping: {body.get('total')} ({names})."
+
+
 async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
-                 metadata: dict[str, Any], placement: Placement) -> CallToolResult:
+                 metadata: dict[str, Any], placement: Placement, *, source: str | None = None,
+                 request: dict[str, Any] | None = None, replaces_build_id: str | None = None,
+                 force: bool = False) -> CallToolResult:
+    """Place a compiled artifact. `source`/`request` (entry, props, root_size) are recorded as the
+    build's provenance; without `source` it is fetched from the service (best effort)."""
     artifact_id = metadata["artifact_id"]
     requested = {key: getattr(placement, key) for key in ("x", "y", "z")}
     position = {**requested, "y": placement.y + (metadata.get("y_offset", 0) if placement.apply_y_offset else 0)}
     outcome = {"status": "failed", "requested_position": requested, "position": position,
                "world": placement.world, "rotation": placement.rotation}
+    retry_tool = "revise_build" if replaces_build_id else "place_starlark_structure"
     # A staged build is placed stage by stage; a dry run only needs the finished structure.
     stage_ids = [] if placement.dry_run else [s["stage"] for s in metadata.get("stages") or []]
     try:
@@ -93,11 +138,25 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
         return pending_result(pending)
     except Exception as exc:
         return _service_error(exc, artifact_id=artifact_id, placement=outcome)
+    provenance = None
+    if not placement.dry_run:
+        if source is None:
+            try:
+                fetched = await client.get_artifact_source(artifact_id)
+            except Exception:
+                fetched = None
+            # Without it the build is still recorded by artifact id; the script just cannot be shown or revised.
+            source = fetched if isinstance(fetched, str) else None
+        provenance = starlark_provenance(
+            metadata, source, request if request is not None else metadata, requested,
+            position["y"] - requested["y"], placement.apply_y_offset)
     try:
         result = await api_client.place_nbt_structure_bytes(
             nbt, f"{artifact_id}.nbt", position["x"], position["y"], position["z"],
             placement.world, placement.rotation, placement.include_entities, True, placement.dry_run,
-            **({"stages": stages, "stage_delay_ticks": metadata.get("stage_delay_ticks")} if stages else {}))
+            **({"stages": stages, "stage_delay_ticks": metadata.get("stage_delay_ticks")} if stages else {}),
+            **({"provenance": provenance} if provenance else {}),
+            **({"replaces_build_id": replaces_build_id, "force": force} if replaces_build_id else {}))
     except PendingOperation as pending:
         return pending_result(pending)
     except Exception as exc:
@@ -107,35 +166,57 @@ async def _place(api_client: MinecraftAPIClient, client: StarlarkServiceClient,
             return _failure(conflict["code"], conflict["error"],
                             "Keep the original build location. Explicitly renew, resize, or coordinate the reservation before retrying; never omit lock_id to bypass the error.",
                             artifact_id=artifact_id, placement=outcome, lock_error=conflict)
+        overlap = revision_conflict(exc)
+        if overlap is not None:
+            return _failure("revision_conflict", revision_conflict_text(overlap),
+                            "Nothing was changed. Check the overlapping builds; pass force=true only if erasing them is intended.",
+                            artifact_id=artifact_id, placement=outcome)
         rejected = (isinstance(exc, httpx.HTTPStatusError)
                     and 400 <= exc.response.status_code < 500 and exc.response.status_code != 408)
         outcome["status"] = "failed" if rejected else "unknown"
         message = _detail(exc) if isinstance(exc, httpx.HTTPStatusError) else str(exc)
-        hint = ("Correct the request and retry place_starlark_structure with this artifact ID." if rejected else
+        hint = (f"Correct the request and retry {retry_tool}." if rejected else
                 "Placement outcome is unknown. Inspect the world before retrying; entities could be duplicated.")
         return _failure("placement_failed" if rejected else "placement_unknown", message, hint,
                         artifact_id=artifact_id, placement=outcome)
     if not result.get("success"):
         return _failure("placement_failed", f"Placement failed: {result}",
-                        "Inspect the world before retrying place_starlark_structure; partial placement may have occurred.",
+                        f"Inspect the world before retrying {retry_tool}; partial placement may have occurred.",
                         artifact_id=artifact_id, placement=outcome)
     if placement.dry_run:
         outcome.update(status="dry_run", **{key: result.get(key) for key in
-                                            ("overwrite", "lock_check", "reservations", "builds")})
+                                            ("overwrite", "lock_check", "reservations", "builds", "revision")})
         return _response({"ok": True, "artifact_id": artifact_id, "placement": outcome},
                          f"Dry run of {artifact_id} at ({position['x']}, {position['y']}, {position['z']}).\n"
                          + format_dry_run(result))
     outcome.update(status="placed", build_id=result.get("build_id"),
                    undo_available=result.get("undo_available"),
                    undo_unavailable_reason=result.get("undo_unavailable_reason"),
-                   stages=result.get("stages"), stages_placed=result.get("stages_placed"))
+                   stages=result.get("stages"), stages_placed=result.get("stages_placed"),
+                   revision=result.get("revision"), warning=result.get("warning"))
     staged = (f" Installed in {result['stages_placed']} stages, {result.get('stage_delay_ticks')} ticks apart."
               if result.get("stages_placed") else "")
     return _response({"ok": True, "artifact_id": artifact_id, "placement": outcome},
                      f"Placed {artifact_id} at ({position['x']}, {position['y']}, {position['z']}) "
                      f"in {placement.world}, rotation {placement.rotation}.{staged}"
                      + (f" Build ID: {result['build_id']}" if result.get("build_id") else "")
-                     + (f" {undo_hint(result)}" if undo_hint(result) else ""))
+                     + (f" {revision_text(result)}" if result.get("revision") else
+                        f" {undo_hint(result)}" if undo_hint(result) else "")
+                     + (f" Warning: {result['warning']}" if result.get("warning") else ""))
+
+
+def revision_text(result: dict[str, Any]) -> str:
+    """How a completed revision relates to the build it replaced."""
+    revision = result.get("revision") or {}
+    parent, child = revision.get("replaces_build_id"), result.get("build_id")
+    text = f"Replaced build {parent}, which is now {revision.get('parent_status', 'SUPERSEDED')}."
+    if revision.get("overwrote_later_builds"):
+        text += f" Forced over {revision['overwrote_later_builds']} later overlapping build(s)."
+    if child and result.get("undo_available"):
+        text += f' undo_build(build_id="{child}") brings the previous version back.'
+    elif result.get("undo_unavailable_reason"):
+        text += f" Undo is unavailable ({result['undo_unavailable_reason']})."
+    return text
 
 
 def _image(data: bytes) -> ImageContent:
@@ -180,7 +261,8 @@ async def handle_build_starlark_structure(
     payload.update(ok=True, compilation_ok=True)
     summary = _build_summary(result)
     if target is not None:
-        placed = await _place(api_client, client, result, target)
+        placed = await _place(api_client, client, result, target, source=source,
+                              request={"entry": entry, "props": props or {}, "root_size": root_size})
         payload.update(placed.structuredContent)
         response = _response(payload, summary + "\n" + placed.content[0].text)
     else:

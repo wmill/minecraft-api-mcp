@@ -5,6 +5,7 @@ import ca.waltermiller.mcpapi.operation.OperationRegistry;
 
 import ca.waltermiller.mcpapi.buildtask.model.BoundingBox;
 import ca.waltermiller.mcpapi.buildtask.model.Build;
+import ca.waltermiller.mcpapi.buildtask.model.BuildSource;
 import ca.waltermiller.mcpapi.buildtask.model.BuildStatus;
 import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
 import ca.waltermiller.mcpapi.buildtask.model.TaskType;
@@ -96,6 +97,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
         registerReplayBuild();
         registerRestoreBuild(false);
         registerRestoreBuild(true);
+        registerGetSource();
+        registerVerifyBuild();
         registerCloneBuild();
         registerQueryLocation();
         registerAuditBuild();
@@ -158,6 +161,9 @@ public class BuildTaskEndpoint extends APIEndpoint {
         buildJson.put("created_at", build.getCreatedAt().toString());
         if (build.getCompletedAt() != null) {
             buildJson.put("completed_at", build.getCompletedAt().toString());
+        }
+        if (build.getParentBuildId() != null) {
+            buildJson.put("parent_build_id", build.getParentBuildId().toString());
         }
         return buildJson;
     }
@@ -254,6 +260,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("success", true);
             response.put("build", buildToMap(build));
+            BuildSource source = buildService.getSourceSummaries(List.of(buildId)).get(buildId);
+            if (source != null) response.put("source", source.toMap(false));
             response.put("tasks", taskMaps);
             if (boundingBox != null) {
                 response.put("bounding_box", boundingBox);
@@ -537,8 +545,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
         if (found.isEmpty()) return new RestoreResponse(404, Map.of("error", "Build not found"));
         BuildService.NbtPlacement placement = found.get();
         Build build = placement.build();
-        AreaBounds bounds = PlacementBounds.structure(placement.x(), placement.y(), placement.z(),
-            placement.sizeX(), placement.sizeY(), placement.sizeZ(), placement.rotation());
+        AreaBounds bounds = PlacementBounds.recorded(placement);
         if (!snapshots.exists(buildId, redo)) {
             throw new IllegalArgumentException("No " + action + " snapshot exists for this build");
         }
@@ -570,17 +577,154 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     LOGGER.warn("Failed to emit {} effect", action, e);
                 }
                 LOGGER.info("{} build {} via API", action, buildId);
-                return new RestoreResponse(200, Map.of(
+                Map<String, Object> body = new LinkedHashMap<>(Map.of(
                     "success", true, "build_id", buildId.toString(),
                     "status", (redo ? BuildStatus.COMPLETED : BuildStatus.REVERTED).name(),
                     "world", build.getWorld(), "bounds", bounds,
                     "overwrote_later_builds", force ? conflicts.size() : 0,
                     "undo_available", redo, "redo_available", !redo,
                     "message", "Restored the " + action + " snapshot; entities were not changed"));
+                if (build.getParentBuildId() != null) {
+                    // Undoing a revision brings back the build it replaced; redo supersedes it again.
+                    body.put("parent_build_id", build.getParentBuildId().toString());
+                    buildService.getBuild(build.getParentBuildId())
+                        .ifPresent(parent -> body.put("parent_status", parent.getStatus().name()));
+                }
+                return new RestoreResponse(200, body);
             } catch (Exception e) {
                 throw new java.util.concurrent.CompletionException(e);
             }
         }, result -> result.status() == 200);
+    }
+
+    // GET /api/builds/{id}/source - Provenance, placement, lineage and snapshot availability of a placement
+    private void registerGetSource() {
+        app.get("/api/builds/{id}/source", ctx -> handle(ctx, "retrieving build source", () -> {
+            UUID buildId = pathUuid(ctx, "id", "build ID");
+            if (buildId == null) return;
+            Optional<BuildService.NbtPlacement> found = buildService.getPlacementRecord(buildId);
+            if (found.isEmpty()) {
+                ctx.status(404).json(Map.of("error", "Build not found"));
+                return;
+            }
+            BuildService.NbtPlacement placement = found.get();
+            Build build = placement.build();
+
+            Map<String, Object> placed = new LinkedHashMap<>();
+            placed.put("type", placement.type().name());
+            if (placement.filename() != null) placed.put("filename", placement.filename());
+            placed.put("origin", Map.of("x", placement.x(), "y", placement.y(), "z", placement.z()));
+            placed.put("size", Map.of("x", placement.sizeX(), "y", placement.sizeY(), "z", placement.sizeZ()));
+            placed.put("rotation", placement.rotation());
+            placed.put("structure_bounds", PlacementBounds.structure(placement.x(), placement.y(), placement.z(),
+                placement.sizeX(), placement.sizeY(), placement.sizeZ(), placement.rotation()));
+            placed.put("snapshot_bounds", PlacementBounds.recorded(placement));
+
+            Map<String, Object> lineage = new LinkedHashMap<>();
+            if (build.getParentBuildId() != null) {
+                lineage.put("parent_build_id", build.getParentBuildId().toString());
+                buildService.getBuild(build.getParentBuildId())
+                    .ifPresent(parent -> lineage.put("parent_status", parent.getStatus().name()));
+            }
+            lineage.put("children", buildService.getChildren(buildId).stream().map(child -> Map.<String, Object>of(
+                "build_id", child.getId().toString(), "status", child.getStatus().name(),
+                "created_at", child.getCreatedAt().toString())).toList());
+
+            Map<String, Object> stored = new LinkedHashMap<>();
+            stored.put("undo_snapshot", snapshots != null && snapshots.exists(buildId));
+            stored.put("redo_snapshot", snapshots != null && snapshots.exists(buildId, true));
+            stored.put("placed_template", snapshots != null && snapshots.templateExists(buildId));
+            if (build.getParentBuildId() != null) {
+                stored.put("revision_base", snapshots != null && snapshots.baseExists(buildId));
+            }
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("success", true);
+            response.put("build", buildToMap(build));
+            response.put("placement", placed);
+            Optional<BuildSource> source = buildService.getSource(buildId);
+            response.put("source", source.map(value -> (Object) value.toMap(true)).orElse(null));
+            response.put("lineage", lineage);
+            response.put("stored", stored);
+            response.put("undo_available", build.getStatus() == BuildStatus.COMPLETED && Boolean.TRUE.equals(stored.get("undo_snapshot")));
+            response.put("redo_available", build.getStatus() == BuildStatus.REVERTED && Boolean.TRUE.equals(stored.get("redo_snapshot")));
+            response.put("revisable", build.getStatus() == BuildStatus.COMPLETED && placement.type() == TaskType.NBT_STRUCTURE
+                && source.isPresent() && Boolean.TRUE.equals(stored.get(build.getParentBuildId() == null ? "undo_snapshot" : "revision_base")));
+            ctx.json(response);
+        }));
+    }
+
+    // GET /api/builds/{id}/verify - Compare a placement's saved template with the world (read-only)
+    private void registerVerifyBuild() {
+        app.get("/api/builds/{id}/verify", ctx -> handle(ctx, "verifying build", () -> {
+            UUID buildId = pathUuid(ctx, "id", "build ID");
+            if (buildId == null) return;
+            if (snapshots == null) {
+                ctx.status(503).json(Map.of("error", "Build snapshots are not configured on this server"));
+                return;
+            }
+            Optional<BuildService.NbtPlacement> found = buildService.getPlacementRecord(buildId);
+            if (found.isEmpty()) {
+                ctx.status(404).json(Map.of("error", "Build not found"));
+                return;
+            }
+            BuildService.NbtPlacement placement = found.get();
+            if (placement.type() != TaskType.NBT_STRUCTURE) throw new IllegalArgumentException("Only NBT structure placements can be verified");
+            net.minecraft.nbt.NbtCompound template = snapshots.loadTemplate(buildId).orElseThrow(() -> new IllegalArgumentException(
+                "No placed template was saved for this build (placed before verification support, or the save failed)"));
+            Build build = placement.build();
+            RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(build.getWorld());
+            ServerWorld world = worldKey == null ? null : server.getWorld(worldKey);
+            if (world == null) throw new IllegalArgumentException("Unknown world: " + build.getWorld());
+            AreaBounds bounds = PlacementBounds.structure(placement.x(), placement.y(), placement.z(),
+                placement.sizeX(), placement.sizeY(), placement.sizeZ(), placement.rotation());
+            net.minecraft.structure.StructurePlacementData data = new net.minecraft.structure.StructurePlacementData()
+                .setRotation(net.minecraft.util.BlockRotation.valueOf(placement.rotation()));
+            net.minecraft.util.math.BlockPos pos = new net.minecraft.util.math.BlockPos(placement.x(), placement.y(), placement.z());
+
+            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+            OperationHttp.dispatch(server::execute, () -> {
+                if (future.isCancelled()) return;
+                try {
+                    var missing = RegionSnapshot.missingChunks(world, bounds);
+                    if (!missing.isEmpty()) {
+                        future.complete(Map.of("success", false, "code", "unloaded_chunks",
+                            "error", "Chunks in the build's bounds are not loaded", "missing_chunks", missing));
+                        return;
+                    }
+                    future.complete(Map.of("success", true, "report", RegionSnapshot.verify(world, template, pos, data)));
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
+                }
+            }, future);
+            Map<String, Object> result;
+            try {
+                result = future.get(UNDO_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                future.cancel(false);
+                ctx.status(504).json(Map.of("error", "Timed out waiting for verification"));
+                return;
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof Exception cause) throw cause;
+                throw e;
+            }
+            if (!Boolean.TRUE.equals(result.get("success"))) {
+                ctx.status(400).json(result);
+                return;
+            }
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("success", true);
+            response.put("build_id", buildId.toString());
+            response.put("status", build.getStatus().name());
+            if (build.getStatus() != BuildStatus.COMPLETED) {
+                response.put("note", "This build is " + build.getStatus() + ", so its blocks are not expected to be in the world");
+            }
+            response.put("bounds", bounds);
+            response.put("rotation", placement.rotation());
+            response.put("report", result.get("report"));
+            response.put("compared", "block ids without block states; template air cells count, structure voids do not");
+            ctx.json(response);
+        }));
     }
 
     // POST /api/builds/{id}/clone - Clone a build with a new UUID; source is preserved unchanged
@@ -619,6 +763,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
             }
 
             LocationQueryService.LocationQueryResult result = locationQueryService.queryBuildsByLocation(request);
+            Map<UUID, BuildSource> sources = buildService.getSourceSummaries(
+                result.builds.stream().map(found -> found.build.getId()).toList());
 
             // Convert result to JSON-friendly format (this route's wire format uses camelCase keys)
             List<Map<String, Object>> buildResults = result.builds.stream()
@@ -633,6 +779,11 @@ public class BuildTaskEndpoint extends APIEndpoint {
                     if (buildResult.build.getCompletedAt() != null) {
                         buildMap.put("completedAt", buildResult.build.getCompletedAt().toString());
                     }
+                    if (buildResult.build.getParentBuildId() != null) {
+                        buildMap.put("parentBuildId", buildResult.build.getParentBuildId().toString());
+                    }
+                    BuildSource source = sources.get(buildResult.build.getId());
+                    if (source != null) buildMap.put("source", source.toMap(false));
 
                     List<Map<String, Object>> taskMaps = buildResult.intersecting_tasks.stream()
                         .map(task -> {

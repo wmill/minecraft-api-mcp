@@ -141,7 +141,7 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 - `MessageEndpoint` - Send messages to players (broadcast or targeted)
 - `PlayerTeleportEndpoint` - Teleport players to coordinates
 - `PrefabEndpoint` - Place prefab structures: doors, stairs, windows, torches, signs, ladders (core logic in `PrefabEndpointCore`)
-- `NBTStructureEndpoint` - Place NBT data structures; snapshots the target cuboid before writing (undo) and supports `dry_run` overwrite reports. Staged placement: repeated `stage_nbt_file` parts are placed instead of `nbt_file` (which still drives bounds and dry runs) — stage 0 under the snapshot and build record, later stages `stage_delay_ticks` apart via `StagedPlacement` (an `END_SERVER_TICK` scheduler, cancelled on `SERVER_STOPPING`), each re-checking the lock and writing with `NOTIFY_ALL`
+- `NBTStructureEndpoint` - Place NBT data structures; snapshots the target cuboid before writing (undo) and supports `dry_run` overwrite reports. Optional `provenance` JSON (Starlark script/props or schematic id, `BuildSource`) is stored with the recorded build and the placed template is saved for verify. `replaces_build_id` revises a COMPLETED placement in place (clear to its saved terrain, place, parent becomes `SUPERSEDED`; 409 `revision_conflict` unless `force`). Staged placement: repeated `stage_nbt_file` parts are placed instead of `nbt_file` (which still drives bounds and dry runs) — stage 0 under the snapshot and build record, later stages `stage_delay_ticks` apart via `StagedPlacement` (an `END_SERVER_TICK` scheduler, cancelled on `SERVER_STOPPING`), each re-checking the lock and writing with `NOTIFY_ALL`
 - `RainFireEndpoint` - Rain fire effect over a radius
 - `AreaLockEndpoint` - Acquire/renew/resize/release/list area reservations (`/api/area-locks`)
 - `TerrainSmoothEndpoint` - Ground smoothing (`POST /api/world/terrain/smooth`, MCP `smooth_terrain`): gaussian/median/bilateral filters or a flat pad, vegetation cleared, built/fluid columns masked; `dry_run` returns before/after relief and change maps; writes are lock-checked, snapshotted and recorded as an undoable `TERRAIN_SMOOTH` build (logic in `terrain/`)
@@ -174,9 +174,12 @@ Top-down terrain maps for LLM site reading (`POST /api/world/blocks/heightmap/ma
 **Location**: `src/main/java/ca/waltermiller/mcpapi/snapshot/`
 
 - `SnapshotStore` - gzipped structure NBT per build id in `BUILD_SNAPSHOT_DIR` (default `<run dir>/build-snapshots`), capped by `BUILD_SNAPSHOT_MAX_VOLUME` voxels (default 2,000,000)
-- `RegionSnapshot` - server-thread capture/restore and the dry-run template-vs-world scan
+- `RegionSnapshot` - server-thread capture/restore, the dry-run template-vs-world scan (optionally over a snapshot overlay for revision previews) and `verify` drift scan
+- `TemplateDrift` - pure tally for `verify_build` (match %, missing/extra/changed, top differences, samples)
 - `SnapshotRestorer` - reversible restore: persists the current region as the opposite snapshot and a pending marker before writing, so an interrupted restore blocks further undo/redo until inspected; runs on the server thread inside the area lock
 - `OverwriteTally` - pure counting/categorization for dry-run reports
+
+`SnapshotStore` also keeps `{id}.template.nbt` (placed structure) and, for revisions, `{id}.base.nbt` (terrain after clearing the replaced build, so revising a revision does not restore its parent). `GET /api/builds/{id}/source` returns provenance, lineage and stored snapshots; `GET /api/builds/{id}/verify` compares the template with the world.
 
 `POST /api/builds/{id}/undo` restores the pre-placement snapshot (build becomes `REVERTED`) and saves the current region so `POST /api/builds/{id}/redo` can put it back (build becomes `COMPLETED` again). Undo and redo alternate; a duplicate returns 409, and later unreverted overlapping builds return 409 `undo_conflict`/`redo_conflict` unless `force`. `replay_build` is not redo. See `docs/undo-and-dry-run.md`.
 
@@ -198,7 +201,7 @@ A comprehensive system for queuing, persisting, and executing complex build oper
 **Architecture Pattern**: Repository-Service-Executor
 - **Repositories** (`repository/`): PostgreSQL data access with implementations for Build, Task, and RailPlanningJob entities. `BuildTransaction` locks the build row (`SELECT ... FOR UPDATE`) and hands both repositories one connection, so queue edits (append, insert, delete, reorder, update, translate, rail-plan append) and execute/replay claims are atomic. `InterruptedExecutions` is the startup sweep for builds/tasks left mid-execution
 - **Services** (`service/`): Business logic for task validation, location queries, build orchestration, and rail planning
-- **Models** (`model/`): Data classes (Build, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus incl. `REVERTED`, RailPlanningJob, RailPlanningStatus) plus `TaskDataTranslator`, which shifts task_data coordinates for `translate`
+- **Models** (`model/`): Data classes (Build incl. `parentBuildId`, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus incl. `REVERTED`/`SUPERSEDED` (`removedFromWorld()`), BuildSource (placement provenance), RailPlanningJob, RailPlanningStatus) plus `TaskDataTranslator`, which shifts task_data coordinates for `translate`
 
 **Task Types:**
 - `BLOCK_SET` - Place a 3D array of blocks
@@ -215,7 +218,8 @@ A comprehensive system for queuing, persisting, and executing complex build oper
 - `NBT_STRUCTURE` / `TERRAIN_SMOOTH` - Auto-recorded direct writes (NBT placement, terrain smoothing); snapshot-restorable via undo/redo, never executed, replayed or cloned
 
 **Database Schema:**
-- `builds` table: Build metadata (id, name, description, world, status, timestamps)
+- `builds` table: Build metadata (id, name, description, world, status, timestamps, `parent_build_id` for revisions)
+- `build_sources` table: placement provenance, one row per build (kind, artifact_id, schematic_id, source TEXT, entry, props, root_size, y_offset, target, details)
 - `build_tasks` table: Individual tasks (id, build_id, task_order, task_type, status, task_data JSONB, description, executed_at)
 - `rail_planning_jobs` table: Async rail planning jobs (id, build_id, status, phases, timestamps)
 
@@ -269,6 +273,7 @@ DB_PASSWORD=your_password
   - `effects.py` - One-shot area effects (`rain_fire`)
   - `area_locks.py` - `acquire_area_lock`, `update_area_lock`, `release_area_lock`, `list_area_locks`
   - `operations.py` - `get_operation` (poll an edit that came back `pending`)
+  - `revisions.py` - `get_build_source`, `verify_build`, `revise_build` (recompile the recorded Starlark script with changes, or swap the schematic, and replace in place)
   - `survey.py` - `survey_site`
   - `terrain.py` - `smooth_terrain` (dry-run before/after/change images plus summary)
   - `schematics.py` - Optional schematic search, tags, metadata lookup, preview images, and NBT placement orchestration
@@ -379,7 +384,7 @@ STARLARK_PREVIEW_TIMEOUT_S=30            # wall-clock cap for rendering one arti
 **HTTP API:**
 - `GET /health`
 - `POST /build` — `{source, entry?, props?, root_size?}`
-- `GET /artifacts/{artifact_id}` and `GET /artifacts/{artifact_id}/nbt?stage=`
+- `GET /artifacts/{artifact_id}`, `GET /artifacts/{artifact_id}/source` and `GET /artifacts/{artifact_id}/nbt?stage=`
 - `GET /artifacts/{artifact_id}/images/{view}?max_px=...&cut_x|cut_y|cut_z=...` - `view` is `sheet`, one of `iso/top/north/south/east/west`, `section` (needs a cut), or `floors`; with a cut only `sheet` (cutaway + section), `iso` and `section` are allowed; responses carry `X-Artifact-Size` and, for `floors`, `X-Preview-Floors` (`floor:cut,...`); same sizing as the schematic image route; 400 for bad cuts, 404 for unknown artifacts, 503 if rendering fails or times out
 - `GET /docs/catalog` — the script API reference (component catalog markdown)
 - `GET /examples` and `GET /examples/{name}`
@@ -467,7 +472,8 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - Site survey tests: `SiteSurveyTest`, `SiteSurveyEndpointTest`, `SurveyOccupancyTest`
 - Terrain smoothing tests: `TerrainSmootherTest`, `TerrainRewriterTest`, `TerrainSmoothEndpointTest`
 - Preview tests: `BlockGridTest`, `IsoRendererTest`, `PaletteTest`, `TerrainHeightmapGridAdapterTest`, `TerrainMapRendererTest`, `SurfaceCategoryTest`
-- Snapshot tests: `SnapshotStoreTest`, `SnapshotRestorerTest`, `OverwriteTallyTest`, `BuildUndoEndpointTest`
+- Snapshot tests: `SnapshotStoreTest`, `SnapshotRestorerTest`, `OverwriteTallyTest`, `TemplateDriftTest`, `BuildUndoEndpointTest` (incl. source/verify routes), `NBTStructureEndpointTest` (provenance/revision request validation)
+- Provenance tests: `BuildSourceTest`, `ProvenanceIntegrationTest` (gated like `AtomicQueueIntegrationTest`)
 
 **Python Tests** (`mcp/`, run with `uv run pytest`):
 - `test_backward_compatibility.py` - Backward compatibility tests
@@ -479,6 +485,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_starlark_tools.py` - Starlark MCP tool registration/config tests, `get_starlark_preview` and build thumbnails
 - `test_starlark_transport.py` - Structured Starlark results through MCP dispatch and real transport framing
 - `test_undo_dry_run.py` - `undo_build`/`redo_build` and `dry_run` placement tools
+- `test_build_revisions.py` - provenance sent with placements, `get_build_source`, `verify_build`, `revise_build` (Starlark and schematic)
 - `test_area_locks.py` - Lock tools, `lock_id` forwarding (incl. multipart), concurrent calls
 - `test_survey_site.py` - `survey_site` handler
 - `test_preview_heightmap.py` - `preview_heightmap` image output

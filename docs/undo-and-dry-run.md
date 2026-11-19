@@ -91,8 +91,9 @@ update pass. This lets a stage install an observer without pulsing it during pla
 
 ## Storage
 
-Snapshots are gzipped structure NBT files, `{build_id}.nbt` (undo) and
-`{build_id}.redo.nbt` (redo), stored in
+Snapshots are gzipped structure NBT files, `{build_id}.nbt` (undo),
+`{build_id}.redo.nbt` (redo), `{build_id}.template.nbt` (the structure as placed, for
+`verify_build`) and, for revisions, `{build_id}.base.nbt` (see below), stored in
 `BUILD_SNAPSHOT_DIR`. The default is `<server run dir>/build-snapshots`, which in
 Docker is on the `minecraft_data` volume. `BUILD_SNAPSHOT_MAX_VOLUME` (default
 2,000,000 voxels) caps the snapshotted cuboid. Larger placements still succeed but
@@ -111,6 +112,45 @@ and marker, inspect the recorded action and actual region state, and reconcile t
 world and database status (`REVERTED` after undo, `COMPLETED` after redo). Remove
 the marker only when they agree. Do not simply retry or remove it without inspecting
 the world: a failed restore may have written part of the region.
+
+## Provenance, verification and revision
+
+Placement tools send a `provenance` field that is stored in the `build_sources` table
+(one row per build): for Starlark the script, entry, props, root_size, artifact id,
+library versions it loads, the requested walking-plane position and the ground offset
+applied; for schematics the schematic id. Raw `place_nbt_structure` uploads record
+none. Unlike the Starlark artifact cache this is never evicted.
+
+- `get_build_source(build_id)` (`GET /api/builds/{id}/source`): provenance, origin,
+  rotation, bounds, revision lineage, stored snapshots, and whether undo, redo,
+  verify and revise apply.
+- `verify_build(build_id)` (`GET /api/builds/{id}/verify`): compares the saved
+  template with the world by block id and reports match %, missing/extra/changed
+  counts, top differences and sample coordinates. Read-only; chunks must be loaded.
+  Builds placed before this feature have no template.
+- `revise_build(build_id, ...)`: recompiles the recorded script with a new `source`,
+  `props` (merged over the recorded ones), `entry` or `root_size` (or swaps
+  `schematic_id`), then places it with `replaces_build_id` at the same requested
+  position and rotation unless `x`/`y`/`z`/`rotation` override them. `dry_run` previews it.
+
+A revision is one locked server-thread step over the union of the old cuboid and the
+new structure:
+
+1. Capture the union. This becomes the new build's undo snapshot and holds the old build.
+2. Restore the old cuboid to its terrain: the old build's undo snapshot, or its
+   `base` snapshot if it is itself a revision. Its undo snapshot would bring back
+   the build it replaced.
+3. Capture the union again as the new build's `base`.
+4. Place the new structure. If that fails, put step 1's capture back.
+
+The new build records `parent_build_id` and `restore_bounds` (the union), and the old
+build becomes `SUPERSEDED` in the same transaction. Undoing the revision restores
+the union to step 1 and returns the parent to `COMPLETED`. Redoing it supersedes the
+parent again. A superseded build cannot be undone, redone or revised; act on its
+active revision. Later builds overlapping the old cuboid give 409
+`revision_conflict` unless `force`. The old build needs its terrain snapshot, and
+the union must fit `BUILD_SNAPSHOT_MAX_VOLUME`. Edits made after placement are
+overwritten, so use `verify_build` first.
 
 ## Live regression
 

@@ -1726,6 +1726,81 @@ TOOL_REDO_BUILD = Tool(
     },
 )
 
+TOOL_GET_BUILD_SOURCE = Tool(
+    name="get_build_source",
+    description=(
+        "Inspect a recorded NBT placement (place_starlark_structure, build_starlark_structure with placement, "
+        "place_schematic): the Starlark script, props and artifact or the schematic id it came from, where and how it "
+        "was placed, its revision lineage, and whether undo_build, redo_build, verify_build and revise_build apply. "
+        "Find build IDs near a location with query_builds_by_location."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {"type": "string", "description": "Build UUID of the placement"},
+            "include_source": {"type": "boolean", "default": True,
+                               "description": "Include the Starlark script text (it can be long)."},
+        },
+        "required": ["build_id"],
+    },
+)
+
+TOOL_VERIFY_BUILD = Tool(
+    name="verify_build",
+    description=(
+        "Check how much of a placed structure is still intact: compares the saved template with the world block by "
+        "block (block ids only) and reports match %, missing/extra/changed blocks, the most common differences and "
+        "example coordinates. Read-only; chunks must be loaded. Use before revise_build or undo_build, which overwrite "
+        "edits made after placement."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+    inputSchema={
+        "type": "object",
+        "properties": {"build_id": {"type": "string", "description": "Build UUID of the placement"}},
+        "required": ["build_id"],
+    },
+)
+
+TOOL_REVISE_BUILD = Tool(
+    name="revise_build",
+    description=(
+        "Change a placed Starlark or schematic structure in place. Recompiles the recorded script with your changes "
+        "(new source, props merged into the recorded props, entry, root_size) or swaps the schematic, then in one "
+        "locked step clears the old structure back to the terrain saved before it was placed and places the new one "
+        "at the same position and rotation (override with x/y/z/rotation). The old build becomes SUPERSEDED and the "
+        "revision is a new build; undo_build on the revision brings the old version back. Use get_build_source to see "
+        "the current script and dry_run=true to preview. Fails with revision_conflict when later builds overlap the "
+        "old structure (pass force=true only if erasing them is intended). Edits made in the area after placement "
+        "are overwritten; check with verify_build."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {"type": "string", "description": "Build UUID of the COMPLETED placement to revise"},
+            "source": {"type": "string", "description": "Starlark: full replacement script. Omit to recompile the recorded script."},
+            "props": {"type": "object", "description": "Starlark: props merged over the recorded props."},
+            "entry": {"type": "string", "description": "Starlark: entry function (default: the recorded one)."},
+            "root_size": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3,
+                          "description": "Starlark: root size override."},
+            "schematic_id": {"type": "string", "description": "Schematic placements: the replacement schematic."},
+            "rotation": {"type": "string", "enum": ["NONE", "CLOCKWISE_90", "CLOCKWISE_180", "COUNTERCLOCKWISE_90"],
+                         "description": "New rotation (default: unchanged)."},
+            "x": {"type": "integer", "description": "New requested x (default: unchanged)."},
+            "y": {"type": "integer", "description": "New requested walking-plane y; ground offset is reapplied (default: unchanged)."},
+            "z": {"type": "integer", "description": "New requested z (default: unchanged)."},
+            "dry_run": {"type": "boolean", "default": False,
+                        "description": "Compile and report what the revision would change without touching the world."},
+            "force": {"type": "boolean", "default": False,
+                      "description": "Revise even though later overlapping builds would be erased."},
+            "include_preview": {"type": "boolean", "default": False,
+                                "description": "Starlark: attach a small iso render of the revised structure."},
+        },
+        "required": ["build_id"],
+    },
+)
+
 TOOL_CLONE_BUILD = Tool(
     name="clone_build",
     description="Create a copy of an existing build with a new UUID. All non-NBT tasks are copied as QUEUED. The original build is preserved unchanged as a placement record. Use this before translate_build when you want to place the same structure at a different location without losing the original. Rejected if the build is currently executing.",
@@ -2481,6 +2556,9 @@ TOOL_SCHEMAS = [
     TOOL_REPLAY_BUILD,
     TOOL_UNDO_BUILD,
     TOOL_REDO_BUILD,
+    TOOL_GET_BUILD_SOURCE,
+    TOOL_VERIFY_BUILD,
+    TOOL_REVISE_BUILD,
     TOOL_CLONE_BUILD,
     TOOL_QUERY_BUILDS_BY_LOCATION,
     TOOL_GET_BUILD_STATUS,

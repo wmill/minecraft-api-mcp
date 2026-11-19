@@ -34,6 +34,13 @@ class StarlarkServiceClient:
             response.raise_for_status()
             return response.json()
 
+    async def get_artifact_source(self, artifact_id: str) -> str:
+        """The script an artifact was compiled from (404 once the artifact is evicted)."""
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{self.base_url}/artifacts/{artifact_id}/source")
+            response.raise_for_status()
+            return response.text
+
     async def get_artifact_nbt(self, artifact_id: str, stage: Optional[int] = None) -> bytes:
         """The artifact's structure NBT, or one install stage of a staged build."""
         params = {"stage": stage} if stage is not None else None

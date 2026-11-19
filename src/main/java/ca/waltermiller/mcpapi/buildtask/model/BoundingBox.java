@@ -290,6 +290,13 @@ public class BoundingBox {
             return null;
         }
 
+        // A revision's undo snapshot covers the old and new structures; queries and conflicts use that cuboid.
+        JsonNode restore = taskData.path("restore_bounds");
+        if (restore.isObject()) {
+            return new BoundingBox(restore.path("min_x").asInt(), restore.path("min_y").asInt(), restore.path("min_z").asInt(),
+                restore.path("max_x").asInt(), restore.path("max_y").asInt(), restore.path("max_z").asInt());
+        }
+
         if (!(taskData.has("x") && taskData.has("y") && taskData.has("z") &&
               taskData.has("size_x") && taskData.has("size_y") && taskData.has("size_z"))) {
             return null;

@@ -246,10 +246,23 @@ async def handle_place_schematic(
     dry_run: bool = False,
     **arguments,
 ) -> CallToolResult:
+    return await place_schematic(api_client, str(schematic_id), x, y, z, world, rotation, include_entities,
+                                 replace_blocks, apply_ground_offset, dry_run)
+
+
+async def place_schematic(
+    api_client: MinecraftAPIClient, schematic_id: str, x: int, y: int, z: int, world: Optional[str],
+    rotation: str, include_entities: bool, replace_blocks: bool, apply_ground_offset: bool, dry_run: bool,
+    *, replaces_build_id: Optional[str] = None, force: bool = False,
+) -> CallToolResult:
+    """Place a catalog schematic, recording its id as the build's provenance. With
+    `replaces_build_id` the placement revises that build in place (see revise_build)."""
+    from .starlark import revision_conflict, revision_conflict_text, revision_text
+
     client = _schematic_client()
     try:
-        metadata = await client.get_schematic(str(schematic_id))
-        nbt_bytes = await client.get_schematic_nbt(str(schematic_id))
+        metadata = await client.get_schematic(schematic_id)
+        nbt_bytes = await client.get_schematic_nbt(schematic_id)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             return format_success_response(f"Schematic {schematic_id} is not available as converted NBT.")
@@ -263,6 +276,13 @@ async def handle_place_schematic(
 
     ground_level = _ground_level(metadata)
     place_y = y - ground_level if apply_ground_offset else y
+    provenance = None if dry_run else {
+        "kind": "schematic", "schematic_id": schematic_id, "y_offset": place_y - y,
+        "target": {"x": x, "y": y, "z": z},
+        "details": {"apply_ground_offset": apply_ground_offset, "include_entities": include_entities,
+                    **({"title": str(metadata["title"])[:200]} if metadata.get("title") else {})},
+    }
+    action = "revising build" if replaces_build_id else "placing schematic"
     try:
         result = await api_client.place_nbt_structure_bytes(
             nbt_bytes,
@@ -275,11 +295,19 @@ async def handle_place_schematic(
             include_entities,
             replace_blocks,
             dry_run,
+            provenance=provenance,
+            replaces_build_id=replaces_build_id,
+            force=force,
         )
     except PendingOperation as pending:
         return pending_result(pending)
     except Exception as exc:
-        return format_error_response(exc, "placing schematic")
+        overlap = revision_conflict(exc)
+        if overlap is not None:
+            return CallToolResult(content=[TextContent(type="text", text=(
+                "Revision refused; nothing was changed. " + revision_conflict_text(overlap)
+                + " Pass force=true only if erasing them is intended."))], structuredContent=overlap, isError=True)
+        return format_error_response(exc, action)
 
     offset_note = (f"Structure origin y={place_y} (requested walking plane y={y}, ground_level offset {ground_level})."
                    if apply_ground_offset and ground_level else "")
@@ -289,7 +317,8 @@ async def handle_place_schematic(
 
     if not result.get("success"):
         return CallToolResult(
-            content=[TextContent(type="text", text=f"Failed to place schematic {schematic_id}: {result}")]
+            content=[TextContent(type="text", text=f"Failed to place schematic {schematic_id}: {result}")],
+            isError=True,
         )
 
     title = metadata.get("title", f"Schematic {schematic_id}")
@@ -298,6 +327,10 @@ async def handle_place_schematic(
         msg += f"\n{offset_note}"
     if result.get("build_id"):
         msg += f"\nRecorded as build: {result['build_id']}"
-    if undo_hint(result):
+    if result.get("revision"):
+        msg += f"\n{revision_text(result)}"
+    elif undo_hint(result):
         msg += f"\n{undo_hint(result)}"
-    return format_success_response(msg)
+    if result.get("warning"):
+        msg += f"\nWarning: {result['warning']}"
+    return CallToolResult(content=[TextContent(type="text", text=msg)], structuredContent=result)

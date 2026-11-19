@@ -443,6 +443,134 @@ class BuildServiceTest {
         assertThat(buildService.getNbtPlacement(missing)).isEmpty();
     }
 
+    private Build completedParent() {
+        Build parent = new Build("NBT: hut.nbt", "", "minecraft:overworld");
+        parent.setStatus(BuildStatus.COMPLETED);
+        return parent;
+    }
+
+    @Test
+    void recordingARevisionStoresProvenanceAndSupersedesTheParent() throws Exception {
+        var sources = org.mockito.Mockito.mock(ca.waltermiller.mcpapi.buildtask.repository.BuildSourceRepository.class);
+        BuildService service = new BuildService(buildRepository, taskRepository, sources, taskExecutor);
+        try {
+            Build parent = completedParent();
+            when(buildRepository.findById(parent.getId())).thenReturn(Optional.of(parent));
+            when(buildRepository.create(any(Build.class))).thenAnswer(call -> call.getArgument(0));
+            var provenance = ca.waltermiller.mcpapi.buildtask.model.BuildSource.fromJson(
+                objectMapper.readTree("{\"kind\": \"starlark\", \"source\": \"def build(): pass\"}"));
+            var box = new ca.waltermiller.mcpapi.buildtask.model.BoundingBox(0, 60, 0, 9, 70, 9);
+
+            Build child = service.recordNbtPlacement(new BuildService.PlacementRecord("slk_a.nbt", "minecraft:overworld",
+                1, 64, 2, 3, 4, 5, "NONE", provenance, parent.getId(), box));
+
+            assertThat(child.getParentBuildId()).isEqualTo(parent.getId());
+            assertThat(child.getStatus()).isEqualTo(BuildStatus.COMPLETED);
+            assertThat(parent.getStatus()).isEqualTo(BuildStatus.SUPERSEDED);
+            verify(buildRepository).update(parent);
+            ArgumentCaptor<ca.waltermiller.mcpapi.buildtask.model.BuildSource> stored =
+                ArgumentCaptor.forClass(ca.waltermiller.mcpapi.buildtask.model.BuildSource.class);
+            verify(sources).create(stored.capture());
+            assertThat(stored.getValue().buildId()).isEqualTo(child.getId());
+            ArgumentCaptor<BuildTask> task = ArgumentCaptor.forClass(BuildTask.class);
+            verify(taskRepository).create(task.capture());
+            assertThat(task.getValue().getTaskData().get("restore_bounds").get("max_y").asInt()).isEqualTo(70);
+            assertThat(task.getValue().getCoordinates().getMinY()).isEqualTo(60);
+        } finally {
+            service.shutdown();
+        }
+    }
+
+    @Test
+    void revisionOfANonCompletedParentIsRejected() throws Exception {
+        Build parent = completedParent();
+        parent.setStatus(BuildStatus.REVERTED);
+        when(buildRepository.findById(parent.getId())).thenReturn(Optional.of(parent));
+        assertThrows(IllegalStateException.class, () -> buildService.recordNbtPlacement(new BuildService.PlacementRecord(
+            "a.nbt", "minecraft:overworld", 0, 64, 0, 1, 1, 1, "NONE", null, parent.getId(), null)));
+        verify(buildRepository, never()).create(any());
+    }
+
+    @Test
+    void supersededBuildsPointAtTheirActiveRevision() throws Exception {
+        Build parent = completedParent();
+        parent.setStatus(BuildStatus.SUPERSEDED);
+        Build undone = new Build("NBT: v2", "", "minecraft:overworld");
+        undone.setStatus(BuildStatus.REVERTED);
+        Build active = new Build("NBT: v3", "", "minecraft:overworld");
+        active.setStatus(BuildStatus.COMPLETED);
+        when(buildRepository.findById(parent.getId())).thenReturn(Optional.of(parent));
+        when(buildRepository.findChildren(parent.getId())).thenReturn(List.of(undone, active));
+
+        IllegalStateException undo = assertThrows(IllegalStateException.class, () -> buildService.getNbtPlacement(parent.getId()));
+        assertThat(undo.getMessage()).contains(active.getId().toString()).doesNotContain(undone.getId().toString());
+        assertThrows(IllegalStateException.class, () -> buildService.getNbtPlacement(parent.getId(), true));
+    }
+
+    @Test
+    void undoingARevisionRestoresTheParentAndRedoSupersedesItAgain() throws Exception {
+        Build parent = completedParent();
+        parent.setStatus(BuildStatus.SUPERSEDED);
+        Build child = new Build("NBT: v2", "", "minecraft:overworld");
+        child.setParentBuildId(parent.getId());
+        child.setStatus(BuildStatus.COMPLETED);
+        when(buildRepository.findById(parent.getId())).thenReturn(Optional.of(parent));
+        when(buildRepository.findChildren(parent.getId())).thenReturn(List.of(child));
+
+        buildService.markReverted(child);
+        assertThat(child.getStatus()).isEqualTo(BuildStatus.REVERTED);
+        assertThat(parent.getStatus()).isEqualTo(BuildStatus.COMPLETED);
+
+        buildService.markRestored(child);
+        assertThat(child.getStatus()).isEqualTo(BuildStatus.COMPLETED);
+        assertThat(parent.getStatus()).isEqualTo(BuildStatus.SUPERSEDED);
+    }
+
+    @Test
+    void undoingOneRevisionKeepsTheParentSupersededWhileAnotherIsActive() throws Exception {
+        Build parent = completedParent();
+        parent.setStatus(BuildStatus.SUPERSEDED);
+        Build child = new Build("NBT: v2", "", "minecraft:overworld");
+        child.setParentBuildId(parent.getId());
+        Build other = new Build("NBT: v3", "", "minecraft:overworld");
+        other.setParentBuildId(parent.getId());
+        other.setStatus(BuildStatus.COMPLETED);
+        when(buildRepository.findById(parent.getId())).thenReturn(Optional.of(parent));
+        when(buildRepository.findChildren(parent.getId())).thenReturn(List.of(child, other));
+
+        buildService.markReverted(child);
+        assertThat(parent.getStatus()).isEqualTo(BuildStatus.SUPERSEDED);
+    }
+
+    @Test
+    void onlyCompletedNbtPlacementsAreRevisable() throws Exception {
+        Build terrain = completedParent();
+        when(buildRepository.findById(terrain.getId())).thenReturn(Optional.of(terrain));
+        when(taskRepository.findByBuildIdOrdered(terrain.getId())).thenReturn(List.of(new BuildTask(terrain.getId(), 0,
+            TaskType.TERRAIN_SMOOTH, nbtTask(terrain.getId()).getTaskData(), "Terrain smoothing")));
+        assertThrows(IllegalArgumentException.class, () -> buildService.getRevisablePlacement(terrain.getId()));
+
+        Build placed = completedParent();
+        when(buildRepository.findById(placed.getId())).thenReturn(Optional.of(placed));
+        when(taskRepository.findByBuildIdOrdered(placed.getId())).thenReturn(List.of(nbtTask(placed.getId())));
+        assertThat(buildService.getRevisablePlacement(placed.getId())).isPresent();
+        // Placement records are readable whatever the status, for inspection.
+        placed.setStatus(BuildStatus.REVERTED);
+        assertThat(buildService.getPlacementRecord(placed.getId())).isPresent();
+    }
+
+    @Test
+    void laterOverlappingBuildsExcludeSupersededBuilds() throws Exception {
+        Build target = new Build("NBT: a", "", "minecraft:overworld");
+        target.setCreatedAt(java.time.Instant.parse("2026-10-01T00:00:00Z"));
+        Build superseded = new Build("later superseded", "", "minecraft:overworld");
+        superseded.setCreatedAt(java.time.Instant.parse("2026-10-02T00:00:00Z"));
+        superseded.setStatus(BuildStatus.SUPERSEDED);
+        var box = new ca.waltermiller.mcpapi.buildtask.model.BoundingBox(0, 0, 0, 1, 1, 1);
+        when(buildRepository.findByLocationIntersection("minecraft:overworld", box)).thenReturn(List.of(target, superseded));
+        assertThat(buildService.findLaterOverlappingBuilds(target, box)).isEmpty();
+    }
+
     @Test
     void laterOverlappingBuildsExcludeSelfEarlierAndReverted() throws Exception {
         Build target = new Build("NBT: a", "", "minecraft:overworld");

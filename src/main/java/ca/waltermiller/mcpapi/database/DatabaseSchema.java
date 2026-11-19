@@ -14,7 +14,7 @@ import java.sql.Statement;
 public class DatabaseSchema {
     private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseSchema.class);
 
-    private static final String[] TABLE_NAMES = {"builds", "build_tasks", "rail_planning_jobs"};
+    private static final String[] TABLE_NAMES = {"builds", "build_tasks", "rail_planning_jobs", "build_sources"};
 
     private final DatabaseConfig databaseConfig;
 
@@ -66,6 +66,7 @@ public class DatabaseSchema {
                 createBuildsTable(connection);
                 createBuildTasksTable(connection);
                 createRailPlanningJobsTable(connection);
+                createBuildSourcesTable(connection);
                 createIndexes(connection);
                 
                 connection.commit();
@@ -93,6 +94,9 @@ public class DatabaseSchema {
             """;
 
         execute(connection, sql, "Created builds table");
+        // Revision lineage: the build this one replaced in place. Added separately for existing databases.
+        execute(connection, "ALTER TABLE builds ADD COLUMN IF NOT EXISTS parent_build_id UUID "
+            + "REFERENCES builds(id) ON DELETE SET NULL", "Added builds.parent_build_id");
     }
     
     private void createBuildTasksTable(Connection connection) throws SQLException {
@@ -145,6 +149,31 @@ public class DatabaseSchema {
         addBuildForeignKeyIfMissing(connection, "rail_planning_jobs");
     }
     
+    /**
+     * Where a placed structure came from (Starlark source and props, schematic id), one row per build,
+     * so a placement can be inspected and revised after the compiler's artifact cache evicts it.
+     */
+    private void createBuildSourcesTable(Connection connection) throws SQLException {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS build_sources (
+                build_id UUID PRIMARY KEY REFERENCES builds(id) ON DELETE CASCADE,
+                kind VARCHAR(32) NOT NULL,
+                artifact_id VARCHAR(64),
+                schematic_id VARCHAR(255),
+                source TEXT,
+                entry VARCHAR(255),
+                props JSONB,
+                root_size JSONB,
+                y_offset INTEGER,
+                target JSONB,
+                details JSONB,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+            """;
+
+        execute(connection, sql, "Created build_sources table");
+    }
+
     private void createIndexes(Connection connection) throws SQLException {
         String[] indexes = {
             "CREATE INDEX IF NOT EXISTS idx_builds_status ON builds(status)",
@@ -155,6 +184,9 @@ public class DatabaseSchema {
             "CREATE INDEX IF NOT EXISTS idx_tasks_coordinates ON build_tasks(min_x, min_y, min_z, max_x, max_y, max_z)",
             "CREATE INDEX IF NOT EXISTS idx_rail_planning_build_id ON rail_planning_jobs(build_id)",
             "CREATE INDEX IF NOT EXISTS idx_rail_planning_status ON rail_planning_jobs(status)",
+            "CREATE INDEX IF NOT EXISTS idx_builds_parent ON builds(parent_build_id)",
+            "CREATE INDEX IF NOT EXISTS idx_build_sources_artifact ON build_sources(artifact_id)",
+            "CREATE INDEX IF NOT EXISTS idx_build_sources_schematic ON build_sources(schematic_id)",
             // Spatial index for efficient location queries using box type
             "CREATE INDEX IF NOT EXISTS idx_tasks_location_query ON build_tasks USING GIST (box(point(min_x, min_z), point(max_x, max_z)))"
         };

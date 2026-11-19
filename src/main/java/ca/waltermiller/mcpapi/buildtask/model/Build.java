@@ -15,6 +15,7 @@ public class Build {
     private Instant createdAt;
     private Instant completedAt;
     private String world;
+    private UUID parentBuildId;
 
     public Build() {
         this.id = UUID.randomUUID();
@@ -94,6 +95,15 @@ public class Build {
         this.world = world;
     }
 
+    /** The build this one revised in place, or null. */
+    public UUID getParentBuildId() {
+        return parentBuildId;
+    }
+
+    public void setParentBuildId(UUID parentBuildId) {
+        this.parentBuildId = parentBuildId;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
@@ -117,6 +127,7 @@ public class Build {
                 ", createdAt=" + createdAt +
                 ", completedAt=" + completedAt +
                 ", world='" + world + '\'' +
+                (parentBuildId != null ? ", parentBuildId=" + parentBuildId : "") +
                 '}';
     }
 }
