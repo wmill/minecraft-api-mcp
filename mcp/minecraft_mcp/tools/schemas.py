@@ -350,6 +350,50 @@ TOOL_SURVEY_SITE = Tool(
     outputSchema=SurveyResult.model_json_schema(),
 )
 
+_INT32 = {"type": "integer", "minimum": -2147483648, "maximum": 2147483647}
+
+TOOL_RENDER_REGION = Tool(
+    name="render_region",
+    description=(
+        "See what is actually in the world: render a placed build in context (build_id, widened by a margin so "
+        "terrain and neighbours show) or any cuboid, with the same renderer as get_starlark_preview. Use it after "
+        "place_starlark_structure, place_schematic, revise_build or block edits to check how a build sits on the "
+        "terrain, seams with neighbours, and interiors. The default 'sheet' is one labelled image (about 600 "
+        "tokens): iso from the south-east, top-down plan (north up) and the four elevations. view='floors' gives "
+        "a plan of every detected storey; cut_y/cut_x/cut_z (WORLD coordinates) slice it open. Read-only; only "
+        "already-loaded chunks can be rendered; at most 1,000,000 blocks. Needs the starlark service."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "build_id": {"type": "string", "description": "Recorded build to render with its surroundings (instead of a cuboid)"},
+            **{key: dict(_INT32, description="Cuboid corner (inclusive); give all six instead of build_id")
+               for key in ("x1", "y1", "z1", "x2", "y2", "z2")},
+            "world": {"type": "string", "default": "minecraft:overworld"},
+            "margin": {"type": "integer", "minimum": 0, "maximum": 32, "default": 6,
+                       "description": "With build_id: blocks of surroundings on each horizontal side"},
+            "below": {"type": "integer", "minimum": 0, "maximum": 32, "default": 3,
+                      "description": "With build_id: blocks of ground under the build's lowest block"},
+            "above": {"type": "integer", "minimum": 0, "maximum": 32, "default": 4,
+                      "description": "With build_id: blocks of air over the build's highest block"},
+            "view": {
+                "type": "string",
+                "enum": ["sheet", "iso", "top", "north", "south", "east", "west", "section", "floors"],
+                "default": "sheet",
+                "description": ("sheet = all views in one image (or cutaway + section with a cut); section needs "
+                                "a cut; floors = plan of each storey"),
+            },
+            "cut_y": dict(_INT32, description="World Y to slice at; removes everything above (floor + 2 cuts through doors and furniture)"),
+            "cut_x": dict(_INT32, description="World X to slice at; removes everything east of it"),
+            "cut_z": dict(_INT32, description="World Z to slice at; removes everything south of it"),
+            "max_px": {"type": "integer", "minimum": 64, "maximum": 1024,
+                       "description": "Longest edge for a single view (default 768), or tile size for a sheet (default 256)"},
+        },
+        "additionalProperties": False,
+    },
+)
+
 _ACCESS_POINT = {"type": "object", "properties": {k: {"type": "integer"} for k in ("x", "y", "z")}, "required": ["x", "y", "z"], "additionalProperties": False}
 
 TOOL_CHECK_ACCESS = Tool(
@@ -2581,6 +2625,7 @@ TOOL_SCHEMAS = [
     TOOL_GET_HEIGHTMAP,
     TOOL_SURVEY_SITE,
     TOOL_CHECK_ACCESS,
+    TOOL_RENDER_REGION,
     TOOL_SUMMARIZE_HEIGHTMAP,
     TOOL_PREVIEW_HEIGHTMAP,
     TOOL_MAP_TERRAIN,

@@ -73,6 +73,19 @@ class StarlarkServiceClient:
             return response.content, {key: response.headers[key] for key in ("x-artifact-size", "x-preview-floors")
                                       if key in response.headers}
 
+    async def upload_render(self, data: bytes, origin: Optional[str] = None,
+                            world: Optional[str] = None) -> dict[str, Any]:
+        """Store a captured world region (gzipped structure NBT) for rendering; returns its rgn_ artifact id."""
+        headers = {"Content-Type": "application/octet-stream"}
+        if origin:
+            headers["X-Region-Origin"] = origin
+        if world:
+            headers["X-Region-World"] = world
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(f"{self.base_url}/renders", content=data, headers=headers)
+            response.raise_for_status()
+            return response.json()
+
     async def get_catalog(self, topic: str = "quickstart", component: str | None = None) -> str:
         async with httpx.AsyncClient(timeout=10.0) as client:
             params = {"component": component} if component is not None else {"topic": topic}

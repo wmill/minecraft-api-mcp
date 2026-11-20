@@ -364,6 +364,16 @@ class MinecraftAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def capture_region(self, params: dict) -> tuple[bytes, dict[str, str]]:
+        """Gzipped structure NBT of a world cuboid (or a build plus margin) and the X-Region-*/X-Build-* headers."""
+        query = {key: str(value) for key, value in params.items() if value is not None}
+        async with self._http_client(timeout=40.0) as client:
+            response = await client.get(f"{self.base_url}/api/world/region/nbt", params=query)
+            response.raise_for_status()
+            return response.content, {key: response.headers[key] for key in
+                                      ("x-region-origin", "x-region-size", "x-region-world", "x-build-removed")
+                                      if key in response.headers}
+
     async def check_access(self, payload: dict) -> dict:
         async with self._http_client(timeout=40.0) as client:
             response = await client.post(f"{self.base_url}/api/world/access/check", json=payload)

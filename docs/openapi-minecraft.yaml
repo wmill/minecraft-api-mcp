@@ -551,6 +551,72 @@ paths:
               schema:
                 $ref: "#/components/schemas/SiteSurveyError"
 
+  /api/world/region/nbt:
+    get:
+      tags: [blocks]
+      summary: Capture a world cuboid as gzipped structure NBT
+      operationId: captureRegion
+      description: >-
+        Read-only; not tracked as an operation and never lock-checked. Give either a cuboid
+        (x1..z2, inclusive, normalized if reversed) or a recorded build_id, whose recorded bounds
+        are widened by margin (sideways), below and above. The region is clamped to the world's
+        height range and capped at REGION_RENDER_MAX_VOLUME blocks (default 1,000,000). Only
+        already-loaded chunks are read. Blocks, air and block entities are captured; entities are not.
+        MCP render_region posts the bytes to the starlark service (POST /renders) for rendering.
+      parameters:
+        - {name: world, in: query, schema: {type: string, default: "minecraft:overworld"}}
+        - {name: build_id, in: query, schema: {type: string, format: uuid}}
+        - {name: margin, in: query, schema: {type: integer, minimum: 0, maximum: 32, default: 6}}
+        - {name: below, in: query, schema: {type: integer, minimum: 0, maximum: 32, default: 3}}
+        - {name: above, in: query, schema: {type: integer, minimum: 0, maximum: 32, default: 4}}
+        - {name: x1, in: query, schema: {type: integer}}
+        - {name: y1, in: query, schema: {type: integer}}
+        - {name: z1, in: query, schema: {type: integer}}
+        - {name: x2, in: query, schema: {type: integer}}
+        - {name: y2, in: query, schema: {type: integer}}
+        - {name: z2, in: query, schema: {type: integer}}
+      responses:
+        "200":
+          description: Gzipped vanilla structure NBT of the region
+          headers:
+            X-Region-World: {schema: {type: string}, description: Resolved world id}
+            X-Region-Origin: {schema: {type: string, example: "100,60,-20"}, description: Minimum corner (structure local 0,0,0)}
+            X-Region-Size: {schema: {type: string, example: "20,12,16"}, description: Size in blocks (x,y,z)}
+            X-Build-Removed: {schema: {type: string, enum: ["true", "false"]}, description: With build_id; true when the build was undone or superseded}
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        "400":
+          description: Invalid parameters or world, region outside the height range, too large, or build without bounds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionCaptureError"
+        "404":
+          description: Unknown build_id (code build_not_found)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionCaptureError"
+        "409":
+          description: Chunks in the region are not loaded (code chunks_not_loaded, at most 64 listed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionCaptureError"
+        "503":
+          description: Build history unavailable for build_id (code builds_unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionCaptureError"
+        "504":
+          description: Timed out waiting for the server thread (code capture_timeout)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionCaptureError"
+
   /api/world/access/check:
     post:
       tags: [blocks]
@@ -1978,6 +2044,25 @@ components:
         x2: {type: integer, format: int32}
         z2: {type: integer, format: int32}
         world: {type: string, default: "minecraft:overworld"}
+
+    RegionCaptureError:
+      type: object
+      required: [success, code, error]
+      properties:
+        success: {const: false}
+        code:
+          type: string
+          enum: [invalid_request, region_too_large, build_not_found, build_has_no_bounds,
+                 builds_unavailable, chunks_not_loaded, capture_timeout]
+        error: {type: string}
+        missing_chunks:
+          type: array
+          items:
+            type: object
+            required: [x, z]
+            properties:
+              x: {type: integer}
+              z: {type: integer}
 
     SiteSurveyError:
       type: object

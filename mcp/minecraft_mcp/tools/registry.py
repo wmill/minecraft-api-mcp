@@ -9,7 +9,7 @@ from typing import Callable, Optional
 from mcp.types import CallToolResult
 
 from ..handlers import area_locks, world, blocks, messages, prefabs, builds, system, effects, schematics, starlark, survey, terrain
-from ..handlers import access, markers, operations, revisions
+from ..handlers import access, markers, operations, render, revisions
 
 
 # Tool handler type
@@ -39,6 +39,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_heightmap": blocks.handle_get_heightmap,
     "survey_site": survey.handle_survey_site,
     "check_access": access.handle_check_access,
+    "render_region": render.handle_render_region,
     "summarize_heightmap": blocks.handle_summarize_heightmap,
     "preview_heightmap": blocks.handle_preview_heightmap,
     "map_terrain": blocks.handle_map_terrain,

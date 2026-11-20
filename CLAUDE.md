@@ -147,6 +147,7 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 - `TerrainSmoothEndpoint` - Ground smoothing (`POST /api/world/terrain/smooth`, MCP `smooth_terrain`): gaussian/median/bilateral filters or a flat pad, vegetation cleared, built/fluid columns masked; `dry_run` returns before/after relief and change maps; writes are lock-checked, snapshotted and recorded as an undoable `TERRAIN_SMOOTH` build (logic in `terrain/`)
 - `SiteSurveyEndpoint` - Read-only footprint assessment (`POST /api/world/blocks/survey`): walking-plane heights, slope, water/lava/vegetation coverage, cut/fill grading suggestion, overlapping reservations and builds (logic in `survey/`)
 - `AccessCheckEndpoint` - Read-only path check (`POST /api/world/access/check`, MCP `check_access`): start → named targets (optional `via` doorway) and an optional reachability map (`build_id` or cuboid) with per-level reachable counts and unreached indoor/outdoor groups; `player` profile is our own movement search, `villager` runs vanilla `PathNodeNavigator` with an unspawned villager (no ladders). `build_id` bounds come from a `BuildLookup` set in `APIServer.initializeBuildTaskSystem` (logic in `access/`)
+- `RegionCaptureEndpoint` - Read-only capture of a world cuboid or a recorded build plus margin as gzipped structure NBT (`GET /api/world/region/nbt`, untracked, never lock-checked); loaded chunks only (409 `chunks_not_loaded`), capped at `REGION_RENDER_MAX_VOLUME` (default 1,000,000). Parsing/bounds in pure `RegionCaptureRequest`; build bounds come from the same `BuildLookup` as `AccessCheckEndpoint`. Used by MCP `render_region` (see `docs/world-render.md`)
 - `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, undo/redo, clone, translate, preview, rail planning, and location query routes
 - `TaskExecutor` - Executes queued build tasks on the Minecraft server thread; generic `executeAsync`/`dispatch` helpers parse task data and route it to the endpoint cores
 - `RailRenderInspectionService` - Dry-run rail placement inspection used by the audit route
@@ -282,6 +283,7 @@ DB_PASSWORD=your_password
   - `revisions.py` - `get_build_source`, `verify_build`, `revise_build` (recompile the recorded Starlark script with changes, or swap the schematic, and replace in place)
   - `survey.py` - `survey_site`
   - `access.py` - `check_access` (text summary of targets, floors and unreached indoor areas)
+  - `render.py` - `render_region` (capture a world region or build in context from the mod, upload it to the starlark service's `/renders`, return the preview image; cuts in world coordinates)
   - `terrain.py` - `smooth_terrain` (dry-run before/after/change images plus summary)
   - `schematics.py` - Optional schematic search, tags, metadata lookup, preview images, and NBT placement orchestration
   - `starlark.py` - Optional Starlark build/preview/place, docs, examples, and script library tools
@@ -369,6 +371,7 @@ Compiles Starlark build scripts submitted by MCP users into placeable structure 
 - `runner.py` - in-subprocess build worker (`build_source` → NBT + result JSON on stdout)
 - `cache.py` - artifact hashing, sharded disk layout, LRU eviction, lib fingerprint
 - `library.py` - saved-script library: versioned storage, source analysis (params/exports/loads), local search
+- `regions.py` - uploaded world regions (`POST /renders`): validation (gzip, decompressed cap, structure size/volume) and content-addressed `rgn_` ids
 - `docs.py` - focused views of the component catalog plus the `library` usage topic
 - `previews.py` - lazy per-artifact preview rendering (bounded concurrency, per-artifact lock), on-demand cut/floor variants, downscaled views and labelled tile sheets
 - `preview_worker.py` - in-subprocess render of all six views plus `meta.json` (with the chosen background), or one cut/floors variant
@@ -392,6 +395,7 @@ STARLARK_PREVIEW_TIMEOUT_S=30            # wall-clock cap for rendering one arti
 **HTTP API:**
 - `GET /health`
 - `POST /build` — `{source, entry?, props?, root_size?}`
+- `POST /renders` — raw gzipped structure NBT (optional `X-Region-Origin`/`X-Region-World` headers) → `{artifact_id: "rgn_…", size, cached}`; `rgn_` ids work on every `/artifacts/{id}` route (no source or stages)
 - `GET /artifacts/{artifact_id}`, `GET /artifacts/{artifact_id}/source` and `GET /artifacts/{artifact_id}/nbt?stage=`
 - `GET /artifacts/{artifact_id}/images/{view}?max_px=...&cut_x|cut_y|cut_z=...` - `view` is `sheet`, one of `iso/top/north/south/east/west`, `section` (needs a cut), or `floors`; with a cut only `sheet` (cutaway + section), `iso` and `section` are allowed; responses carry `X-Artifact-Size` and, for `floors`, `X-Preview-Floors` (`floor:cut,...`); same sizing as the schematic image route; 400 for bad cuts, 404 for unknown artifacts, 503 if rendering fails or times out
 - `GET /docs/catalog` — the script API reference (component catalog markdown)
@@ -402,6 +406,7 @@ STARLARK_PREVIEW_TIMEOUT_S=30            # wall-clock cap for rendering one arti
 
 **MCP tools using this service:**
 - `build_starlark_structure` — compile source; failure text lists numbered diagnostics for the edit loop; `include_preview` attaches a small iso render (best-effort); an optional `placement` object compiles and places in one call
+- `render_region` — render a live world region or placed build in context through `/renders` (see `docs/world-render.md`)
 - `get_starlark_preview` — preview sheet or single view of a compiled artifact as MCP image content; `cut_x`/`cut_y`/`cut_z` and `view="floors"` show interiors
 - `place_starlark_structure` — fetch artifact NBT, apply its `y_offset`, place via the mod's NBT placement endpoint
 - `get_starlark_docs`
@@ -478,6 +483,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `BuildTaskTest`, `BoundingBoxTest`, `TaskDataValidatorTest`, `TaskDataTranslatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`, `AtomicQueueIntegrationTest` (queue atomicity, execution claims and the interrupted-execution sweep; gated behind `DB_TEST` and requires a `DB_NAME` containing `test`)
 - Area lock tests: `AreaLockServiceTest`, `AreaLockEndpointTest`
 - Site survey tests: `SiteSurveyTest`, `SiteSurveyEndpointTest`, `SurveyOccupancyTest`
+- Region capture tests: `RegionCaptureRequestTest`, `RegionCaptureEndpointTest`
 - Access check tests: `PlayerAccessSearchTest` (fake `GridTerrain`: jumps, stairs, drops, ladders, trapdoors, door policies, via, limits, map), `AccessCheckEndpointTest`
 - Terrain smoothing tests: `TerrainSmootherTest`, `TerrainRewriterTest`, `TerrainSmoothEndpointTest`
 - Preview tests: `BlockGridTest`, `IsoRendererTest`, `PaletteTest`, `TerrainHeightmapGridAdapterTest`, `TerrainMapRendererTest`, `SurfaceCategoryTest`
@@ -498,6 +504,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_area_locks.py` - Lock tools, `lock_id` forwarding (incl. multipart), concurrent calls
 - `test_survey_site.py` - `survey_site` handler
 - `test_check_access.py` - `check_access` registration, summary text and errors
+- `test_render_region.py` - `render_region` capture→upload→image orchestration, world→local cuts, error hints, client HTTP contract
 - `test_preview_heightmap.py` - `preview_heightmap` image output
 - `test_teleport_player.py` - `teleport_player` handler
 - `test_spawn_entity.py` - `spawn_entity` options schema, passenger payload conversion, tree summary and 400 messages
@@ -516,6 +523,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_cache.py` - Artifact id hashing, LRU eviction, lib fingerprint
 - `test_sandbox.py` - Timeout kill, resource-limit rejections, queue-full 429
 - `test_library.py` - Save/version immutability, failed-build rejection, save by artifact id, loading saved versions, search filters
+- `test_regions.py` - `POST /renders` content addressing, validation limits, rendering uploaded regions, eviction
 - `test_previews.py` - Preview views/sheet, orientation, cutaways/sections/floors, cut validation, background choice, stale preview re-render, render failure/timeout 503, eviction of preview dirs, stair shapes (all facing/shape/half combinations against Minecraft's table) and slab heights
 
 **Testing Best Practices** (see TESTING.md):
@@ -540,8 +548,8 @@ Minecraft uses a right-handed 3D coordinate system:
 - Optional schematic service runs on port 7080 when started
 - Optional Starlark build service runs on port 7090 when started; its artifact cache in `starlark-service-data/` is git-ignored and safe to delete (artifacts regenerate deterministically); its script library in `starlark-library/` is durable and meant to be committed
 - Database schema auto-creates on first server start
-- Design docs and OpenAPI contracts live in `docs/` (`access-check.md`, `area-locks.md`, `operations-and-queues.md`, `site-survey.md`, `terrain-smoothing.md`, `undo-and-dry-run.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
-- Mod-side environment variables beyond the DB settings: `AREA_LOCK_IDLE_SECONDS`, `BUILD_SNAPSHOT_DIR`, `BUILD_SNAPSHOT_MAX_VOLUME`
+- Design docs and OpenAPI contracts live in `docs/` (`access-check.md`, `area-locks.md`, `operations-and-queues.md`, `site-survey.md`, `terrain-smoothing.md`, `undo-and-dry-run.md`, `world-render.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
+- Mod-side environment variables beyond the DB settings: `AREA_LOCK_IDLE_SECONDS`, `BUILD_SNAPSHOT_DIR`, `BUILD_SNAPSHOT_MAX_VOLUME`, `REGION_RENDER_MAX_VOLUME`
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
 - Build tasks are executed asynchronously and can be queried by location for spatial awareness
 - Run Python commands from the relevant Python project with `uv run`

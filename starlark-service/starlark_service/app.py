@@ -12,11 +12,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
-from . import cache, library, previews
+from . import cache, library, previews, regions
 from .config import ServiceConfig, load_config
 from .docs import UnknownDocs, catalog_view
 from .sandbox import BuildQueueFull, Sandbox
@@ -189,6 +189,43 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             resolved, source = library.read_source(cfg.library_dir, name, version)
         return PlainTextResponse(source, media_type="text/plain",
                                  headers={"X-Library-Version": str(resolved)})
+
+    @app.post("/renders")
+    async def upload_render(request: Request) -> dict[str, Any]:
+        """Store an uploaded structure NBT (a captured world region) so the artifact image routes can render it."""
+        declared = request.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > cfg.max_nbt_bytes:
+            raise HTTPException(status_code=413, detail=f"the NBT is larger than {cfg.max_nbt_bytes} bytes")
+        data = bytearray()
+        async for chunk in request.stream():
+            data.extend(chunk)
+            if len(data) > cfg.max_nbt_bytes:
+                raise HTTPException(status_code=413, detail=f"the NBT is larger than {cfg.max_nbt_bytes} bytes")
+        data = bytes(data)
+        try:
+            origin = regions.parse_origin(request.headers.get("x-region-origin"))
+            world = regions.parse_world(request.headers.get("x-region-world"))
+            size = await asyncio.to_thread(regions.inspect, data, cfg.max_root_volume)
+        except regions.InvalidRegion as exc:
+            raise HTTPException(status_code=400, detail=f"invalid_nbt: {exc}") from None
+        identifier = regions.region_id(data, origin, world)
+        if cache.load_metadata(cfg.cache_dir, identifier) is not None:
+            cache.touch(cfg.cache_dir, identifier)
+            return {"artifact_id": identifier, "size": size, "cached": True}
+        path = cache.nbt_path(cfg.cache_dir, identifier)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{uuid.uuid4().hex}.nbt.tmp")
+        tmp.write_bytes(data)
+        tmp.replace(path)
+        metadata: dict[str, Any] = {"artifact_id": identifier, "kind": regions.KIND, "size": size,
+                                    "nbt_bytes": len(data)}
+        if origin is not None:
+            metadata["origin"] = origin
+        if world is not None:
+            metadata["world"] = world
+        cache.store_metadata(cfg.cache_dir, identifier, metadata)
+        cache.evict(cfg.cache_dir, cfg.cache_max_bytes)
+        return {"artifact_id": identifier, "size": size, "cached": False}
 
     @app.get("/artifacts/{artifact_id}")
     async def get_artifact(artifact_id: str) -> dict[str, Any]:

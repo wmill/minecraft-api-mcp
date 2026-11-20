@@ -78,6 +78,7 @@ public class APIServer {
         new BlocksEndpoint(app, server, logger, locks);
         new ca.waltermiller.mcpapi.endpoints.SiteSurveyEndpoint(app, server, locks, surveyOccupancy);
         var accessEndpoint = new ca.waltermiller.mcpapi.endpoints.AccessCheckEndpoint(app, server);
+        var regionEndpoint = new ca.waltermiller.mcpapi.endpoints.RegionCaptureEndpoint(app, server);
         new PlayersEndpoint(app, server, logger);
         new MessageEndpoint(app, server, logger);
         new PlayerTeleportEndpoint(app, server, logger);
@@ -96,7 +97,7 @@ public class APIServer {
         // Initialize build task management system
         try {
             initializeBuildTaskSystem(app, server, logger, nbtEndpoint, terrainEndpoint, locks, surveyOccupancy, snapshots,
-                accessEndpoint);
+                accessEndpoint, regionEndpoint);
         } catch (SQLException | RuntimeException e) {
             logger.error("Failed to initialize build task system", e);
             // Continue without build task system if database is not available
@@ -113,7 +114,8 @@ public class APIServer {
                                                    AreaLockService locks,
                                                    ca.waltermiller.mcpapi.survey.SurveyOccupancy surveyOccupancy,
                                                    SnapshotStore snapshots,
-                                                   ca.waltermiller.mcpapi.endpoints.AccessCheckEndpoint accessEndpoint)
+                                                   ca.waltermiller.mcpapi.endpoints.AccessCheckEndpoint accessEndpoint,
+                                                   ca.waltermiller.mcpapi.endpoints.RegionCaptureEndpoint regionEndpoint)
             throws SQLException {
         logger.info("Initializing build task management system...");
         
@@ -145,7 +147,7 @@ public class APIServer {
         nbtEndpoint.setBuildService(buildService);
         terrainEndpoint.setBuildService(buildService);
         surveyOccupancy.setBuildRepository(buildRepository);
-        accessEndpoint.setBuildLookup(id -> {
+        ca.waltermiller.mcpapi.endpoints.AccessCheckEndpoint.BuildLookup buildLookup = id -> {
             var build = buildRepository.findById(id);
             if (build.isEmpty()) return java.util.Optional.empty();
             ca.waltermiller.mcpapi.access.PlayerAccessSearch.Box bounds = null;
@@ -158,7 +160,9 @@ public class APIServer {
             }
             return java.util.Optional.of(new ca.waltermiller.mcpapi.endpoints.AccessCheckEndpoint.BuildArea(
                 build.get().getWorld(), build.get().getStatus().removedFromWorld(), bounds));
-        });
+        };
+        accessEndpoint.setBuildLookup(buildLookup);
+        regionEndpoint.setBuildLookup(buildLookup);
 
         // Create and register build task endpoint
         new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, railPlanningService, taskExecutor,

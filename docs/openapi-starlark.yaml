@@ -67,6 +67,51 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /renders:
+    post:
+      tags: [artifacts]
+      summary: Store an uploaded structure NBT (a captured world region) for rendering
+      operationId: uploadRender
+      description: >-
+        The body is gzipped vanilla structure NBT, normally from the mod's GET /api/world/region/nbt.
+        It is validated (gzip, at most 64 MB decompressed, a size whose volume is at most
+        STARLARK_MAX_ROOT_VOLUME, a single palette and block list) and stored in the artifact cache
+        under rgn_ + sha256(bytes, origin, world)[:16], so the /artifacts/{id}/images routes render it
+        (views, cutaways, sections, floors) and an unchanged region reuses its previews. Region
+        artifacts count toward the cache byte cap and have no source or install stages.
+      parameters:
+        - {name: X-Region-Origin, in: header, schema: {type: string, pattern: "^-?\\d+,-?\\d+,-?\\d+$"}, description: World minimum corner, echoed in metadata}
+        - {name: X-Region-World, in: header, schema: {type: string}, description: Namespaced world id, echoed in metadata}
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary}
+      responses:
+        "200":
+          description: Stored (or already cached)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [artifact_id, size, cached]
+                properties:
+                  artifact_id: {type: string, pattern: "^rgn_[0-9a-f]{16}$"}
+                  size: {type: array, items: {type: integer}, minItems: 3, maxItems: 3}
+                  cached: {type: boolean}
+        "400":
+          description: Not gzip, not a structure NBT, too many blocks, or malformed headers (detail starts with invalid_nbt)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Body larger than STARLARK_MAX_NBT_BYTES
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /artifacts/{artifact_id}:
     get:
       tags: [artifacts]
@@ -104,7 +149,7 @@ paths:
         - name: artifact_id
           in: path
           required: true
-          schema: {type: string, pattern: "^slk_[0-9a-f]{16}$"}
+          schema: {type: string, pattern: "^(slk|rgn)_[0-9a-f]{16}$"}
       responses:
         "200":
           description: Script source
@@ -249,10 +294,10 @@ components:
       name: artifact_id
       in: path
       required: true
-      description: Artifact id returned by POST /build (slk_ followed by 16 hex chars)
+      description: Artifact id returned by POST /build (slk_) or POST /renders (rgn_), followed by 16 hex chars
       schema:
         type: string
-        pattern: "^slk_[0-9a-f]{16}$"
+        pattern: "^(slk|rgn)_[0-9a-f]{16}$"
 
   schemas:
     BuildRequest:

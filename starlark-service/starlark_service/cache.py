@@ -14,7 +14,9 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-ARTIFACT_ID_PATTERN = re.compile(r"^slk_[0-9a-f]{16}$")
+# slk_: compiled Starlark builds; rgn_: world regions uploaded for rendering (see regions.py).
+ARTIFACT_ID_PATTERN = re.compile(r"^(slk|rgn)_[0-9a-f]{16}$")
+ARTIFACT_GLOB = "*/*_*.nbt"
 
 
 def _core_fingerprint() -> str | None:
@@ -63,7 +65,7 @@ def nbt_path(cache_dir: Path, identifier: str) -> Path:
 def stages_dir(nbt: Path) -> Path:
     """Install-stage NBTs of a staged build (`stage<N>.nbt`), beside its main NBT.
 
-    A directory, not `slk_*.stage<N>.nbt` files, so the `*/slk_*.nbt` globs
+    A directory, not `slk_*.stage<N>.nbt` files, so the ARTIFACT_GLOB scans
     below keep matching one file per artifact."""
     return nbt.with_suffix(".stages")
 
@@ -113,7 +115,7 @@ def _previews_bytes(path: Path) -> int:
 def stats(cache_dir: Path) -> dict[str, int]:
     artifacts = 0
     total = 0
-    for path in cache_dir.glob("*/slk_*.nbt"):
+    for path in cache_dir.glob(ARTIFACT_GLOB):
         artifacts += 1
         total += path.stat().st_size + _previews_bytes(path)
         for companion in (path.with_suffix(".json"), path.with_suffix(".star")):
@@ -126,7 +128,7 @@ def evict(cache_dir: Path, max_bytes: int) -> None:
     """Delete oldest artifacts (by NBT mtime) and their companions and previews until under the byte cap."""
     entries = []
     total = 0
-    for path in cache_dir.glob("*/slk_*.nbt"):
+    for path in cache_dir.glob(ARTIFACT_GLOB):
         companions = [path.with_suffix(".json"), path.with_suffix(".star")]
         size = (path.stat().st_size + sum(c.stat().st_size for c in companions if c.exists())
                 + _previews_bytes(path))
