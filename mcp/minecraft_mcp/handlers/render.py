@@ -13,7 +13,7 @@ import httpx
 from mcp.types import CallToolResult, TextContent
 
 from ..client.minecraft_api import MinecraftAPIClient
-from .starlark import ORIENTATION_NOTE, _detail, _image, _starlark_client
+from .starlark import FRAME_NOTE, FRAMED_VIEWS, ORIENTATION_NOTE, _detail, _image, _starlark_client
 
 AXES = ("x", "y", "z")
 
@@ -68,7 +68,7 @@ async def handle_render_region(api_client: MinecraftAPIClient, build_id: str | N
                                world: str | None = None, margin: int | None = None, below: int | None = None,
                                above: int | None = None, view: str = "sheet", max_px: int | None = None,
                                cut_x: int | None = None, cut_y: int | None = None, cut_z: int | None = None,
-                               **arguments: Any) -> CallToolResult:
+                               annotate: bool = True, **arguments: Any) -> CallToolResult:
     corners = {"x1": x1, "y1": y1, "z1": z1, "x2": x2, "y2": y2, "z2": z2}
     given = [name for name, value in corners.items() if value is not None]
     if build_id and given:
@@ -115,7 +115,7 @@ async def handle_render_region(api_client: MinecraftAPIClient, build_id: str | N
     try:
         uploaded = await client.upload_render(data, info.get("x-region-origin"), region_world)
         image, preview_info = await client.get_artifact_preview(uploaded["artifact_id"], view, max_px,
-                                                                local_cut or None)
+                                                                local_cut or None, annotate)
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status == 413:
@@ -149,6 +149,7 @@ async def handle_render_region(api_client: MinecraftAPIClient, build_id: str | N
         lines.append("Floor plans (world Y): " + (", ".join(levels) or "none detected") + ". Each plan looks down "
                      "from two blocks above the floor, north up. Use cut_y with view='iso' for a 3D cutaway.")
     else:
-        lines.append(f"{view} view. {ORIENTATION_NOTE} Colours are flat per block type. "
+        framed = f" {FRAME_NOTE} Labels are world coordinates." if view in FRAMED_VIEWS and annotate else ""
+        lines.append(f"{view} view. {ORIENTATION_NOTE}{framed} Colours are flat per block type. "
                      "For interiors use view='floors' or cut_y/cut_x/cut_z (world coordinates).")
     return CallToolResult(content=[_image(image), TextContent(type="text", text="\n".join(lines))])

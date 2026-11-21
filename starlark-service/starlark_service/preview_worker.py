@@ -18,11 +18,12 @@ import os
 import sys
 from pathlib import Path
 
+import numpy as np
 from nbt_image_gen.loader import load_structure
 from nbt_image_gen.metadata import build_metadata
 
 from . import render
-from .previews import PREVIEW_VERSION
+from .previews import PREVIEW_VERSION, TOP_HEIGHTS
 
 # Native render sizes stay near these bounds; the HTTP layer resizes to max_px anyway.
 ORTHO_TARGET_PX = 1024
@@ -57,6 +58,8 @@ def render_base(structure, out: Path, shapes=None) -> None:
     views["iso"] = render.render_iso(structure, structure.grid, scale=_iso_scale(structure), shapes=shapes)
     for view, img in views.items():
         img.save(out / f"{view}.png")
+    # Per-column top-block Y for the spot heights on annotated top views.
+    np.save(out / TOP_HEIGHTS, render.top_heights(structure.grid))
 
     meta = build_metadata(structure)
     name, colour = render.choose_background(list(views.values()))

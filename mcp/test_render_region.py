@@ -55,7 +55,7 @@ async def test_build_render_captures_uploads_and_returns_image(clients):
     api.capture_region.assert_awaited_once_with(
         {"world": None, "build_id": "b-1", "margin": 4, "below": None, "above": None})
     service.upload_render.assert_awaited_once_with(NBT, "100,60,-20", "minecraft:overworld")
-    service.get_artifact_preview.assert_awaited_once_with("rgn_0123456789abcdef", "sheet", None, None)
+    service.get_artifact_preview.assert_awaited_once_with("rgn_0123456789abcdef", "sheet", None, None, True)
     assert result.content[0].type == "image" and base64.b64decode(result.content[0].data) == PNG
     body = text(result)
     assert "build b-1 in context" in body and "x 100..119, y 60..71, z -20..-5" in body
@@ -67,7 +67,7 @@ async def test_world_cuts_become_local_and_are_range_checked(clients):
     api, service = clients
     result = await handle_render_region(api, x1=100, y1=60, z1=-20, x2=119, y2=71, z2=-5, view="iso", cut_y=65)
     assert not result.isError
-    service.get_artifact_preview.assert_awaited_once_with("rgn_0123456789abcdef", "iso", None, {"cut_y": 5})
+    service.get_artifact_preview.assert_awaited_once_with("rgn_0123456789abcdef", "iso", None, {"cut_y": 5}, True)
     assert "world y=65 (local y=5)" in text(result)
 
     outside = await handle_render_region(api, x1=100, y1=60, z1=-20, x2=119, y2=71, z2=-5, cut_x=99)
@@ -163,3 +163,9 @@ async def test_clients_match_http_contract(monkeypatch):
     assert seen[1].method == "POST" and seen[1].url.path == "/renders" and seen[1].content == NBT
     assert seen[1].headers["x-region-origin"] == "1,2,3"
     assert seen[1].headers["content-type"] == "application/octet-stream"
+
+    await StarlarkServiceClient("http://slk").get_artifact_preview("rgn_0123456789abcdef", "top", 512, annotate=False)
+    assert seen[2].url.path == "/artifacts/rgn_0123456789abcdef/images/top"
+    assert dict(seen[2].url.params) == {"max_px": "512", "annotate": "false"}
+    await StarlarkServiceClient("http://slk").get_artifact_preview("rgn_0123456789abcdef", "top")
+    assert "annotate" not in seen[3].url.params  # the service frames single views by default

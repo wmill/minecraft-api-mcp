@@ -22,6 +22,11 @@ from ..utils.starlark_models import Placement, StarlarkResult
 THUMBNAIL_PX = 384
 ORIENTATION_NOTE = ("Top view has north up and east right; side views are elevations seen from that side "
                     "(south = the +Z face, the default front); iso is viewed from the south-east.")
+FRAMED_VIEWS = ("top", "north", "south", "east", "west")
+FRAME_NOTE = ("Single top/side/section views are framed like a map: grid lines labelled with coordinates, a "
+              "scale bar, and on the top view spot heights (y of the topmost block). Shading: on the top view "
+              "lighter = higher and slopes are lit from the north-west, with dark lines at drops of 2+ blocks; "
+              "on side views darker = further back.")
 
 BUILD_FIELDS = ("artifact_id", "size", "block_count", "entity_count", "ground_level",
                 "y_offset", "cached", "build_ms", "nbt_bytes", "palette", "stages", "stage_delay_ticks")
@@ -305,7 +310,8 @@ CUT_NOTE = ("Cuts use the artifact's local coordinates (0 = its west/bottom/nort
             "full colour with black outlines where the material changes, blocks further back fade out.")
 
 
-def _preview_text(artifact_id: str, view: str, cut: dict[str, int], info: dict[str, str]) -> str:
+def _preview_text(artifact_id: str, view: str, cut: dict[str, int], info: dict[str, str],
+                  annotate: bool = True) -> str:
     size = info.get("x-artifact-size")
     sized = f" (size {size}, x by y by z)" if size else ""
     if cut:
@@ -316,17 +322,18 @@ def _preview_text(artifact_id: str, view: str, cut: dict[str, int], info: dict[s
         listed = ", ".join(f"floor y={floor} (cut y={cut_y})" for floor, cut_y in levels) or "none"
         return (f"Artifact {artifact_id}{sized} floor plans: {listed}. Each plan looks down from two blocks above "
                 f"the floor, north up. {CUT_NOTE} Use cut_y with view='iso' for a 3D cutaway of one storey.")
-    return (f"Artifact {artifact_id}{sized} {view} preview. {ORIENTATION_NOTE} "
+    framed = f" {FRAME_NOTE} Labels are local coordinates." if view in FRAMED_VIEWS and annotate else ""
+    return (f"Artifact {artifact_id}{sized} {view} preview. {ORIENTATION_NOTE}{framed} "
             "To check interiors, use view='floors' or a cut_y/cut_x/cut_z.")
 
 
 async def handle_get_starlark_preview(api_client: MinecraftAPIClient, artifact_id: str, view: str = "sheet",
                                       max_px: int | None = None, cut_x: int | None = None,
                                       cut_y: int | None = None, cut_z: int | None = None,
-                                      **arguments) -> CallToolResult:
+                                      annotate: bool = True, **arguments) -> CallToolResult:
     cut = {key: value for key, value in (("cut_x", cut_x), ("cut_y", cut_y), ("cut_z", cut_z)) if value is not None}
     try:
-        data, info = await _starlark_client().get_artifact_preview(artifact_id, view, max_px, cut or None)
+        data, info = await _starlark_client().get_artifact_preview(artifact_id, view, max_px, cut or None, annotate)
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status == 404:
@@ -342,7 +349,7 @@ async def handle_get_starlark_preview(api_client: MinecraftAPIClient, artifact_i
         return _service_error(exc)
     return CallToolResult(content=[
         _image(data),
-        TextContent(type="text", text=_preview_text(artifact_id, view, cut, info)),
+        TextContent(type="text", text=_preview_text(artifact_id, view, cut, info, annotate)),
     ])
 
 

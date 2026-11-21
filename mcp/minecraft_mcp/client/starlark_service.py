@@ -59,14 +59,18 @@ class StarlarkServiceClient:
             return response.content
 
     async def get_artifact_preview(self, artifact_id: str, view: str = "sheet", max_px: Optional[int] = None,
-                                   cut: Optional[dict[str, int]] = None) -> tuple[bytes, dict[str, str]]:
+                                   cut: Optional[dict[str, int]] = None,
+                                   annotate: bool = True) -> tuple[bytes, dict[str, str]]:
         """Image plus the service's info headers (X-Artifact-Size, X-Preview-Floors).
 
-        `cut` is at most one of {"cut_x"|"cut_y"|"cut_z": local coordinate}.
+        `cut` is at most one of {"cut_x"|"cut_y"|"cut_z": local coordinate}. `annotate=False` asks for
+        single views without the map frame (coordinate grid, spot heights, scale bar).
         """
-        params: dict[str, int] = dict(cut or {})
+        params: dict[str, Any] = dict(cut or {})
         if max_px is not None:
             params["max_px"] = max_px
+        if not annotate:
+            params["annotate"] = "false"
         async with httpx.AsyncClient(timeout=45.0) as client:
             response = await client.get(f"{self.base_url}/artifacts/{artifact_id}/images/{view}", params=params or None)
             response.raise_for_status()

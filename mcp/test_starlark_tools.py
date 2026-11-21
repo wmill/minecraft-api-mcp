@@ -379,7 +379,18 @@ async def test_preview_returns_image_with_orientation(clients):
     assert "north up" in result.content[1].text
     assert "size 7x9x7" in result.content[1].text
     assert "view='floors'" in result.content[1].text
-    service.get_artifact_preview.assert_awaited_once_with("slk_0123456789abcdef", "top", 256, None)
+    service.get_artifact_preview.assert_awaited_once_with("slk_0123456789abcdef", "top", 256, None, True)
+
+
+async def test_preview_frame_is_described_and_can_be_turned_off(clients):
+    api, service = clients
+    service.get_artifact_preview.return_value = (PNG, {"x-artifact-size": "7x9x7"})
+    framed = await starlark.handle_get_starlark_preview(api, "slk_0123456789abcdef", view="top")
+    assert "spot heights" in framed.content[1].text and "local coordinates" in framed.content[1].text
+    service.get_artifact_preview.reset_mock()
+    bare = await starlark.handle_get_starlark_preview(api, "slk_0123456789abcdef", view="top", annotate=False)
+    assert "spot heights" not in bare.content[1].text
+    service.get_artifact_preview.assert_awaited_once_with("slk_0123456789abcdef", "top", None, None, False)
 
 
 async def test_preview_passes_one_cut_and_explains_it(clients):
@@ -389,7 +400,7 @@ async def test_preview_passes_one_cut_and_explains_it(clients):
     assert not result.isError
     assert "iso at cut_y=2" in result.content[1].text
     assert "local coordinates" in result.content[1].text
-    service.get_artifact_preview.assert_awaited_once_with("slk_0123456789abcdef", "iso", None, {"cut_y": 2})
+    service.get_artifact_preview.assert_awaited_once_with("slk_0123456789abcdef", "iso", None, {"cut_y": 2}, True)
 
 
 async def test_floors_preview_lists_levels(clients):

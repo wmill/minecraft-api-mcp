@@ -360,7 +360,9 @@ TOOL_RENDER_REGION = Tool(
         "place_starlark_structure, place_schematic, revise_build or block edits to check how a build sits on the "
         "terrain, seams with neighbours, and interiors. The default 'sheet' is one labelled image (about 600 "
         "tokens): iso from the south-east, top-down plan (north up) and the four elevations. view='floors' gives "
-        "a plan of every detected storey; cut_y/cut_x/cut_z (WORLD coordinates) slice it open. Read-only; only "
+        "a plan of every detected storey; cut_y/cut_x/cut_z (WORLD coordinates) slice it open. A single "
+        "top/side/section view is framed like map_terrain's maps, with a world-coordinate grid and (top) spot "
+        "heights, so positions can be read off it. Read-only; only "
         "already-loaded chunks can be rendered; at most 1,000,000 blocks. Needs the starlark service."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
@@ -389,6 +391,9 @@ TOOL_RENDER_REGION = Tool(
             "cut_z": dict(_INT32, description="World Z to slice at; removes everything south of it"),
             "max_px": {"type": "integer", "minimum": 64, "maximum": 1024,
                        "description": "Longest edge for a single view (default 768), or tile size for a sheet (default 256)"},
+            "annotate": {"type": "boolean", "default": True,
+                         "description": ("Frame single top/side/section views like a map: coordinate grid, scale "
+                                         "bar and (top view) spot heights. false = bare image")},
         },
         "additionalProperties": False,
     },
@@ -2441,7 +2446,8 @@ TOOL_GET_STARLARK_PREVIEW = Tool(
         "Exterior views cannot show interiors: use view='floors' for a plan of every detected storey, or "
         "cut_y (or cut_x/cut_z) to slice the build open and check floors, furniture, doors and lighting. "
         "With a cut, 'sheet' shows a cutaway iso and the section side by side, 'iso' the cutaway only, "
-        "'section' the flat cross-section only. Colors are flat per block type (no textures). "
+        "'section' the flat cross-section only. Colors are flat per block type (no textures); single "
+        "top/side/section views add a local-coordinate grid, and the top view spot heights and height shading. "
         "A single view at max_px=768 costs about 800 tokens."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
@@ -2473,7 +2479,10 @@ TOOL_GET_STARLARK_PREVIEW = Tool(
                 "maximum": 1024,
                 "description": ("Longest edge for a single view (default 768), or tile size for a sheet "
                                 "(default 256; 384 for a cut sheet)")
-            }
+            },
+            "annotate": {"type": "boolean", "default": True,
+                         "description": ("Frame single top/side/section views like a map: coordinate grid, scale "
+                                         "bar and (top view) spot heights. false = bare image")},
         },
         "required": ["artifact_id"]
     }

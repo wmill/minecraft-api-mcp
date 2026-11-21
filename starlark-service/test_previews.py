@@ -68,15 +68,15 @@ def test_single_views_render_and_fit_max_px(config):
             assert img.getpixel((0, 0)) == previews.IMAGE_BG
     # Rendered once, cached beside the artifact with nbt-image-gen's metadata.
     directory = previews.preview_dir(config.cache_dir, artifact)
-    assert sorted(p.name for p in directory.iterdir()) == sorted([f"{v}.png" for v in previews.VIEWS] + ["meta.json"])
+    assert sorted(p.name for p in directory.iterdir()) == sorted([f"{v}.png" for v in previews.VIEWS] + ["meta.json", previews.TOP_HEIGHTS])
 
 
 def test_side_views_follow_schematic_orientation(config):
     # The marker juts from the north face: seen from the north, hidden from the south, at the top of the plan.
     client = TestClient(create_app(config))
     artifact = build(client)
-    north = png(client.get(f"/artifacts/{artifact}/images/north", params={"max_px": 64}))
-    south = png(client.get(f"/artifacts/{artifact}/images/south", params={"max_px": 64}))
+    north = png(client.get(f"/artifacts/{artifact}/images/north", params={"max_px": 64, "annotate": False}))
+    south = png(client.get(f"/artifacts/{artifact}/images/south", params={"max_px": 64, "annotate": False}))
 
     def has_red(img):
         data = img.convert("RGB").tobytes()
@@ -84,7 +84,7 @@ def test_side_views_follow_schematic_orientation(config):
 
     assert has_red(north)
     assert not has_red(south)
-    top = png(client.get(f"/artifacts/{artifact}/images/top", params={"max_px": 64}))
+    top = png(client.get(f"/artifacts/{artifact}/images/top", params={"max_px": 64, "annotate": False}))
     w, h = top.size
     assert has_red(top.crop((0, 0, w, h // 2)))  # north is up in the top view
     assert not has_red(top.crop((0, h // 2, w, h)))
@@ -309,11 +309,11 @@ def test_stair_previews_show_facing(config):
     # Seen from above, a north-facing stair's raised step (north half) is lighter than its tread.
     client = TestClient(create_app(config))
     artifact = build(client, STAIR_SOURCE)
-    top = png(client.get(f"/artifacts/{artifact}/images/top", params={"max_px": 64}))
+    top = png(client.get(f"/artifacts/{artifact}/images/top", params={"max_px": 64, "annotate": False}))
     north, south = top.getpixel((32, 8)), top.getpixel((32, 56))
     assert sum(north) > sum(south)
     # The plan section through the stair outlines the step, and the cut sheet still renders.
-    section = png(client.get(f"/artifacts/{artifact}/images/section", params={"cut_y": 0, "max_px": 64}))
+    section = png(client.get(f"/artifacts/{artifact}/images/section", params={"cut_y": 0, "max_px": 64, "annotate": False}))
     assert sum(section.getpixel((32, 16))) > sum(section.getpixel((32, 48)))
     png(client.get(f"/artifacts/{artifact}/images/sheet", params={"cut_x": 0}))
 
@@ -349,13 +349,71 @@ def test_slab_previews_show_height(config):
     result = client.post("/build", json={"source": SLAB_SOURCE}).json()
     assert result["ok"] is True, result
     artifact = result["artifact_id"]
-    south = png(client.get(f"/artifacts/{artifact}/images/south", params={"max_px": 64}))
+    south = png(client.get(f"/artifacts/{artifact}/images/south", params={"max_px": 64, "annotate": False}))
     w, h = south.size
     bg = south.getpixel((0, 0))  # letterboxed: the 2x1 view leaves background rows above and below
     upper, lower = h // 2 - 4, h // 2 + 4
     assert south.getpixel((w // 4, upper)) == bg and south.getpixel((w // 4, lower)) != bg
     assert south.getpixel((3 * w // 4, upper)) != bg and south.getpixel((3 * w // 4, lower)) == bg
     # From above, the bottom slab is the lower surface, so it is darker.
-    top = png(client.get(f"/artifacts/{artifact}/images/top", params={"max_px": 64}))
+    top = png(client.get(f"/artifacts/{artifact}/images/top", params={"max_px": 64, "annotate": False}))
     tw, th = top.size
     assert sum(top.getpixel((tw // 4, th // 2))) < sum(top.getpixel((3 * tw // 4, th // 2)))
+
+
+def _ortho(grid: np.ndarray, view: str, scale: int = 8) -> Image.Image:
+    structure = Structure(grid.shape, ["minecraft:stone"], grid)
+    return render.render_ortho(structure, view, scale=scale)
+
+
+def _cell(img: Image.Image, col: int, row: int, scale: int = 8) -> int:
+    """Brightness at the centre of a block cell of an ortho view."""
+    return sum(img.getpixel((col * scale + scale // 2, row * scale + scale // 2))[:3])
+
+
+def test_top_view_is_lighter_where_higher():
+    # A stepped pyramid: 5x5 base, 3x3 middle, single block peak at local (2, 2, 2).
+    grid = np.full((5, 3, 5), AIR, dtype=np.int16)
+    grid[:, 0, :] = 0
+    grid[1:4, 1, 1:4] = 0
+    grid[2, 2, 2] = 0
+    top = _ortho(grid, "top")
+    assert _cell(top, 2, 2) > _cell(top, 0, 0)
+
+
+def test_top_view_outlines_steps_but_not_flat_ground():
+    # x=0 stands 3 high, x=1..2 one high: the 2-block step between them is outlined, the flat join is not.
+    grid = np.full((3, 3, 3), AIR, dtype=np.int16)
+    grid[0, :, :] = 0
+    grid[1:, 0, :] = 0
+    top = _ortho(grid, "top")
+    centre_x1 = sum(top.getpixel((8 + 4, 12))[:3])
+    step_edge = sum(top.getpixel((8, 12))[:3])           # first pixel column of x=1, against the step
+    flat_edge = sum(top.getpixel((16, 12))[:3])          # first pixel column of x=2, same height as x=1
+    assert step_edge < centre_x1 * 0.6
+    assert flat_edge == sum(top.getpixel((16 + 4, 12))[:3])
+
+
+def test_side_view_darkens_recesses():
+    # Seen from the south, x=1 sits two blocks further back than x=0.
+    grid = np.full((2, 1, 3), AIR, dtype=np.int16)
+    grid[0, 0, 2] = 0
+    grid[1, 0, 0] = 0
+    south = _ortho(grid, "south")
+    assert _cell(south, 1, 0) < _cell(south, 0, 0)
+
+
+def test_top_heights_lists_each_columns_top_block():
+    grid = np.full((2, 4, 3), AIR, dtype=np.int16)
+    grid[0, :3, 0] = 0
+    grid[1, 0, 2] = 0
+    heights = render.top_heights(grid)
+    assert heights.shape == (3, 2)  # [z, x]
+    assert heights.tolist() == [[2, -1], [-1, -1], [-1, 0]]
+
+
+def test_short_grass_gets_the_grass_colour():
+    grid = np.zeros((1, 1, 1), dtype=np.int16)
+    structure = Structure(grid.shape, ["minecraft:short_grass"], grid)
+    grass = Structure(grid.shape, ["minecraft:grass"], grid)
+    assert render.palette_rgb(structure).tolist() == render.palette_rgb(grass).tolist()

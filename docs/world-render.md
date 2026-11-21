@@ -36,7 +36,11 @@ loading or generating it (which `StructureTemplate.saveFromWorld` would otherwis
 
 The capture's minimum corner is its local origin (`X-Region-Origin`). `render_region` takes cuts in **world**
 coordinates and converts them (`local = world - origin`); floor levels from `view="floors"` are converted back to
-world Y in the result text. The service's own routes use local coordinates, like Starlark artifacts.
+world Y in the result text. The service's own routes take cuts in local coordinates, like Starlark artifacts, but
+label images in world coordinates: the origin is stored with the region, so a single `top`, side or `section`
+view is framed with a world-coordinate grid, a scale bar and (top view) world-Y spot heights of the topmost
+block in each grid cell. Those labels line up with `map_terrain`'s grid for the same area, but its spot heights
+are standing Y (one above the top block). Pass `annotate=false` for the bare image.
 
 ## Caching
 

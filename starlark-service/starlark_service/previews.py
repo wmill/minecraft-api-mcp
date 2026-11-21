@@ -18,12 +18,14 @@ import shutil
 import sys
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from . import cache
+from . import annotate, cache
 
 VIEWS = ("iso", "top", "north", "south", "east", "west")
 SHEET = "sheet"
@@ -32,7 +34,8 @@ FLOORS = "floors"
 CUT_VIEWS = (SHEET, "iso", SECTION)
 AXES = ("x", "y", "z")
 # Bumped when base renders change; older preview directories are re-rendered on next request.
-PREVIEW_VERSION = 5
+PREVIEW_VERSION = 6
+TOP_HEIGHTS = "top_heights.npy"
 MIN_PX, MAX_PX = 64, 1024
 DEFAULT_VIEW_PX = 768
 DEFAULT_TILE_PX = 256
@@ -190,17 +193,45 @@ def _png(img: Image.Image) -> bytes:
     return buffer.getvalue()
 
 
-@lru_cache(maxsize=256)
-def render_view(path: Path, max_px: int, bg: tuple[int, int, int] = IMAGE_BG) -> bytes:
-    """Fit into max_px on the background: downscale smoothly, upscale small renders crisply (artifacts are immutable)."""
-    img = _open(path, bg)
-    scale = min(max_px / img.width, max_px / img.height)
-    if scale < 1.0:
-        img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.LANCZOS)
-    elif scale >= 2.0:
+@dataclass(frozen=True)
+class Frame:
+    """What `annotate.frame` needs to draw a map frame around one orthographic view."""
+    view: str                                  # an annotate.VIEW_AXES key
+    size: tuple[int, int, int]
+    origin: tuple[int, int, int] | None = None  # world position of local (0, 0, 0), for captured regions
+    heights: Path | None = None                 # top_heights.npy, for spot heights on the top view
+    title: str | None = None
+
+
+def _fit(img: Image.Image, max_w: int, max_h: int, fill: bool = False) -> Image.Image:
+    """Downscale smoothly, upscale small renders crisply by a whole factor.
+
+    With `fill`, upscaling uses the whole space (nearest-neighbour, so a few block columns
+    end up a pixel wider), for framed maps whose labels are laid out from the actual size.
+    """
+    scale = min(max_w / img.width, max_h / img.height)
+    if scale < 1.0 or (fill and scale > 1.0):
+        method = Image.LANCZOS if scale < 1.0 else Image.NEAREST
+        return img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), method)
+    if scale >= 2.0:
         factor = int(scale)
-        img = img.resize((img.width * factor, img.height * factor), Image.NEAREST)
-    return _png(img)
+        return img.resize((img.width * factor, img.height * factor), Image.NEAREST)
+    return img
+
+
+@lru_cache(maxsize=256)
+def render_view(path: Path, max_px: int, bg: tuple[int, int, int] = IMAGE_BG, frame: Frame | None = None) -> bytes:
+    """Fit into max_px on the background (artifacts are immutable, so results are cached).
+
+    With a `frame`, the view is shrunk to leave room for coordinate labels and the framed
+    image fits max_px instead.
+    """
+    img = _open(path, bg)
+    if frame is None:
+        return _png(_fit(img, max_px, max_px))
+    img = _fit(img, *annotate.fit_size(max_px), fill=True)
+    heights = np.load(frame.heights) if frame.heights is not None and frame.heights.exists() else None
+    return _png(annotate.frame(img, frame.view, frame.size, frame.origin, heights, frame.title))
 
 
 def _font():

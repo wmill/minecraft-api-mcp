@@ -260,7 +260,7 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
     @app.get("/artifacts/{artifact_id}/images/{view}")
     async def get_artifact_image(artifact_id: str, view: str, max_px: int | None = None,
                                  cut_x: int | None = None, cut_y: int | None = None,
-                                 cut_z: int | None = None) -> Response:
+                                 cut_z: int | None = None, annotate: bool = True) -> Response:
         identifier = valid_artifact_id(artifact_id)
         all_views = (previews.SHEET,) + previews.VIEWS + (previews.SECTION, previews.FLOORS)
         if view not in all_views:
@@ -298,12 +298,23 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         except previews.PreviewFailed as exc:
             raise HTTPException(status_code=503, detail=f"preview unavailable: {exc}") from exc
         bg = previews.background(directory)
+        origin = (cache.load_metadata(cfg.cache_dir, identifier) or {}).get("origin")
+        origin = tuple(origin) if origin else None
+
+        def frame(name: str, title: str | None = None, heights: bool = False) -> previews.Frame | None:
+            if not annotate:
+                return None
+            return previews.Frame(name, size, origin, directory / previews.TOP_HEIGHTS if heights else None, title)
+
         if cuts:
             if view == previews.SHEET:
                 tiles = tuple((previews.cut_label(kind, axis, at), path) for kind, path in files.items())
                 data = previews.render_tiles(tiles, previews.clamp_px(max_px, previews.DEFAULT_CUT_TILE_PX), bg)
             else:
-                data = previews.render_view(files[view], previews.clamp_px(max_px, previews.DEFAULT_VIEW_PX), bg)
+                shown_at = at + origin[previews.AXES.index(axis)] if origin else at
+                spec = (frame(f"section_{axis}", previews.cut_label(view, axis, shown_at))
+                        if view == previews.SECTION else None)
+                data = previews.render_view(files[view], previews.clamp_px(max_px, previews.DEFAULT_VIEW_PX), bg, spec)
         elif view == previews.FLOORS:
             if not floors:
                 raise HTTPException(status_code=400, detail="the artifact is empty; there are no floors to show")
@@ -313,8 +324,9 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
         elif view == previews.SHEET:
             data = previews.render_sheet(directory, previews.clamp_px(max_px, previews.DEFAULT_TILE_PX))
         else:
+            spec = None if view == "iso" else frame(view, heights=view == "top")
             data = previews.render_view(directory / f"{view}.png",
-                                        previews.clamp_px(max_px, previews.DEFAULT_VIEW_PX), bg)
+                                        previews.clamp_px(max_px, previews.DEFAULT_VIEW_PX), bg, spec)
         return Response(content=data, media_type="image/png", headers=headers)
 
     @app.get("/docs/catalog")

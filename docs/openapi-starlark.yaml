@@ -199,6 +199,90 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /artifacts/{artifact_id}/images/{view}:
+    get:
+      tags: [artifacts]
+      summary: Preview image of an artifact or uploaded region
+      description: >-
+        Base views are rendered once per artifact and cached beside it. `iso` is seen from the
+        south-east; `top` has north up; side views are elevations seen from that side. Top views are
+        shaded by height (lighter = higher, north-west hillshade, dark lines at drops of 2+ blocks);
+        side views darken with depth. `sheet` is a labelled 3x2 grid of all six (or cutaway + section
+        with a cut); `floors` a grid of plan sections, one per detected storey. With `annotate`
+        (default), a single top, side or section view is framed like a map: a coordinate grid (world
+        coordinates for `rgn_` regions with an origin, local otherwise), a scale bar and, on the top
+        view, spot heights (y of the topmost block); the framed image still fits `max_px`.
+      operationId: getArtifactImage
+      parameters:
+        - $ref: "#/components/parameters/ArtifactId"
+        - name: view
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [sheet, iso, top, north, south, east, west, section, floors]
+        - name: max_px
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 64
+            maximum: 1024
+          description: Longest edge of a single view (default 768) or tile size of a sheet (default 256; 384 with a cut)
+        - name: cut_x
+          in: query
+          required: false
+          schema: {type: integer, minimum: 0}
+          description: Local x to cut at (only with sheet, iso or section; at most one cut)
+        - name: cut_y
+          in: query
+          required: false
+          schema: {type: integer, minimum: 0}
+          description: Local y to cut at
+        - name: cut_z
+          in: query
+          required: false
+          schema: {type: integer, minimum: 0}
+          description: Local z to cut at
+        - name: annotate
+          in: query
+          required: false
+          schema: {type: boolean, default: true}
+          description: Map frame on single top/side/section views; ignored for iso, sheet and floors
+      responses:
+        "200":
+          description: PNG image
+          headers:
+            X-Artifact-Size:
+              schema: {type: string}
+              description: Artifact size as `XxYxZ`
+            X-Preview-Floors:
+              schema: {type: string}
+              description: For view=floors, `floor:cut` pairs (local y), comma separated
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid artifact id, view or cut
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Artifact not found (evicted or never built)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Rendering failed or timed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /docs/catalog:
     get:
       tags: [reference]
