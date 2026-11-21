@@ -11,7 +11,6 @@ import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
 import ca.waltermiller.mcpapi.buildtask.model.TaskType;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import ca.waltermiller.mcpapi.buildtask.service.LocationQueryService;
-import ca.waltermiller.mcpapi.buildtask.service.RailPlanningService;
 import ca.waltermiller.mcpapi.preview.BlockGrid;
 import ca.waltermiller.mcpapi.preview.IsoRenderer;
 import ca.waltermiller.mcpapi.preview.PreviewViewDirection;
@@ -56,32 +55,28 @@ public class BuildTaskEndpoint extends APIEndpoint {
 
     private final BuildService buildService;
     private final LocationQueryService locationQueryService;
-    private final RailPlanningService railPlanningService;
     private final TaskExecutor taskExecutor;
-    private final RailRenderInspectionService railRenderInspectionService;
     private final AreaLockService locks;
     private final SnapshotStore snapshots;
 
     public BuildTaskEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
                            BuildService buildService, LocationQueryService locationQueryService,
-                           RailPlanningService railPlanningService, TaskExecutor taskExecutor) {
-        this(app, server, logger, buildService, locationQueryService, railPlanningService, taskExecutor,
+                           TaskExecutor taskExecutor) {
+        this(app, server, logger, buildService, locationQueryService, taskExecutor,
             new AreaLockService(), null);
     }
 
     /** {@code snapshots} null disables the undo route (503). */
     public BuildTaskEndpoint(Javalin app, MinecraftServer server, org.slf4j.Logger logger,
                            BuildService buildService, LocationQueryService locationQueryService,
-                           RailPlanningService railPlanningService, TaskExecutor taskExecutor,
+                           TaskExecutor taskExecutor,
                            AreaLockService locks, SnapshotStore snapshots) {
         super(app, server, logger);
         this.locks = locks;
         this.snapshots = snapshots;
         this.buildService = buildService;
         this.locationQueryService = locationQueryService;
-        this.railPlanningService = railPlanningService;
         this.taskExecutor = taskExecutor;
-        this.railRenderInspectionService = new RailRenderInspectionService(taskExecutor);
         init();
     }
 
@@ -102,10 +97,8 @@ public class BuildTaskEndpoint extends APIEndpoint {
         registerCloneBuild();
         registerQueryLocation();
         registerAuditBuild();
-        registerPlanRail();
         registerTranslateBuild();
         registerPreviewBuild();
-        registerGetRailPlan();
     }
 
     @FunctionalInterface
@@ -874,11 +867,6 @@ public class BuildTaskEndpoint extends APIEndpoint {
                 checkCrossBuildOverlap(build, task, buildId, issues);
             }
 
-            RegistryKey<World> worldKey = WorldResolver.resolveWorldKey(build.getWorld());
-            ServerWorld serverWorld = worldKey != null ? server.getWorld(worldKey) : null;
-            RecordingBlockSink railInspectionSink = serverWorld != null ? new RecordingBlockSink(serverWorld) : null;
-            issues.addAll(railRenderInspectionService.inspect(tasks, railInspectionSink));
-
             int warningCount = (int) issues.stream()
                 .filter(issue -> "warning".equals(issue.get("severity")))
                 .count();
@@ -894,37 +882,6 @@ public class BuildTaskEndpoint extends APIEndpoint {
             ));
 
             LOGGER.info("Audited build {} - found {} warnings, {} errors", buildId, warningCount, errorCount);
-        }));
-    }
-
-    // POST /api/builds/{id}/plan-rail - Start async rail corridor planning
-    private void registerPlanRail() {
-        app.post("/api/builds/{id}/plan-rail", ctx -> handle(ctx, "starting rail planner", () -> {
-            UUID buildId = pathUuid(ctx, "id", "build ID");
-            if (buildId == null) {
-                return;
-            }
-            RailPlanningService.StartRailPlanningRequest request = ctx.bodyAsClass(RailPlanningService.StartRailPlanningRequest.class);
-            request.build_id = buildId;
-            if (request.world == null || request.world.isBlank()) {
-                Optional<Build> build = buildService.getBuild(buildId);
-                request.world = build.map(Build::getWorld).orElse("minecraft:overworld");
-            }
-
-            var job = railPlanningService.startPlanning(request);
-            ctx.status(202).json(Map.of(
-                "success", true,
-                "planning_job", Map.of(
-                    "id", job.getId().toString(),
-                    "build_id", job.getBuildId().toString(),
-                    "status", job.getStatus().name(),
-                    "phase", job.getPhase(),
-                    "sampled_area_count", job.getSampledAreaCount(),
-                    "route_length", job.getRouteLength(),
-                    "created_at", job.getCreatedAt().toString(),
-                    "updated_at", job.getUpdatedAt().toString()
-                )
-            ));
         }));
     }
 
@@ -1065,39 +1022,6 @@ public class BuildTaskEndpoint extends APIEndpoint {
         }));
     }
 
-    // GET /api/rail-plans/{jobId} - Poll rail planning job status
-    private void registerGetRailPlan() {
-        app.get("/api/rail-plans/{jobId}", ctx -> handle(ctx, "fetching rail planner job", () -> {
-            UUID jobId = pathUuid(ctx, "jobId", "planning job ID");
-            if (jobId == null) {
-                return;
-            }
-            var jobOpt = railPlanningService.getJob(jobId);
-            if (jobOpt.isEmpty()) {
-                ctx.status(404).json(Map.of("error", "Planning job not found"));
-                return;
-            }
-
-            var job = jobOpt.get();
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("id", job.getId().toString());
-            response.put("build_id", job.getBuildId().toString());
-            response.put("status", job.getStatus().name());
-            response.put("phase", job.getPhase());
-            response.put("sampled_area_count", job.getSampledAreaCount());
-            response.put("route_length", job.getRouteLength());
-            response.put("created_at", job.getCreatedAt().toString());
-            response.put("updated_at", job.getUpdatedAt().toString());
-            if (job.getErrorMessage() != null) {
-                response.put("error_message", job.getErrorMessage());
-            }
-            if (job.getResultData() != null) {
-                response.put("result", job.getResultData());
-            }
-            ctx.json(Map.of("success", true, "planning_job", response));
-        }));
-    }
-
     /**
      * Checks if stair direction aligns with the longer horizontal dimension.
      * Only warns if slope > 1 (steep stairs) combined with direction mismatch.
@@ -1201,7 +1125,7 @@ public class BuildTaskEndpoint extends APIEndpoint {
 
         for (LocationQueryService.BuildLocationResult buildResult : result.builds) {
             if (buildResult.build.getId().equals(currentBuildId)) {
-                continue; // Same-build overlaps are covered by checkFillOverwrite/rail inspection
+                continue; // Same-build overlaps are covered by checkFillOverwrite
             }
 
             String severity = buildResult.build.getStatus() == BuildStatus.COMPLETED ? "error" : "warning";

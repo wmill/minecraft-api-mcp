@@ -8,7 +8,7 @@
 ## Project Structure & Module Organization
 - `src/main/java/ca/waltermiller/mcpapi`: Core Fabric mod, `APIServer`, endpoint classes, database layer, and build-task domain.
 - `src/main/java/ca/waltermiller/mcpapi/endpoints`: REST API endpoints. Keep route registration thin and put reusable logic into core/helper classes where practical.
-- `src/main/java/ca/waltermiller/mcpapi/buildtask`: Build orchestration models, repositories, and services, including rail planning and location queries.
+- `src/main/java/ca/waltermiller/mcpapi/buildtask`: Build orchestration models, repositories, and services, including location queries.
 - `src/main/java/ca/waltermiller/mcpapi/database`: HikariCP/PostgreSQL configuration, schema creation, and connection management.
 - `src/main/java/ca/waltermiller/mcpapi/preview`: Isometric preview grids, palettes, terrain adapters, and rendering logic.
 - `src/main/java/ca/waltermiller/mcpapi/arealock`: Area reservations and write authorization; `survey/`: site suitability and occupancy queries; `snapshot/`: NBT snapshots and undo/redo restoration.
@@ -99,7 +99,6 @@
 - Database environment variables: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`.
 - The MCP server reads `BASE_URL` from `mcp/.env`; it defaults to `http://localhost:7070`.
 - Optional MCP service URLs are `SCHEMATIC_SERVICE_URL` (default `http://localhost:7080`) and `STARLARK_SERVICE_URL` (default `http://localhost:7090`).
-- Rail tools are disabled by default. Set `ENABLE_RAIL_TOOLS=true` in the process environment or `mcp/.env` and restart MCP to expose them; Compose forwards the setting from the shell/root `.env`. Preserve discovery and call gating in `mcp/test_rail_feature_flag.py`.
 - The schematic service uses `SCHEMATIC_DATA_DIR` and `ELASTICSEARCH_URL`; the Starlark service uses `STARLARK_TOOL_DIR`, `STARLARK_CACHE_DIR`, and `STARLARK_LIBRARY_DIR`, with resource-limit settings prefixed `STARLARK_`.
 - Starlark build memory defaults to 2048 MB. Keep `STARLARK_BUILD_MEMORY_MB` at least 1024: the Rust runtime reserves about 1 GB up front. See `starlark-service/starlark_service/config.py` for timeout, volume, concurrency, cache, and preview limits.
 - `AREA_LOCK_IDLE_SECONDS` defaults to 900. `BUILD_SNAPSHOT_DIR` defaults to `build-snapshots` under the server run directory; `BUILD_SNAPSHOT_MAX_VOLUME` defaults to 2,000,000 voxels.

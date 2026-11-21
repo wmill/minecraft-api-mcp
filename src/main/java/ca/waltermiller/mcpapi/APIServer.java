@@ -2,13 +2,10 @@ package ca.waltermiller.mcpapi;
 
 import ca.waltermiller.mcpapi.buildtask.repository.BuildRepository;
 import ca.waltermiller.mcpapi.buildtask.repository.PostgreSQLBuildRepository;
-import ca.waltermiller.mcpapi.buildtask.repository.PostgreSQLRailPlanningJobRepository;
 import ca.waltermiller.mcpapi.buildtask.repository.PostgreSQLTaskRepository;
-import ca.waltermiller.mcpapi.buildtask.repository.RailPlanningJobRepository;
 import ca.waltermiller.mcpapi.buildtask.repository.TaskRepository;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import ca.waltermiller.mcpapi.buildtask.service.LocationQueryService;
-import ca.waltermiller.mcpapi.buildtask.service.RailPlanningService;
 import ca.waltermiller.mcpapi.database.DatabaseManager;
 import ca.waltermiller.mcpapi.endpoints.BlocksEndpoint;
 import ca.waltermiller.mcpapi.endpoints.BuildTaskEndpoint;
@@ -39,7 +36,6 @@ public class APIServer {
     public static ca.waltermiller.mcpapi.marker.AreaMarkerService markers;
     public static ca.waltermiller.mcpapi.operation.OperationRegistry operations;
     private static BuildService buildService;
-    private static RailPlanningService railPlanningService;
     private static java.util.concurrent.CompletableFuture<Void> stopping = java.util.concurrent.CompletableFuture.completedFuture(null);
 
     public static synchronized void start(MinecraftServer server, org.slf4j.Logger logger) {
@@ -103,7 +99,6 @@ public class APIServer {
             // Continue without build task system if database is not available
             logger.warn("Build task management endpoints will not be available");
             if (buildService != null) { buildService.shutdown(); buildService = null; }
-            if (railPlanningService != null) { railPlanningService.shutdown(); railPlanningService = null; }
             DatabaseManager.getInstance().shutdown();
         }
         app.start(port);
@@ -130,7 +125,6 @@ public class APIServer {
         // Create repositories
         BuildRepository buildRepository = new PostgreSQLBuildRepository(databaseManager.getDatabaseConfig());
         TaskRepository taskRepository = new PostgreSQLTaskRepository(databaseManager.getDatabaseConfig());
-        RailPlanningJobRepository railPlanningJobRepository = new PostgreSQLRailPlanningJobRepository(databaseManager.getDatabaseConfig());
         
         // Create task executor
         TaskExecutor taskExecutor = new TaskExecutor(server, locks);
@@ -140,8 +134,6 @@ public class APIServer {
             new ca.waltermiller.mcpapi.buildtask.repository.PostgreSQLBuildSourceRepository(databaseManager.getDatabaseConfig()),
             taskExecutor);
         LocationQueryService locationQueryService = new LocationQueryService(buildRepository, taskRepository);
-        railPlanningService = new RailPlanningService(
-            buildRepository, buildService, railPlanningJobRepository, server);
         
         // Wire build service into NBT endpoint for spatial record-keeping
         nbtEndpoint.setBuildService(buildService);
@@ -165,7 +157,7 @@ public class APIServer {
         regionEndpoint.setBuildLookup(buildLookup);
 
         // Create and register build task endpoint
-        new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, railPlanningService, taskExecutor,
+        new BuildTaskEndpoint(app, server, logger, buildService, locationQueryService, taskExecutor,
             locks, snapshots);
 
         logger.info("Build task management system initialized successfully");
@@ -177,14 +169,11 @@ public class APIServer {
         if (operations != null) operations.closeAdmission();
         Javalin http = app;
         BuildService builds = buildService;
-        RailPlanningService rails = railPlanningService;
         var registry = operations;
         var log = logger;
         app = null;
         buildService = null;
-        railPlanningService = null;
         if (builds != null) builds.shutdown();
-        if (rails != null) rails.shutdown();
         if (markers != null) { markers.clear(); markers = null; }
         minecraftServer = null;
         logger = null;
@@ -197,7 +186,6 @@ public class APIServer {
                 long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
                 boolean settled = true;
                 if (builds != null) settled &= builds.awaitTermination(deadline);
-                if (rails != null) settled &= rails.awaitTermination(deadline);
                 if (registry != null) settled &= registry.workers.awaitTermination(Math.max(0, deadline - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
                 if (!settled && log != null) log.warn("API shutdown left unresolved background work after ten seconds");
             } catch (Exception failure) {

@@ -56,7 +56,7 @@ length appends. Legacy orders remain unchanged on reads and execution; the next
 queue edit normalizes the queue to `0..N-1`. Edits preserve task IDs, payloads,
 descriptions, coordinates, statuses, errors, and execution timestamps.
 
-Append, insert, delete, reorder, task updates, translation, rail-plan append, and
+Append, insert, delete, reorder, task updates, translation, and
 execution/replay claims share a JDBC transaction and lock the build row before
 checking its status. In-progress, completed, and reverted builds reject queue
 edits. Reorder requires every existing task ID exactly once; it cannot introduce,

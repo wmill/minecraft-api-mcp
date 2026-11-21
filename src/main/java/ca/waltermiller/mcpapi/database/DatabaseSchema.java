@@ -14,7 +14,7 @@ import java.sql.Statement;
 public class DatabaseSchema {
     private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseSchema.class);
 
-    private static final String[] TABLE_NAMES = {"builds", "build_tasks", "rail_planning_jobs", "build_sources"};
+    private static final String[] TABLE_NAMES = {"builds", "build_tasks", "build_sources"};
 
     private final DatabaseConfig databaseConfig;
 
@@ -65,7 +65,7 @@ public class DatabaseSchema {
             try {
                 createBuildsTable(connection);
                 createBuildTasksTable(connection);
-                createRailPlanningJobsTable(connection);
+                removeLegacyRailData(connection);
                 createBuildSourcesTable(connection);
                 createIndexes(connection);
                 
@@ -128,25 +128,46 @@ public class DatabaseSchema {
         addBuildForeignKeyIfMissing(connection, "build_tasks");
     }
 
-    private void createRailPlanningJobsTable(Connection connection) throws SQLException {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS rail_planning_jobs (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                build_id UUID NOT NULL,
-                status VARCHAR(50) NOT NULL,
-                phase VARCHAR(255) NOT NULL,
-                sampled_area_count INTEGER NOT NULL DEFAULT 0,
-                route_length INTEGER NOT NULL DEFAULT 0,
-                error_message TEXT,
-                request_data JSONB,
-                result_data JSONB,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            )
+    /**
+     * Minecart rail planning was removed (see git tag {@code last-minecart-railways}). Deletes leftover
+     * RAIL_* tasks, which no longer map to a {@code TaskType}, renumbers the affected queues to
+     * {@code 0..N-1}, and drops the planner's job table. Idempotent: a no-op once the data is gone.
+     */
+    private void removeLegacyRailData(Connection connection) throws SQLException {
+        java.util.List<Object> affected = new java.util.ArrayList<>();
+        String delete = """
+            DELETE FROM build_tasks
+            WHERE task_type IN ('RAIL_SURFACE_SEGMENT', 'RAIL_BRIDGE_SEGMENT', 'RAIL_TUNNEL_SEGMENT')
+            RETURNING build_id
             """;
-
-        execute(connection, sql, "Created rail_planning_jobs table");
-        addBuildForeignKeyIfMissing(connection, "rail_planning_jobs");
+        int removed = 0;
+        try (Statement stmt = connection.createStatement(); var rs = stmt.executeQuery(delete)) {
+            while (rs.next()) {
+                removed++;
+                Object buildId = rs.getObject(1);
+                if (!affected.contains(buildId)) affected.add(buildId);
+            }
+        }
+        if (removed > 0) {
+            // Two passes through negative values so UNIQUE(build_id, task_order) never sees a collision.
+            String renumber = """
+                UPDATE build_tasks t SET task_order = -1 - o.rn
+                FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY build_id ORDER BY task_order, id) - 1 AS rn
+                      FROM build_tasks WHERE build_id = ANY(?)) o
+                WHERE t.id = o.id
+                """;
+            try (var ps = connection.prepareStatement(renumber)) {
+                ps.setArray(1, connection.createArrayOf("uuid", affected.toArray()));
+                ps.executeUpdate();
+            }
+            try (var ps = connection.prepareStatement(
+                    "UPDATE build_tasks SET task_order = -1 - task_order WHERE build_id = ANY(?) AND task_order < 0")) {
+                ps.setArray(1, connection.createArrayOf("uuid", affected.toArray()));
+                ps.executeUpdate();
+            }
+            LOGGER.warn("Removed {} legacy rail task(s) from {} build(s)", removed, affected.size());
+        }
+        execute(connection, "DROP TABLE IF EXISTS rail_planning_jobs", "Dropped legacy rail_planning_jobs table");
     }
     
     /**
@@ -182,8 +203,6 @@ public class DatabaseSchema {
             "CREATE INDEX IF NOT EXISTS idx_tasks_build_id ON build_tasks(build_id)",
             "CREATE INDEX IF NOT EXISTS idx_tasks_status ON build_tasks(status)",
             "CREATE INDEX IF NOT EXISTS idx_tasks_coordinates ON build_tasks(min_x, min_y, min_z, max_x, max_y, max_z)",
-            "CREATE INDEX IF NOT EXISTS idx_rail_planning_build_id ON rail_planning_jobs(build_id)",
-            "CREATE INDEX IF NOT EXISTS idx_rail_planning_status ON rail_planning_jobs(status)",
             "CREATE INDEX IF NOT EXISTS idx_builds_parent ON builds(parent_build_id)",
             "CREATE INDEX IF NOT EXISTS idx_build_sources_artifact ON build_sources(artifact_id)",
             "CREATE INDEX IF NOT EXISTS idx_build_sources_schematic ON build_sources(schematic_id)",

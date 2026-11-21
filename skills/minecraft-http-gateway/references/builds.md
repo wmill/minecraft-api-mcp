@@ -75,19 +75,3 @@ uv run --project mcp python skills/minecraft-http-gateway/scripts/build_flow.py 
   --terrain-margin 3 \
   --output /tmp/build-preview.png
 ```
-
-## Rail Planning
-
-The rail planner is asynchronous. `ENABLE_RAIL_TOOLS` controls MCP discovery and dispatch only (off by default); these HTTP helpers can call REST rail endpoints without enabling MCP rail tools:
-
-```bash
-uv run --project mcp python skills/minecraft-http-gateway/scripts/build_flow.py plan-rail \
-  --build-id <uuid> \
-  --start-x 0 --start-y 64 --start-z 0 \
-  --end-x 200 --end-y 64 --end-z 200
-
-uv run --project mcp python skills/minecraft-http-gateway/scripts/build_flow.py rail-status --job-id <uuid>
-uv run --project mcp python skills/minecraft-http-gateway/scripts/build_flow.py audit --build-id <uuid>
-```
-
-For a full local rail debug loop, use `scripts/rail_debug_e2e.py`.

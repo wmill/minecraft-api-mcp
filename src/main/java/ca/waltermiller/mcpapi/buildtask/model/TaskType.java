@@ -13,9 +13,6 @@ public enum TaskType {
     PREFAB_TORCH,   // Uses PrefabEndpoint.torch
     PREFAB_SIGN,    // Uses PrefabEndpoint.sign
     PREFAB_LADDER,  // Uses PrefabEndpoint.ladder
-    RAIL_SURFACE_SEGMENT,
-    RAIL_BRIDGE_SEGMENT,
-    RAIL_TUNNEL_SEGMENT,
     NBT_STRUCTURE,
     TERRAIN_SMOOTH  // Auto-recorded by TerrainSmoothEndpoint; undoable, not replayable
 }

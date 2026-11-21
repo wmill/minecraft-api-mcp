@@ -5,7 +5,6 @@ import ca.waltermiller.mcpapi.buildtask.model.BoundingBox;
 import ca.waltermiller.mcpapi.buildtask.model.Build;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import ca.waltermiller.mcpapi.buildtask.service.LocationQueryService;
-import ca.waltermiller.mcpapi.buildtask.service.RailPlanningService;
 import ca.waltermiller.mcpapi.snapshot.SnapshotStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,7 +43,6 @@ class BuildUndoEndpointTest {
     @Mock private MinecraftServer server;
     @Mock private BuildService buildService;
     @Mock private LocationQueryService locationQueryService;
-    @Mock private RailPlanningService railPlanningService;
     @TempDir Path dir;
 
     private final ObjectMapper json = new ObjectMapper();
@@ -59,7 +57,7 @@ class BuildUndoEndpointTest {
         SnapshotStore store = snapshotsEnabled ? new SnapshotStore(dir, 1_000) : null;
         app = Javalin.create(config -> config.http.defaultContentType = "application/json");
         new BuildTaskEndpoint(app, server, LoggerFactory.getLogger(BuildUndoEndpointTest.class), buildService,
-            locationQueryService, railPlanningService, new TaskExecutor(server), new AreaLockService(), store);
+            locationQueryService, new TaskExecutor(server), new AreaLockService(), store);
         app.start(0);
         return store;
     }
