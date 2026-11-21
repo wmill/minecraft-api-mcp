@@ -130,7 +130,7 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 - `WorldResolver.resolveWorldKey(String)` - single place that maps world identifier strings to registry keys (null/blank → overworld, malformed → null; callers treat null as "unknown world" and return 400)
 - `OperationResult` - common `success()`/`error()`/`failureStatus()` interface implemented by all core result records, used by `TaskExecutor`'s generic dispatch helpers
 - `CheckedDimensions` - overflow-safe span/volume/end checks run before world access or allocation (fill cap 100,000 blocks, heightmap 10,000 points, chunk 64 per dimension)
-- `PlacementBounds` - conservative bounds of a direct write (including stair clearance, rail supports, rotated NBT) used for area-lock checks
+- `PlacementBounds` - conservative bounds of a direct write (including stair clearance and rotated NBT) used for area-lock checks
 - `GuardedPlacement` - submits a placement to the server thread through `AreaLockService.execute()` so the lock check and the write happen together
 - `StructurePlacementEffect` - small smoke-particle burst emitted after NBT placement/restore
 
@@ -148,9 +148,8 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 - `SiteSurveyEndpoint` - Read-only footprint assessment (`POST /api/world/blocks/survey`): walking-plane heights, slope, water/lava/vegetation coverage, cut/fill grading suggestion, overlapping reservations and builds (logic in `survey/`)
 - `AccessCheckEndpoint` - Read-only path check (`POST /api/world/access/check`, MCP `check_access`): start → named targets (optional `via` doorway) and an optional reachability map (`build_id` or cuboid) with per-level reachable counts and unreached indoor/outdoor groups; `player` profile is our own movement search, `villager` runs vanilla `PathNodeNavigator` with an unspawned villager (no ladders). `build_id` bounds come from a `BuildLookup` set in `APIServer.initializeBuildTaskSystem` (logic in `access/`)
 - `RegionCaptureEndpoint` - Read-only capture of a world cuboid or a recorded build plus margin as gzipped structure NBT (`GET /api/world/region/nbt`, untracked, never lock-checked); loaded chunks only (409 `chunks_not_loaded`), capped at `REGION_RENDER_MAX_VOLUME` (default 1,000,000). Parsing/bounds in pure `RegionCaptureRequest`; build bounds come from the same `BuildLookup` as `AccessCheckEndpoint`. Used by MCP `render_region` (see `docs/world-render.md`)
-- `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, undo/redo, clone, translate, preview, rail planning, and location query routes
+- `BuildTaskEndpoint` - Build task management REST routes (one `registerX()` method per route) with database persistence; includes audit, replay, undo/redo, clone, translate, preview, and location query routes
 - `TaskExecutor` - Executes queued build tasks on the Minecraft server thread; generic `executeAsync`/`dispatch` helpers parse task data and route it to the endpoint cores
-- `RailRenderInspectionService` - Dry-run rail placement inspection used by the audit route
 
 #### Edit Operations
 **Location**: `src/main/java/ca/waltermiller/mcpapi/operation/`
@@ -206,9 +205,9 @@ Top-down terrain maps for LLM site reading (`POST /api/world/blocks/heightmap/ma
 A comprehensive system for queuing, persisting, and executing complex build operations:
 
 **Architecture Pattern**: Repository-Service-Executor
-- **Repositories** (`repository/`): PostgreSQL data access with implementations for Build, Task, and RailPlanningJob entities. `BuildTransaction` locks the build row (`SELECT ... FOR UPDATE`) and hands both repositories one connection, so queue edits (append, insert, delete, reorder, update, translate, rail-plan append) and execute/replay claims are atomic. `InterruptedExecutions` is the startup sweep for builds/tasks left mid-execution
-- **Services** (`service/`): Business logic for task validation, location queries, build orchestration, and rail planning
-- **Models** (`model/`): Data classes (Build incl. `parentBuildId`, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus incl. `REVERTED`/`SUPERSEDED` (`removedFromWorld()`), BuildSource (placement provenance), RailPlanningJob, RailPlanningStatus) plus `TaskDataTranslator`, which shifts task_data coordinates for `translate`
+- **Repositories** (`repository/`): PostgreSQL data access with implementations for Build, Task, and BuildSource entities. `BuildTransaction` locks the build row (`SELECT ... FOR UPDATE`) and hands both repositories one connection, so queue edits (append, insert, delete, reorder, update, translate) and execute/replay claims are atomic. `InterruptedExecutions` is the startup sweep for builds/tasks left mid-execution
+- **Services** (`service/`): Business logic for task validation, location queries, and build orchestration
+- **Models** (`model/`): Data classes (Build incl. `parentBuildId`, BuildTask, BoundingBox, TaskType, TaskStatus, BuildStatus incl. `REVERTED`/`SUPERSEDED` (`removedFromWorld()`), BuildSource (placement provenance)) plus `TaskDataTranslator`, which shifts task_data coordinates for `translate`
 
 **Task Types:**
 - `BLOCK_SET` - Place a 3D array of blocks
@@ -219,23 +218,15 @@ A comprehensive system for queuing, persisting, and executing complex build oper
 - `PREFAB_TORCH` - Place torches (wall or floor) with proper facing
 - `PREFAB_SIGN` - Place signs with text content
 - `PREFAB_LADDER` - Place vertical ladders with auto-facing
-- `RAIL_SURFACE_SEGMENT` - Rail corridor segment on the surface
-- `RAIL_BRIDGE_SEGMENT` - Rail corridor segment over a gap (bridge)
-- `RAIL_TUNNEL_SEGMENT` - Rail corridor segment underground (tunnel)
 - `NBT_STRUCTURE` / `TERRAIN_SMOOTH` - Auto-recorded direct writes (NBT placement, terrain smoothing); snapshot-restorable via undo/redo, never executed, replayed or cloned
 
 **Database Schema:**
 - `builds` table: Build metadata (id, name, description, world, status, timestamps, `parent_build_id` for revisions)
 - `build_sources` table: placement provenance, one row per build (kind, artifact_id, schematic_id, source TEXT, entry, props, root_size, y_offset, target, details)
 - `build_tasks` table: Individual tasks (id, build_id, task_order, task_type, status, task_data JSONB, description, executed_at)
-- `rail_planning_jobs` table: Async rail planning jobs (id, build_id, status, phases, timestamps)
+- Legacy minecart rail data (`RAIL_*` tasks, `rail_planning_jobs`) is deleted on startup by `DatabaseSchema.removeLegacyRailData`; the removed feature is preserved at git tag `last-minecart-railways`
 
 **Queue and execution rules:** `task_order` is zero-based; any queue edit normalizes it to `0..N-1` (legacy 1-based rows are left alone until then), keeping task IDs, payloads, statuses, errors and timestamps. Reorder must list every existing task ID exactly once. Execute/replay claim the build (`IN_PROGRESS`) in one transaction before returning 202, so a second claim returns 409. While a build is `IN_PROGRESS`, `COMPLETED` or `REVERTED`, queue edits are rejected. Tasks run as an async chain (each persisted `EXECUTING` before it's scheduled, and its final status after it actually finishes); the HTTP deadline never fails a running task.
-
-#### Rail Planning System
-**Location**: `src/main/java/ca/waltermiller/mcpapi/buildtask/service/RailPlanningService.java`
-
-Asynchronously plans terrain-following rail corridors between two points. Triggered via `POST /api/builds/{id}/plan-rail`; status polled via `GET /api/rail-plans/{jobId}`. The planner samples heightmap data, classifies each segment as surface/bridge/tunnel, then queues the appropriate RAIL_* build tasks.
 
 #### Database Layer
 **Location**: `src/main/java/ca/waltermiller/mcpapi/database/`
@@ -275,7 +266,7 @@ DB_PASSWORD=your_password
   - `blocks.py` - Block manipulation tools
   - `messages.py` - Messaging tools
   - `prefabs.py` - Prefab placement tools
-  - `builds.py` - Build task management tools (create builds, add tasks, execute, replay, audit, undo/redo, clone, translate, preview, query by location, get status, rail planning)
+  - `builds.py` - Build task management tools (create builds, add tasks, execute, replay, audit, undo/redo, clone, translate, preview, query by location, get status)
   - `system.py` - System tools (connection test, teleport, coordinate conventions)
   - `effects.py` - One-shot area effects (`rain_fire`)
   - `area_locks.py` - `acquire_area_lock`, `update_area_lock`, `release_area_lock`, `list_area_locks`
@@ -480,8 +471,8 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 **Test Categories:**
 - Database layer tests: `DatabaseManagerTest`, `DatabaseConfigTest`, `DatabaseIntegrationTest` (integration gated behind `DB_TEST` env var)
 - Operation tests: `OperationRegistryTest`, `OperationHttpTest`, `APIServerLifecycleTest`
-- Endpoint tests: `CheckedDimensionsTest`, `EntitySpawnSpecTest`, `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `RailRenderInspectionServiceTest`, `EndpointRefactoringTest`, `PlacementBoundsTest`, `GuardedPlacementTest`, `StructurePlacementEffectTest`
-- Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `BuildTaskTest`, `BoundingBoxTest`, `TaskDataValidatorTest`, `TaskDataTranslatorTest`, `LocationQueryServiceTest`, `RailPlanningServiceTest`, `AtomicQueueIntegrationTest` (queue atomicity, execution claims and the interrupted-execution sweep; gated behind `DB_TEST` and requires a `DB_NAME` containing `test`)
+- Endpoint tests: `CheckedDimensionsTest`, `EntitySpawnSpecTest`, `BlocksEndpointTest`, `BlocksEndpointCoreTest`, `PrefabEndpointCoreTest`, `EndpointRefactoringTest`, `PlacementBoundsTest`, `GuardedPlacementTest`, `StructurePlacementEffectTest`
+- Build system tests: `TaskExecutorTest`, `BuildTaskEndpointTest`, `BuildTaskEndpointIntegrationTest`, `BuildServiceTest`, `BuildTaskTest`, `BoundingBoxTest`, `TaskDataValidatorTest`, `TaskDataTranslatorTest`, `LocationQueryServiceTest`, `AtomicQueueIntegrationTest` (queue atomicity, execution claims and the interrupted-execution sweep; gated behind `DB_TEST` and requires a `DB_NAME` containing `test`)
 - Area lock tests: `AreaLockServiceTest`, `AreaLockEndpointTest`
 - Site survey tests: `SiteSurveyTest`, `SiteSurveyEndpointTest`, `SurveyOccupancyTest`
 - Region capture tests: `RegionCaptureRequestTest`, `RegionCaptureEndpointTest`

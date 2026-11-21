@@ -1,7 +1,6 @@
 package ca.waltermiller.mcpapi.buildtask.model;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
@@ -49,11 +48,6 @@ public final class TaskDataTranslator {
             case PREFAB_SIGN:
                 return shiftPoint(copy, "x", "y", "z", dx, dy, dz);
 
-            case RAIL_SURFACE_SEGMENT:
-            case RAIL_BRIDGE_SEGMENT:
-            case RAIL_TUNNEL_SEGMENT:
-                return translateRailSegment(copy, dx, dy, dz);
-
             case NBT_STRUCTURE:
             case TERRAIN_SMOOTH:
                 // Unreachable via BuildService.translateBuild today: recordNbtPlacement always
@@ -72,27 +66,6 @@ public final class TaskDataTranslator {
         shift(node, yField, dy);
         shift(node, zField, dz);
         return node;
-    }
-
-    private static JsonNode translateRailSegment(ObjectNode copy, int dx, int dy, int dz) {
-        if (!copy.has("path") || !copy.get("path").isArray()) {
-            throw new IllegalArgumentException("Rail segment task data is missing a 'path' array");
-        }
-
-        ArrayNode path = (ArrayNode) copy.get("path");
-        ArrayNode translatedPath = copy.arrayNode();
-        for (JsonNode point : path) {
-            if (!point.has("x") || !point.has("y") || !point.has("z")) {
-                throw new IllegalArgumentException("Rail segment path point is missing x/y/z");
-            }
-            ObjectNode pointCopy = point.deepCopy();
-            shift(pointCopy, "x", dx);
-            shift(pointCopy, "y", dy);
-            shift(pointCopy, "z", dz);
-            translatedPath.add(pointCopy);
-        }
-        copy.set("path", translatedPath);
-        return copy;
     }
 
     private static void requireFields(ObjectNode node, String... fields) {

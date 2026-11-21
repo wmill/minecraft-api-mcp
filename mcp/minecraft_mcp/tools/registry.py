@@ -89,8 +89,6 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "translate_build": builds.handle_translate_build,
     "delete_build_task": builds.handle_delete_build_task,
     "update_build_task": builds.handle_update_build_task,
-    "plan_rail_route": builds.handle_plan_rail_route,
-    "get_rail_plan_status": builds.handle_get_rail_plan_status,
     "preview_build": builds.handle_preview_build,
 
     # Effect tools

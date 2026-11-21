@@ -2,12 +2,9 @@ package ca.waltermiller.mcpapi.endpoints;
 
 import ca.waltermiller.mcpapi.buildtask.model.Build;
 import ca.waltermiller.mcpapi.buildtask.model.BuildTask;
-import ca.waltermiller.mcpapi.buildtask.model.RailPlanningJob;
-import ca.waltermiller.mcpapi.buildtask.model.RailPlanningStatus;
 import ca.waltermiller.mcpapi.buildtask.model.TaskType;
 import ca.waltermiller.mcpapi.buildtask.service.BuildService;
 import ca.waltermiller.mcpapi.buildtask.service.LocationQueryService;
-import ca.waltermiller.mcpapi.buildtask.service.RailPlanningService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -26,7 +23,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,8 +44,6 @@ class BuildTaskEndpointTest {
     private BuildService buildService;
     @Mock
     private LocationQueryService locationQueryService;
-    @Mock
-    private RailPlanningService railPlanningService;
 
     private TaskExecutor taskExecutor;
 
@@ -63,7 +57,7 @@ class BuildTaskEndpointTest {
         taskExecutor = new TaskExecutor(mockServer);
         app = Javalin.create(config -> config.http.defaultContentType = "application/json");
         new BuildTaskEndpoint(app, mockServer, LoggerFactory.getLogger(BuildTaskEndpointTest.class),
-            buildService, locationQueryService, railPlanningService, taskExecutor);
+            buildService, locationQueryService, taskExecutor);
         app.start(0);
         baseUrl = "http://localhost:" + app.port();
     }
@@ -77,12 +71,12 @@ class BuildTaskEndpointTest {
 
     @Test
     void createBuildReturnsCreatedJson() throws Exception {
-        Build build = new Build("rail", "desc", "minecraft:overworld");
+        Build build = new Build("build", "desc", "minecraft:overworld");
         build.setId(UUID.randomUUID());
         when(buildService.createBuild(any(BuildService.CreateBuildRequest.class))).thenReturn(build);
 
         HttpResponse<String> response = sendJson("POST", "/api/builds",
-            "{\"name\":\"rail\",\"description\":\"desc\",\"world\":\"minecraft:overworld\"}");
+            "{\"name\":\"build\",\"description\":\"desc\",\"world\":\"minecraft:overworld\"}");
 
         assertThat(response.statusCode()).isEqualTo(201);
         JsonNode json = objectMapper.readTree(response.body());
@@ -127,41 +121,6 @@ class BuildTaskEndpointTest {
 
         assertThat(response.statusCode()).isEqualTo(400);
         assertThat(objectMapper.readTree(response.body()).get("error").asText()).contains("Invalid coordinate range");
-    }
-
-    @Test
-    void planRailUsesBuildWorldWhenRequestWorldMissing() throws Exception {
-        UUID buildId = UUID.randomUUID();
-        Build build = new Build("rail", "desc", "minecraft:the_nether");
-        build.setId(buildId);
-        RailPlanningJob job = new RailPlanningJob();
-        job.setBuildId(buildId);
-        job.setStatus(RailPlanningStatus.PLANNING);
-        job.setPhase("queued");
-        job.setCreatedAt(Instant.parse("2025-01-01T00:00:00Z"));
-        job.setUpdatedAt(Instant.parse("2025-01-01T00:00:00Z"));
-
-        when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
-        when(railPlanningService.startPlanning(any(RailPlanningService.StartRailPlanningRequest.class))).thenReturn(job);
-
-        HttpResponse<String> response = sendJson("POST", "/api/builds/" + buildId + "/plan-rail",
-            "{\"world\":\"\",\"start_x\":0,\"start_y\":64,\"start_z\":0,\"end_x\":10,\"end_y\":64,\"end_z\":10}");
-
-        assertThat(response.statusCode()).isEqualTo(202);
-        verify(buildService).getBuild(buildId);
-        assertThat(objectMapper.readTree(response.body()).get("planning_job").get("build_id").asText())
-            .isEqualTo(buildId.toString());
-    }
-
-    @Test
-    void getRailPlanStatusReturnsNotFoundWhenJobMissing() throws Exception {
-        UUID jobId = UUID.randomUUID();
-        when(railPlanningService.getJob(jobId)).thenReturn(Optional.empty());
-
-        HttpResponse<String> response = send("GET", "/api/rail-plans/" + jobId, null);
-
-        assertThat(response.statusCode()).isEqualTo(404);
-        assertThat(objectMapper.readTree(response.body()).get("error").asText()).contains("Planning job not found");
     }
 
     @Test
@@ -215,60 +174,6 @@ class BuildTaskEndpointTest {
         String issuesText = json.get("issues").toString();
         assertThat(issuesText).contains("cross_build_overlap");
         assertThat(issuesText).contains(otherBuildId.toString());
-    }
-
-    @Test
-    void auditBuildAcceptsConnectedRailSegments() throws Exception {
-        UUID buildId = UUID.randomUUID();
-        Build build = new Build("rail", "desc");
-        build.setId(buildId);
-        BuildTask first = new BuildTask(buildId, 0, TaskType.RAIL_SURFACE_SEGMENT, railData(List.of(
-            point(0, 64, 0),
-            point(1, 64, 0)
-        )), "first");
-        BuildTask second = new BuildTask(buildId, 1, TaskType.RAIL_SURFACE_SEGMENT, railData(List.of(
-            point(1, 64, 0),
-            point(2, 64, 0)
-        )), "second");
-
-        when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
-        when(buildService.getTasks(buildId)).thenReturn(new java.util.ArrayList<>(List.of(first, second)));
-        when(locationQueryService.queryBuildsByLocation(any(LocationQueryService.LocationQueryRequest.class)))
-            .thenReturn(new LocationQueryService.LocationQueryResult(List.of(), null));
-
-        HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/audit", null);
-
-        assertThat(response.statusCode()).isEqualTo(200);
-        JsonNode json = objectMapper.readTree(response.body());
-        assertThat(json.get("summary").get("errors").asInt()).isZero();
-        assertThat(json.get("issues")).isEmpty();
-    }
-
-    @Test
-    void auditBuildReportsDisconnectedRailSegments() throws Exception {
-        UUID buildId = UUID.randomUUID();
-        Build build = new Build("rail", "desc");
-        build.setId(buildId);
-        BuildTask first = new BuildTask(buildId, 0, TaskType.RAIL_SURFACE_SEGMENT, railData(List.of(
-            point(0, 64, 0),
-            point(1, 64, 0)
-        )), "first");
-        BuildTask second = new BuildTask(buildId, 1, TaskType.RAIL_SURFACE_SEGMENT, railData(List.of(
-            point(5, 64, 0),
-            point(6, 64, 0)
-        )), "second");
-
-        when(buildService.getBuild(buildId)).thenReturn(Optional.of(build));
-        when(buildService.getTasks(buildId)).thenReturn(new java.util.ArrayList<>(List.of(first, second)));
-        when(locationQueryService.queryBuildsByLocation(any(LocationQueryService.LocationQueryRequest.class)))
-            .thenReturn(new LocationQueryService.LocationQueryResult(List.of(), null));
-
-        HttpResponse<String> response = send("POST", "/api/builds/" + buildId + "/audit", null);
-
-        assertThat(response.statusCode()).isEqualTo(200);
-        JsonNode json = objectMapper.readTree(response.body());
-        assertThat(json.get("summary").get("errors").asInt()).isGreaterThan(0);
-        assertThat(json.get("issues").toString()).contains("rail_segment_disconnected");
     }
 
     @Test
@@ -437,25 +342,4 @@ class BuildTaskEndpointTest {
         return node;
     }
 
-    private ObjectNode railData(List<int[]> points) {
-        ObjectNode node = objectMapper.createObjectNode();
-        var path = node.putArray("path");
-        for (int[] point : points) {
-            ObjectNode pointNode = path.addObject();
-            pointNode.put("x", point[0]);
-            pointNode.put("y", point[1]);
-            pointNode.put("z", point[2]);
-        }
-        node.put("world", "minecraft:overworld");
-        node.put("rail_bed_block", "minecraft:stone");
-        node.put("support_block", "minecraft:stone_bricks");
-        node.put("power_block", "minecraft:redstone_block");
-        node.put("tunnel_lining_block", "minecraft:stone_bricks");
-        node.put("powered_rail_interval", 8);
-        return node;
-    }
-
-    private int[] point(int x, int y, int z) {
-        return new int[]{x, y, z};
-    }
 }

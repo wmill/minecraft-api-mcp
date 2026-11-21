@@ -91,8 +91,6 @@ Common task types:
 - `PREFAB_SIGN`
 - `PREFAB_LADDER`
 
-Rail planning queues `RAIL_SURFACE_SEGMENT`, `RAIL_BRIDGE_SEGMENT` and `RAIL_TUNNEL_SEGMENT` tasks; create those with `build_flow.py plan-rail` rather than by hand.
-
 ## Undo / Redo Payload
 
 `POST /api/builds/{id}/undo` or `/redo` with an optional body `{"force": true}` to restore over later overlapping builds.

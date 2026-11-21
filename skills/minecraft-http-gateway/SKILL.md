@@ -39,7 +39,7 @@ For subcommand helpers, put global options before the subcommand: `world_query.p
 - `scripts/area_lock.py`
   Use to reserve a cuboid before building: `acquire`, `list`, `renew` (optionally resize), `release`.
 - `scripts/build_flow.py`
-  Use for build-system workflows: create/status/tasks, add common task types, reorder/update/delete, preview, audit, execute, replay, clone, translate, undo/redo, query-location, and rail planning.
+  Use for build-system workflows: create/status/tasks, add common task types, reorder/update/delete, preview, audit, execute, replay, clone, translate, undo/redo, and query-location.
 - `scripts/world_ops.py`
   Use for small direct operations: block fill/set, prefab placement, entity spawn, messages, teleport, rain-fire, temporary area markers (`mark-area`, `remove-marker`), and NBT structure placement (with `--dry-run`).
 - `scripts/starlark.py`
@@ -48,14 +48,12 @@ For subcommand helpers, put global options before the subcommand: `world_query.p
   Use to find and place pre-made schematics: search, tags, get, preview images, NBT download, and place.
 - `scripts/call_api.py`
   Use as the raw fallback for unsupported endpoints.
-- `scripts/rail_debug_e2e.py`
-  Use for the manual end-to-end rail planning debug loop.
 
 ## Safety Defaults
 
 - Read before writing when coordinates or world state matter. Run `build_flow.py query-location` or `world_query.py survey` before grading or clearing land; another agent's build may be there.
 - Acquire an area lock for multi-step builds. On a lock conflict (HTTP 409) do not relocate or retry without the token; report it.
-- Use build queues for large fills, `minecraft:air` clears, rail planning, and multi-step builds.
+- Use build queues for large fills, `minecraft:air` clears, and multi-step builds.
 - Run `build_flow.py audit` before executing non-trivial queued builds.
 - Dry-run NBT placements (`--dry-run` on `place-nbt`, `starlark.py place`, `schematics.py place`) and check `overwrite.air_carved` / `replaced`: NBT placement writes air cells too.
 - NBT placements are recorded as builds and can be reverted with `build_flow.py undo` (and re-applied with `redo`).
@@ -68,7 +66,7 @@ For subcommand helpers, put global options before the subcommand: `world_query.p
 - For endpoint conventions, defaults, locks and error codes, read `references/core.md`.
 - For inspection, survey and direct write flows, read `references/world-and-blocks.md`.
 - For terrain smoothing and blended build pads, read `references/terrain.md`.
-- For build queue, undo/redo and rail planning flows, read `references/builds.md`.
+- For build queue and undo/redo flows, read `references/builds.md`.
 - For Starlark scripts and schematics, read `references/structures.md`.
 - For raw fallback payload examples, read `references/payload-patterns.md`.
 - Full contracts: `docs/openapi-minecraft.yaml`, `docs/openapi-starlark.yaml`, `docs/openapi-schematics.yaml`; feature notes in `docs/area-locks.md`, `docs/site-survey.md`, `docs/terrain-smoothing.md`, `docs/undo-and-dry-run.md`.

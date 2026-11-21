@@ -234,16 +234,6 @@ def main() -> int:
     add_world(query)
     query.add_argument("--include-in-progress", action="store_true")
 
-    plan_rail = subparsers.add_parser("plan-rail")
-    plan_rail.add_argument("--build-id", required=True)
-    for field in ("start-x", "start-y", "start-z", "end-x", "end-y", "end-z"):
-        plan_rail.add_argument(f"--{field}", type=int, required=True)
-    add_world(plan_rail)
-    plan_rail.add_argument("--weight-overrides", type=lambda value: parse_json_object(value, "weight-overrides"))
-
-    rail_status = subparsers.add_parser("rail-status")
-    rail_status.add_argument("--job-id", required=True)
-
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
 
@@ -366,17 +356,8 @@ def main() -> int:
             }
             maybe_world(payload, args.world)
             result = request_json("POST", f"{base_url}/api/builds/query-location", payload)
-        elif args.command == "plan-rail":
-            payload = {
-                "start_x": args.start_x, "start_y": args.start_y, "start_z": args.start_z,
-                "end_x": args.end_x, "end_y": args.end_y, "end_z": args.end_z,
-            }
-            maybe_world(payload, args.world)
-            if args.weight_overrides:
-                payload["weight_overrides"] = args.weight_overrides
-            result = request_json("POST", f"{base_url}/api/builds/{args.build_id}/plan-rail", payload)
         else:
-            result = request_json("GET", f"{base_url}/api/rail-plans/{args.job_id}")
+            parser.error(f"unknown command: {args.command}")
 
         print_json(result)
         return 0

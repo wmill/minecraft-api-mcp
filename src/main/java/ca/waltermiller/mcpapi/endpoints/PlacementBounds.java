@@ -1,7 +1,6 @@
 package ca.waltermiller.mcpapi.endpoints;
 
 import ca.waltermiller.mcpapi.arealock.AreaBounds;
-import com.fasterxml.jackson.databind.JsonNode;
 
 /** Conservative bounds of direct writes, including clearance and support blocks. */
 final class PlacementBounds {
@@ -68,18 +67,6 @@ final class PlacementBounds {
     static AreaBounds of(LadderRequest req) {
         if (req.height <= 0) throw new IllegalArgumentException("Invalid ladder height");
         return box(req.x, req.y, req.z, req.x, add(req.y, req.height - 1), req.z);
-    }
-
-    static AreaBounds rail(JsonNode path, String mode) {
-        AreaBounds bounds = null;
-        int depth = "bridge".equals(mode) ? 24 : 8;
-        for (JsonNode point : path) {
-            int x = point.get("x").asInt(), y = point.get("y").asInt(), z = point.get("z").asInt();
-            // Include tunnel lining, headroom, and neighboring rail reconciliation.
-            AreaBounds piece = box(add(x, -1), add(y, -depth), add(z, -1), add(x, 1), add(y, 3), add(z, 1));
-            bounds = bounds == null ? piece : bounds.union(piece);
-        }
-        return bounds;
     }
 
     /** The cuboid a recorded placement's snapshots cover: its stored restore bounds, else the rotated structure. */

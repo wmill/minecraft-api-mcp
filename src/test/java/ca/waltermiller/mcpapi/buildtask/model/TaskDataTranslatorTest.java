@@ -118,24 +118,6 @@ class TaskDataTranslatorTest {
     }
 
     @Test
-    void translateRailSegmentShiftsEveryPathPoint() {
-        ObjectNode taskData = mapper.createObjectNode();
-        ArrayNode path = mapper.createArrayNode();
-        path.addObject().put("x", 10).put("y", 64).put("z", 20);
-        path.addObject().put("x", 12).put("y", 65).put("z", 23);
-        taskData.set("path", path);
-
-        JsonNode translated = TaskDataTranslator.translate(TaskType.RAIL_SURFACE_SEGMENT, taskData, 5, 0, -5);
-
-        ArrayNode translatedPath = (ArrayNode) translated.get("path");
-        assertThat(translatedPath.get(0).get("x").asInt()).isEqualTo(15);
-        assertThat(translatedPath.get(0).get("y").asInt()).isEqualTo(64);
-        assertThat(translatedPath.get(0).get("z").asInt()).isEqualTo(15);
-        assertThat(translatedPath.get(1).get("x").asInt()).isEqualTo(17);
-        assertThat(translatedPath.get(1).get("z").asInt()).isEqualTo(18);
-    }
-
-    @Test
     void translateNbtStructureShiftsPositionButNotSize() {
         ObjectNode taskData = mapper.createObjectNode();
         taskData.put("x", 0).put("y", 64).put("z", 0);

@@ -67,7 +67,7 @@ Malformed bounds and other ordinary input validation errors use HTTP 400. The [O
 
 ## Placement coverage
 
-Checks cover block arrays/fills, doors, stairs, windows, torches, signs, ladders, NBT structures (including schematic and Starlark placement), direct fire placement, and queued tasks including rails. Bounds conservatively enclose the whole operation: sparse arrays can include empty space between writes, stairs include four blocks of clearance, rail supports can reach 24 blocks down for bridges, and rotation can place NBT blocks at negative offsets from the supplied origin.
+Checks cover block arrays/fills, doors, stairs, windows, torches, signs, ladders, NBT structures (including schematic and Starlark placement), direct fire placement, and queued tasks. Bounds conservatively enclose the whole operation: sparse arrays can include empty space between writes, stairs include four blocks of clearance, and rotation can place NBT blocks at negative offsets from the supplied origin.
 
 Reservation conflicts reject a placement before its first write. This is not rollback for unrelated runtime failures. Player actions, entity behavior, later physics/fire/fluid effects, and build-record editing are outside these API reservations.
 

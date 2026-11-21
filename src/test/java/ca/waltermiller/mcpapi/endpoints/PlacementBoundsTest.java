@@ -45,13 +45,6 @@ class PlacementBoundsTest {
     }
 
     @Test
-    void railsIncludeDeepSupportsExcavationAndNeighborReconciliation() throws Exception {
-        var path = new ObjectMapper().readTree("[{\"x\":0,\"y\":70,\"z\":0},{\"x\":1,\"y\":71,\"z\":0}]");
-        assertThat(PlacementBounds.rail(path, "bridge")).isEqualTo(new AreaBounds(-1, 46, -1, 2, 74, 1));
-        assertThat(PlacementBounds.rail(path, "tunnel")).isEqualTo(new AreaBounds(-1, 62, -1, 2, 74, 1));
-    }
-
-    @Test
     void everyPrefabAndFillFootprintIsBlockedBeforeMutation() {
         DoorRequest door = new DoorRequest(); door.facing = "south"; door.width = 3;
         StairRequest stair = new StairRequest(); stair.end_y = 4;

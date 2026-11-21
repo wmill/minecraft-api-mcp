@@ -28,14 +28,10 @@ from mcp.types import (
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 
 from .client.minecraft_api import MinecraftAPIClient
-from .config import load_config
 from .tools.schemas import TOOL_SCHEMAS
 from .tools.area_locks import LOCK_WRITE_TOOLS
 from .tools.registry import get_handler
 from .utils.helpers import safe_url, coordinate_info_blurb
-
-RAIL_TOOLS = frozenset({"plan_rail_route", "get_rail_plan_status"})
-
 
 class MinecraftMCPServer:
     """
@@ -52,11 +48,7 @@ class MinecraftMCPServer:
             api_base: Base URL for the Minecraft API
         """
         self.api_base = api_base
-        enable_rail_tools = load_config().enable_rail_tools
-        self.tool_schemas = [
-            tool for tool in TOOL_SCHEMAS
-            if enable_rail_tools or tool.name not in RAIL_TOOLS
-        ]
+        self.tool_schemas = list(TOOL_SCHEMAS)
         self.enabled_tool_names = {tool.name for tool in self.tool_schemas}
         self.server = Server("minecraft-api")
         self.api_client = MinecraftAPIClient(api_base)
