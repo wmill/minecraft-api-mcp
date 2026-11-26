@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP Spy</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c222b;
+    --line: #2a313c;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --ok: #3fb950;
+    --err: #f85149;
+    --run: #d29922;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+    border-bottom: 1px solid var(--line); background: var(--panel); flex: none; min-height: 42px;
+  }
+  header h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.down { background: var(--run); }
+  #now { color: var(--run); font-family: var(--mono); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .spacer { flex: 1; }
+  #live-btn {
+    display: none; background: var(--accent); color: #0b1220; border: 0; border-radius: 4px;
+    padding: 3px 10px; font-weight: 600; cursor: pointer;
+  }
+  body.pinned #live-btn { display: inline-block; }
+
+  main { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px; }
+  .empty { color: var(--muted); text-align: center; margin-top: 18vh; }
+  .stage-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .stage-head .tool { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+  .stage-head .when { color: var(--muted); font-size: 12px; }
+  .status { font-family: var(--mono); font-size: 13px; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; }
+  .status.run { color: var(--run); }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--err); }
+  .status.stale { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .chip {
+    font-family: var(--mono); font-size: 12px; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 7px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .chip b { color: var(--muted); font-weight: normal; }
+  .body { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 1000px) { .body.split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .images { display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; }
+  .images img {
+    max-width: 100%; max-height: 62vh; border-radius: 6px; border: 1px solid var(--line);
+    background: #000; image-rendering: auto;
+  }
+  .images.many img { max-height: 40vh; max-width: calc(50% - 5px); }
+  .code {
+    display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    overflow: auto; max-height: 70vh; font-family: var(--mono); font-size: 13px; line-height: 1.5;
+  }
+  .gutter { color: #4b5563; text-align: right; padding: 10px 8px 10px 12px; user-select: none; white-space: pre; border-right: 1px solid var(--line); }
+  .code pre { margin: 0; padding: 10px 14px; white-space: pre; }
+  .code pre code.hljs { background: transparent; padding: 0; }
+  .result {
+    margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--muted);
+    white-space: pre-wrap; word-break: break-word; background: var(--panel); border-radius: 6px; padding: 8px 12px;
+    border-left: 3px solid var(--line);
+  }
+  .result.err { color: #ffb4ae; border-left-color: var(--err); }
+
+  #feed { flex: none; height: 30vh; min-height: 120px; overflow-y: auto; border-top: 1px solid var(--line); background: var(--panel); }
+  .row {
+    display: flex; align-items: center; gap: 10px; padding: 5px 16px; cursor: pointer;
+    border-bottom: 1px solid #1f252e; font-size: 13px; min-height: 34px;
+  }
+  .row:hover { background: var(--panel-2); }
+  .row.selected { background: #1f2a3a; box-shadow: inset 3px 0 0 var(--accent); }
+  .row .ico { width: 16px; text-align: center; flex: none; font-family: var(--mono); }
+  .row .ico.run { color: var(--run); animation: pulse 1s ease-in-out infinite; }
+  .row .ico.ok { color: var(--ok); }
+  .row .ico.err { color: var(--err); }
+  .row .ico.stale { color: var(--muted); }
+  .row .name { font-family: var(--mono); flex: none; }
+  .row .args { color: var(--muted); font-family: var(--mono); font-size: 12px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .tag { font-size: 11px; color: var(--accent); border: 1px solid #1f4b7a; border-radius: 3px; padding: 0 4px; flex: none; }
+  .row .dur { color: var(--muted); font-family: var(--mono); font-size: 12px; flex: none; }
+  .row img { height: 26px; border-radius: 3px; flex: none; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (max-width: 560px) { .row .args { display: none; } main { padding: 12px; } }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>MCP Spy</h1>
+  <span id="now"></span>
+  <span class="spacer"></span>
+  <button id="live-btn" title="Follow the newest call (Esc)">Live</button>
+</header>
+<main id="stage"><p class="empty">Waiting for tool calls…</p></main>
+<div id="feed"></div>
+<script>
+(() => {
+  const MAX_CALLS = 200;
+  const STALE_MS = 10 * 60 * 1000;
+  const calls = new Map();          // call_id -> start event with .end
+  let pinned = null;
+  let stageKey = null;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const sorted = () => [...calls.values()].sort((a, b) => a.call_id < b.call_id ? -1 : 1);
+  const script = (c) => c.args && c.args.source && c.args.source.kind === "starlark" ? c.args.source.code : null;
+  const images = (c) => (c.end && c.end.images) || [];
+  const rich = (c) => script(c) !== null || images(c).length > 0;
+
+  function state(c) {
+    if (c.end) return c.end.is_error ? "err" : "ok";
+    return Date.now() - c.ts * 1000 > STALE_MS ? "stale" : "run";
+  }
+  function secs(ms) { return ms < 10000 ? (ms / 1000).toFixed(1) + "s" : Math.round(ms / 1000) + "s"; }
+  function statusText(c) {
+    const s = state(c);
+    if (s === "run") return `<span data-since="${c.ts}">${secs(Date.now() - c.ts * 1000)}</span>`;
+    if (s === "stale") return "no result";
+    return (s === "ok" ? "✓ " : "✗ ") + secs(c.end.duration_ms);
+  }
+  function short(v) {
+    const s = typeof v === "string" ? v : JSON.stringify(v);
+    return s.length > 120 ? s.slice(0, 117) + "…" : s;
+  }
+  function argList(c) {
+    return Object.entries(c.args || {}).filter(([k]) => k !== "source");
+  }
+  function highlight(code) {
+    try { if (window.hljs) return hljs.highlight(code, { language: "python", ignoreIllegals: true }).value; } catch (e) {}
+    return esc(code);
+  }
+
+  function pickStage() {
+    const all = sorted();
+    if (pinned && calls.has(pinned)) return calls.get(pinned);
+    pinned = null;
+    for (let i = all.length - 1; i >= 0; i--) if (rich(all[i])) return all[i];
+    return all[all.length - 1] || null;
+  }
+
+  function renderStage(c) {
+    const key = c ? c.call_id + ":" + (c.end ? "end" : "run") : "none";
+    if (key === stageKey) return;
+    stageKey = key;
+    const stage = $("stage");
+    if (!c) { stage.innerHTML = '<p class="empty">Waiting for tool calls…</p>'; return; }
+    const code = script(c), imgs = images(c), s = state(c);
+    const chips = argList(c).map(([k, v]) => `<span class="chip"><b>${esc(k)}=</b>${esc(short(v))}</span>`).join("");
+    let body = "";
+    if (imgs.length) body += `<div class="images${imgs.length > 1 ? " many" : ""}">` +
+      imgs.map((n) => `<img src="/files/${encodeURIComponent(n)}" alt="${esc(c.tool)} image">`).join("") + "</div>";
+    if (code !== null) {
+      const lines = code.split("\n").length;
+      const gutter = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
+      body += `<div class="code"><div class="gutter">${gutter}</div><pre><code class="hljs language-python">${highlight(code)}</code></pre></div>`;
+    }
+    const text = c.end && c.end.text ? `<div class="result${s === "err" ? " err" : ""}">${esc(c.end.text)}</div>` : "";
+    const when = new Date(c.ts * 1000).toLocaleTimeString();
+    stage.innerHTML =
+      `<div class="stage-head"><span class="tool">${esc(c.tool)}</span>` +
+      `<span class="status ${s}">${statusText(c)}</span><span class="when">${when}</span></div>` +
+      (chips ? `<div class="chips">${chips}</div>` : "") +
+      `<div class="body${imgs.length && code !== null ? " split" : ""}">${body}</div>` + text;
+    stage.scrollTop = 0;
+  }
+
+  function renderFeed(stageCall) {
+    const rows = sorted().reverse().map((c) => {
+      const s = state(c);
+      const ico = { run: "●", ok: "✓", err: "✗", stale: "?" }[s];
+      const args = argList(c).map(([k, v]) => `${k}=${short(v)}`).join("  ");
+      const tag = script(c) !== null ? '<span class="tag">script</span>' : "";
+      const thumb = images(c).slice(0, 1).map((n) => `<img src="/files/${encodeURIComponent(n)}" alt="">`).join("");
+      const dur = s === "run" ? `<span data-since="${c.ts}">${secs(Date.now() - c.ts * 1000)}</span>` : c.end ? secs(c.end.duration_ms) : "";
+      const sel = stageCall && stageCall.call_id === c.call_id ? " selected" : "";
+      return `<div class="row${sel}" data-id="${esc(c.call_id)}"><span class="ico ${s}">${ico}</span>` +
+        `<span class="name">${esc(c.tool)}</span>${tag}<span class="args">${esc(args)}</span>${thumb}<span class="dur">${dur}</span></div>`;
+    });
+    $("feed").innerHTML = rows.join("");
+  }
+
+  function renderNow() {
+    const running = sorted().filter((c) => state(c) === "run");
+    $("now").innerHTML = running.length
+      ? running.map((c) => `● ${esc(c.tool)} <span data-since="${c.ts}">${secs(Date.now() - c.ts * 1000)}</span>`).join("   ")
+      : "";
+  }
+
+  function render() {
+    while (calls.size > MAX_CALLS) calls.delete(sorted()[0].call_id);
+    const c = pickStage();
+    document.body.classList.toggle("pinned", pinned !== null);
+    renderStage(c);
+    renderFeed(c);
+    renderNow();
+  }
+
+  function onEvent(ev) {
+    if (ev.type === "snapshot") {
+      calls.clear();
+      for (const c of ev.calls) calls.set(c.call_id, c);
+      stageKey = null;
+    } else if (ev.type === "start") {
+      calls.set(ev.call_id, Object.assign({ end: null }, ev));
+    } else if (ev.type === "end") {
+      const c = calls.get(ev.call_id);
+      if (!c) return;
+      c.end = ev;
+    }
+    render();
+  }
+
+  function connect() {
+    const src = new EventSource("/api/stream");
+    src.onopen = () => { $("dot").className = "dot live"; };
+    src.onerror = () => { $("dot").className = "dot down"; };
+    src.onmessage = (m) => { try { onEvent(JSON.parse(m.data)); } catch (e) { console.error(e); } };
+  }
+
+  $("feed").addEventListener("click", (e) => {
+    const row = e.target.closest(".row");
+    if (!row) return;
+    pinned = pinned === row.dataset.id ? null : row.dataset.id;
+    render();
+  });
+  $("live-btn").addEventListener("click", () => { pinned = null; render(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && pinned) { pinned = null; render(); } });
+
+  setInterval(() => {
+    const now = Date.now();
+    document.querySelectorAll("[data-since]").forEach((el) => { el.textContent = secs(now - Number(el.dataset.since) * 1000); });
+  }, 200);
+  setInterval(() => { if ([...calls.values()].some((c) => !c.end)) render(); }, 30000);
+
+  connect();
+})();
+</script>
+</body>
+</html>

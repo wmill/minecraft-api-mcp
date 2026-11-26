@@ -98,6 +98,8 @@ uv sync
 BASE_URL=http://localhost:7070
 ```
 
+4. (Optional) Spy mode for demos: set `SPY_DIR=../spy-data` in `.env`, then run `uv run minecraft-spy` and open http://127.0.0.1:7095 to watch tool calls, Starlark scripts and images live. See `docs/spy-mode.md`.
+
 ## Transport Modes
 
 The MCP server supports two transport protocols:

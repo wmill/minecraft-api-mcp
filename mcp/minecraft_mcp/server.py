@@ -6,6 +6,7 @@ tool registration, routing, and transport layer management.
 """
 
 import sys
+import time
 from typing import Any, Dict, List
 
 from contextlib import asynccontextmanager
@@ -32,6 +33,7 @@ from .tools.schemas import TOOL_SCHEMAS
 from .tools.area_locks import LOCK_WRITE_TOOLS
 from .tools.registry import get_handler
 from .utils.helpers import safe_url, coordinate_info_blurb
+from .spy import Spy, make_spy
 
 class MinecraftMCPServer:
     """
@@ -40,13 +42,15 @@ class MinecraftMCPServer:
     Handles tool registration, routing, and transport layer management.
     """
     
-    def __init__(self, api_base: str):
+    def __init__(self, api_base: str, spy: Spy | None = None):
         """
         Initialize the Minecraft MCP Server.
         
         Args:
             api_base: Base URL for the Minecraft API
+            spy: Tool call recorder for the demo viewer (default: from SPY_DIR)
         """
+        self.spy = spy if spy is not None else make_spy()
         self.api_base = api_base
         self.tool_schemas = list(TOOL_SCHEMAS)
         self.enabled_tool_names = {tool.name for tool in self.tool_schemas}
@@ -85,7 +89,9 @@ class MinecraftMCPServer:
                 ValueError: If the tool name is unknown
             """
             print(f"call_tool: {name}", file=sys.stderr)
-            
+            spy_call = self.spy.start(name, arguments)
+            started = time.monotonic()
+
             try:
                 # Get the handler for this tool
                 handler = get_handler(name) if name in self.enabled_tool_names else None
@@ -102,8 +108,8 @@ class MinecraftMCPServer:
                         client = self.api_client.with_area_lock(lock_id)
                 result = await handler(client, **arguments)
 
-                
                 # Preserve structured output and error flags as well as text/images.
+                self.spy.end(spy_call, name, result, time.monotonic() - started)
                 return result
                 
             except Exception as e:
@@ -113,6 +119,7 @@ class MinecraftMCPServer:
                     content=[TextContent(type="text", text=f"Error: {str(e)}")],
                     isError=True,
                 )
+                self.spy.end(spy_call, name, error_result, time.monotonic() - started)
                 return error_result
             
         @self.server.list_resources()

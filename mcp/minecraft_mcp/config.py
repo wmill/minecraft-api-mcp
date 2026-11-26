@@ -18,6 +18,7 @@ class ServerConfig:
     starlark_service_url: str
     debug: bool
     script_dir: str
+    spy_dir: str | None = None
 
 
 def load_config() -> ServerConfig:
@@ -51,6 +52,11 @@ def load_config() -> ServerConfig:
     if "STARLARK_SERVICE_URL" in config:
         starlark_service_url = config["STARLARK_SERVICE_URL"]
 
+    # Spy mode: tool call events for the minecraft-spy viewer (off when unset or empty)
+    spy_dir = config.get("SPY_DIR") or None
+    if spy_dir and not os.path.isabs(spy_dir):
+        spy_dir = os.path.normpath(os.path.join(script_dir, spy_dir))
+
     # Check DEBUG mode
     debug = bool(os.getenv('DEBUG'))
     
@@ -60,6 +66,7 @@ def load_config() -> ServerConfig:
         starlark_service_url=starlark_service_url,
         debug=debug,
         script_dir=script_dir,
+        spy_dir=spy_dir,
     )
 
 

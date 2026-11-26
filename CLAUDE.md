@@ -85,6 +85,9 @@ uv run minecraft_mcp.py
 
 # Run with SSE transport (web clients, Claude API)
 uv run minecraft_mcp.py --transport sse --host 0.0.0.0 --port 3000
+
+# Spy mode viewer for demos (needs SPY_DIR in mcp/.env)
+uv run minecraft-spy      # http://127.0.0.1:7095
 ```
 
 ### Python Schematic Service
@@ -251,7 +254,7 @@ DB_PASSWORD=your_password
 #### Server Core
 - **`server.py`**: `MinecraftMCPServer` class orchestrates tool registration and routing
 - **`__main__.py`**: Entry point supporting stdio and SSE transports
-- **`config.py`**: Loads configuration from `mcp/.env` or the environment: `BASE_URL` (default `http://localhost:7070`), `SCHEMATIC_SERVICE_URL` (default `http://localhost:7080`), `STARLARK_SERVICE_URL` (default `http://localhost:7090`), `DEBUG`
+- **`config.py`**: Loads configuration from `mcp/.env` or the environment: `BASE_URL` (default `http://localhost:7070`), `SCHEMATIC_SERVICE_URL` (default `http://localhost:7080`), `STARLARK_SERVICE_URL` (default `http://localhost:7090`), `DEBUG`, `SPY_DIR` (spy mode, off when unset)
 
 #### API Client
 - **`client/minecraft_api.py`**: `MinecraftAPIClient` - Async HTTP client using httpx for all Minecraft REST endpoints
@@ -259,6 +262,10 @@ DB_PASSWORD=your_password
 - **`client/starlark_service.py`**: Async HTTP client for the optional Starlark build service
 - **`client/operations.py`**: `OperationClient` wraps every `httpx.AsyncClient` from `MinecraftAPIClient._http_client()`. For tracked edit paths (`tracked_path()`, kept in step with Java `OperationHttp.mutation()`) it adds an `Idempotency-Key`, retries once with the same key after a transport error, and on 202 polls `/api/operations/{id}` (sending the key, so reservation tokens aren't redacted) once per second for up to 120s. After that it raises `PendingOperation`; handlers return `pending_result()` and must never claim success. Keys of pending operations are remembered (bounded, in process) so `get_operation` can still recover a lock token. A 404 means the outcome is unknown: never resubmit automatically
 - `MinecraftAPIClient.with_area_lock(lock_id)` returns a client that sends `X-Area-Lock-Id` on writes
+
+#### Spy Mode (demo viewer)
+- **`spy.py`**: when `SPY_DIR` is set, `call_tool` writes a start event (sanitized args: `lock_id`/tokens redacted, Starlark `source` kept whole, `blocks` arrays reduced to a shape note) and an end event (status, duration, text excerpt, images as files) per call into the spool directory; atomic writes, keeps the newest 200 calls, never raises into dispatch. Lock-tool and `get_operation` result text is redacted
+- **`spy_viewer/`**: separate read-only Starlette viewer (`uv run minecraft-spy`, port 7095) that polls the spool and streams events to one page over SSE (highlight.js from cdnjs). See `docs/spy-mode.md`
 
 #### Tool System
 - **`handlers/`**: Tool handler functions organized by domain:
@@ -502,6 +509,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_spawn_entity.py` - `spawn_entity` options schema, passenger payload conversion, tree summary and 400 messages
 - `test_terrain_map.py` - `map_terrain` images, summary text and errors
 - `test_smooth_terrain.py` - `smooth_terrain` registration, dry-run images/summary, apply summary, errors
+- `test_spy.py` - Spy argument sanitizing, spool events/images/pruning, dispatch unaffected by spy failures, viewer routes
 - `test_operations.py` - Idempotency keys, 202 polling, pending results, `get_operation`, delayed lock-token recovery
 
 **Schematic Service Tests** (`schematic-service/`):
@@ -541,7 +549,7 @@ Minecraft uses a right-handed 3D coordinate system:
 - Optional schematic service runs on port 7080 when started
 - Optional Starlark build service runs on port 7090 when started; its artifact cache in `starlark-service-data/` is git-ignored and safe to delete (artifacts regenerate deterministically); its script library in `starlark-library/` is durable and meant to be committed
 - Database schema auto-creates on first server start
-- Design docs and OpenAPI contracts live in `docs/` (`access-check.md`, `area-locks.md`, `operations-and-queues.md`, `site-survey.md`, `terrain-smoothing.md`, `undo-and-dry-run.md`, `world-render.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
+- Design docs and OpenAPI contracts live in `docs/` (`access-check.md`, `area-locks.md`, `operations-and-queues.md`, `site-survey.md`, `spy-mode.md`, `terrain-smoothing.md`, `undo-and-dry-run.md`, `world-render.md`, `openapi-{minecraft,schematics,starlark}.yaml`); update the matching OpenAPI file when changing routes
 - Mod-side environment variables beyond the DB settings: `AREA_LOCK_IDLE_SECONDS`, `BUILD_SNAPSHOT_DIR`, `BUILD_SNAPSHOT_MAX_VOLUME`, `REGION_RENDER_MAX_VOLUME`
 - All Minecraft operations modifying game state must run on server thread via `server.execute()`
 - Build tasks are executed asynchronously and can be queried by location for spatial awareness

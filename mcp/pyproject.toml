@@ -28,13 +28,17 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["minecraft_mcp", "minecraft_mcp.client", "minecraft_mcp.handlers", "minecraft_mcp.tools", "minecraft_mcp.utils"]
+packages = ["minecraft_mcp", "minecraft_mcp.client", "minecraft_mcp.handlers", "minecraft_mcp.tools", "minecraft_mcp.utils", "minecraft_mcp.spy_viewer"]
+
+[tool.setuptools.package-data]
+"minecraft_mcp.spy_viewer" = ["*.html"]
 
 [tool.uv]
 package = true
 
 [project.scripts]
 minecraft-mcp = "minecraft_mcp.__main__:main"
+minecraft-spy = "minecraft_mcp.spy_viewer:main"
 
 [project.entry-points."mcp.servers"]
 minecraft-mcp = "minecraft_mcp.__main__:main"
