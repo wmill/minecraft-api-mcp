@@ -41,7 +41,6 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "check_access": access.handle_check_access,
     "render_region": render.handle_render_region,
     "summarize_heightmap": blocks.handle_summarize_heightmap,
-    "preview_heightmap": blocks.handle_preview_heightmap,
     "map_terrain": blocks.handle_map_terrain,
     "smooth_terrain": terrain.handle_smooth_terrain,
     

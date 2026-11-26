@@ -1,9 +1,5 @@
 package ca.waltermiller.mcpapi.endpoints;
 
-import ca.waltermiller.mcpapi.preview.BlockGrid;
-import ca.waltermiller.mcpapi.preview.IsoRenderer;
-import ca.waltermiller.mcpapi.preview.PreviewViewDirection;
-import ca.waltermiller.mcpapi.preview.TerrainHeightmapGridAdapter;
 import ca.waltermiller.mcpapi.preview.TerrainMapRenderer;
 import ca.waltermiller.mcpapi.arealock.AreaLockService;
 import io.javalin.Javalin;
@@ -21,8 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 public class BlocksEndpoint extends APIEndpoint {
     private static final int WRITE_TIMEOUT_SECONDS = 10;
@@ -110,60 +104,6 @@ public class BlocksEndpoint extends APIEndpoint {
                     "height_range", result.heightRange(),
                     "heights", result.heights()
                 ));
-        });
-
-        app.post("/api/world/blocks/heightmap/preview", ctx -> {
-            HeightmapPreviewRequest req = ctx.bodyAsClass(HeightmapPreviewRequest.class);
-
-            int scale = IsoRenderer.DEFAULT_SCALE;
-            if (req.iso_scale != null) {
-                if (req.iso_scale < IsoRenderer.MIN_SCALE || req.iso_scale > IsoRenderer.MAX_SCALE) {
-                    ctx.status(400).json(Map.of("error",
-                        "iso_scale must be between " + IsoRenderer.MIN_SCALE + " and " + IsoRenderer.MAX_SCALE));
-                    return;
-                }
-                scale = req.iso_scale;
-            }
-
-            PreviewViewDirection viewDirection;
-            try {
-                viewDirection = PreviewViewDirection.fromQueryParam(req.view_direction);
-            } catch (IllegalArgumentException e) {
-                ctx.status(400).json(Map.of("error", "view_direction must be one of: south, west, north, east"));
-                return;
-            }
-
-            HeightmapRequest heightmapRequest = new HeightmapRequest();
-            heightmapRequest.world = req.world;
-            heightmapRequest.x1 = req.x1;
-            heightmapRequest.z1 = req.z1;
-            heightmapRequest.x2 = req.x2;
-            heightmapRequest.z2 = req.z2;
-            heightmapRequest.heightmap_type = req.heightmap_type;
-
-            CompletableFuture<HeightmapResult> future = core.getHeightmap(heightmapRequest);
-
-            try {
-                HeightmapResult result = future.get(BULK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                if (!result.success()) {
-                    ctx.status(isClientError(result.error()) ? 400 : 500).json(Map.of("error", result.error()));
-                    return;
-                }
-
-                BlockGrid grid = TerrainHeightmapGridAdapter.fromHeights(result.heights());
-                if (grid.isEmpty()) {
-                    ctx.status(400).json(Map.of("error", "Heightmap preview area produced no renderable terrain"));
-                    return;
-                }
-
-                byte[] png = IsoRenderer.renderPng(grid, scale, viewDirection);
-                ctx.contentType("image/png");
-                ctx.result(png);
-            } catch (java.util.concurrent.TimeoutException e) {
-                ctx.status(500).json(Map.of("error", "Timeout waiting for heightmap preview operation"));
-            } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", "Unexpected error: " + e.getMessage()));
-            }
         });
 
         // Top-down relief (contours, spot heights) and surface-material maps as base64 PNGs
@@ -317,11 +257,6 @@ class HeightmapRequest {
     public int x2, z2; // second corner coordinate (only X and Z needed for heightmap)
     public String heightmap_type; // optional, defaults to WORLD_SURFACE
     // Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR
-}
-
-class HeightmapPreviewRequest extends HeightmapRequest {
-    public Integer iso_scale; // optional, defaults to 6
-    public String view_direction; // optional, defaults to south
 }
 
 class TerrainMapRequest extends HeightmapRequest {

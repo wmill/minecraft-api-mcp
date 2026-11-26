@@ -56,20 +56,6 @@ class BlocksEndpointTest {
     }
 
     @Test
-    void previewHeightmapRejectsInvalidIsoScale() throws Exception {
-        HttpResponse<String> response = sendJson("/api/world/blocks/heightmap/preview", Map.of(
-            "x1", 0,
-            "z1", 0,
-            "x2", 1,
-            "z2", 1,
-            "iso_scale", 33
-        ));
-
-        assertThat(response.statusCode()).isEqualTo(400);
-        assertThat(readJson(response).get("error").asText()).isEqualTo("iso_scale must be between 1 and 32");
-    }
-
-    @Test
     void writePropagatesTokenAndReturnsStructuredConflict() throws Exception {
         var conflict = new ca.waltermiller.mcpapi.arealock.AreaLockException("area_locked", "reserved", Map.of("reservation", Map.of("label", "house")));
         when(mockCore.fillBox(any(), org.mockito.ArgumentMatchers.eq("owner")))
@@ -112,107 +98,6 @@ class BlocksEndpointTest {
         assertThat(response.statusCode()).isEqualTo(409);
         assertThat(readJson(response).get("code").asText()).isEqualTo("outside_area_lock");
         assertThat(wrote).isFalse();
-    }
-
-    @Test
-    void previewHeightmapRejectsInvalidViewDirection() throws Exception {
-        HttpResponse<String> response = sendJson("/api/world/blocks/heightmap/preview", Map.of(
-            "x1", 0,
-            "z1", 0,
-            "x2", 1,
-            "z2", 1,
-            "view_direction", "northeast"
-        ));
-
-        assertThat(response.statusCode()).isEqualTo(400);
-        assertThat(readJson(response).get("error").asText()).isEqualTo("view_direction must be one of: south, west, north, east");
-    }
-
-    @Test
-    void previewHeightmapRejectsInvalidHeightmapType() throws Exception {
-        when(mockCore.getHeightmap(any())).thenReturn(CompletableFuture.completedFuture(
-            new HeightmapResult(false, "Invalid heightmap type: BAD. Valid types: WORLD_SURFACE, MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES, OCEAN_FLOOR",
-                null, null, null, null, null, null)
-        ));
-
-        HttpResponse<String> response = sendJson("/api/world/blocks/heightmap/preview", Map.of(
-            "x1", 0,
-            "z1", 0,
-            "x2", 1,
-            "z2", 1,
-            "heightmap_type", "BAD"
-        ));
-
-        assertThat(response.statusCode()).isEqualTo(400);
-        assertThat(readJson(response).get("error").asText()).startsWith("Invalid heightmap type: BAD");
-    }
-
-    @Test
-    void previewHeightmapRejectsOversizeArea() throws Exception {
-        when(mockCore.getHeightmap(any())).thenReturn(CompletableFuture.completedFuture(
-            new HeightmapResult(false, "Area too large. Maximum 10000 height points allowed",
-                null, null, null, null, null, null)
-        ));
-
-        HttpResponse<String> response = sendJson("/api/world/blocks/heightmap/preview", Map.of(
-            "x1", 0,
-            "z1", 0,
-            "x2", 200,
-            "z2", 200
-        ));
-
-        assertThat(response.statusCode()).isEqualTo(400);
-        assertThat(readJson(response).get("error").asText()).isEqualTo("Area too large. Maximum 10000 height points allowed");
-    }
-
-    @Test
-    void previewHeightmapReturnsPng() throws Exception {
-        when(mockCore.getHeightmap(any())).thenReturn(CompletableFuture.completedFuture(
-            new HeightmapResult(
-                true,
-                null,
-                "minecraft:overworld",
-                Map.of("min", Map.of("x", 0, "z", 0), "max", Map.of("x", 1, "z", 1)),
-                Map.of("x", 2, "z", 2),
-                "WORLD_SURFACE",
-                Map.of("min", 63, "max", 66),
-                new int[][] {
-                    {64, 65},
-                    {63, 66}
-                }
-            )
-        ));
-
-        HttpResponse<byte[]> response = sendJsonBytes("/api/world/blocks/heightmap/preview", Map.of(
-            "x1", 0,
-            "z1", 0,
-            "x2", 1,
-            "z2", 1,
-            "iso_scale", 4,
-            "view_direction", "west"
-        ));
-
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.headers().firstValue("content-type")).hasValueSatisfying(value -> assertThat(value).startsWith("image/png"));
-        assertThat(response.body()).isNotEmpty();
-    }
-
-    private HttpResponse<String> sendJson(String path, Map<String, Object> body) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl + path))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
-            .build();
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<byte[]> sendJsonBytes(String path, Map<String, Object> body) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl + path))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
-            .build();
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
     }
 
     private JsonNode readJson(HttpResponse<String> response) throws Exception {

@@ -139,7 +139,7 @@ All endpoints extend the `APIEndpoint` base class, which provides:
 
 **Key Endpoints:**
 - `PlayersEndpoint` - Query online players with positions/rotations
-- `BlocksEndpoint` - Read/write block data, handle chunks, heightmap queries, isometric heightmap preview and top-down terrain maps (core logic in `BlocksEndpointCore`)
+- `BlocksEndpoint` - Read/write block data, handle chunks, heightmap queries and top-down terrain maps (core logic in `BlocksEndpointCore`)
 - `EntitiesEndpoint` - List entity types, spawn entities; spawn accepts `count`/`spread` and typed `options` (name, glow, no_ai, gear, effects, variant/color, profession, size, charged creeper, tamed_by, nested passengers) applied via the `EntityType.create` afterConsumer (`EntityCustomizer`, validation in `EntitySpawnSpec`); inapplicable options come back as `ignored`. Creeper `charged` needs the access widener `src/main/resources/mcpapi.accesswidener`
 - `MessageEndpoint` - Send messages to players (broadcast or targeted)
 - `PlayerTeleportEndpoint` - Teleport players to coordinates
@@ -165,7 +165,7 @@ See `docs/operations-and-queues.md`.
 #### Preview Rendering
 **Location**: `src/main/java/ca/waltermiller/mcpapi/preview/`
 
-Isometric PNG preview of builds and terrain: `BlockSink` abstraction (`WorldBlockSink` writes to the world, `RecordingBlockSink` records for dry runs), `BlockGrid` sparse voxel container, `IsoRenderer` (scale bounds `MIN_SCALE`/`MAX_SCALE`), `Palette`, `TerrainHeightmapGridAdapter`.
+Isometric PNG preview of builds (`preview_build`): `BlockSink` abstraction (`WorldBlockSink` writes to the world, `RecordingBlockSink` records for dry runs), `BlockGrid` sparse voxel container, `IsoRenderer` (scale bounds `MIN_SCALE`/`MAX_SCALE`), `Palette`.
 
 Top-down terrain maps for LLM site reading (`POST /api/world/blocks/heightmap/map`, MCP `map_terrain`): `TerrainMapRenderer` draws a greyscale relief map (lighter = higher, half-strength NW hillshade, labelled contours with auto interval, spot heights at grid-cell centres, water tinted) and a surface-material map, both north up with world-coordinate grid labels; `SurfaceCategory` buckets top-block ids into ~10 fixed colours (anything not recognisably natural is `BUILT`; the renderer's `splitBuilt` relabels built columns within 1 block of the median nearby natural ground as `PAVING`, so plazas and roads read apart from buildings). Heights are read from text labels rather than brightness because vision models can't judge absolute grey levels. Text needs fonts in the JVM (the Docker image installs `fontconfig fonts-dejavu-core`); without them the maps render unlabelled and the response sets `labels: false`.
 
@@ -485,7 +485,7 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - Region capture tests: `RegionCaptureRequestTest`, `RegionCaptureEndpointTest`
 - Access check tests: `PlayerAccessSearchTest` (fake `GridTerrain`: jumps, stairs, drops, ladders, trapdoors, door policies, via, limits, map), `AccessCheckEndpointTest`
 - Terrain smoothing tests: `TerrainSmootherTest`, `TerrainRewriterTest`, `TerrainSmoothEndpointTest`
-- Preview tests: `BlockGridTest`, `IsoRendererTest`, `PaletteTest`, `TerrainHeightmapGridAdapterTest`, `TerrainMapRendererTest`, `SurfaceCategoryTest`
+- Preview tests: `BlockGridTest`, `IsoRendererTest`, `PaletteTest`, `TerrainMapRendererTest`, `SurfaceCategoryTest`
 - Snapshot tests: `SnapshotStoreTest`, `SnapshotRestorerTest`, `OverwriteTallyTest`, `TemplateDriftTest`, `BuildUndoEndpointTest` (incl. source/verify routes), `NBTStructureEndpointTest` (provenance/revision request validation)
 - Provenance tests: `BuildSourceTest`, `ProvenanceIntegrationTest` (gated like `AtomicQueueIntegrationTest`)
 
@@ -504,7 +504,6 @@ As with schematics, placement orchestration stays in MCP: `place_starlark_struct
 - `test_survey_site.py` - `survey_site` handler
 - `test_check_access.py` - `check_access` registration, summary text and errors
 - `test_render_region.py` - `render_region` capture→upload→image orchestration, world→local cuts, error hints, client HTTP contract
-- `test_preview_heightmap.py` - `preview_heightmap` image output
 - `test_teleport_player.py` - `teleport_player` handler
 - `test_spawn_entity.py` - `spawn_entity` options schema, passenger payload conversion, tree summary and 400 messages
 - `test_terrain_map.py` - `map_terrain` images, summary text and errors

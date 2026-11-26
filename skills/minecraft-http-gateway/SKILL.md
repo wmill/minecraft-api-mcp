@@ -57,7 +57,7 @@ For subcommand helpers, put global options before the subcommand: `world_query.p
 - Run `build_flow.py audit` before executing non-trivial queued builds.
 - Dry-run NBT placements (`--dry-run` on `place-nbt`, `starlark.py place`, `schematics.py place`) and check `overwrite.air_carved` / `replaced`: NBT placement writes air cells too.
 - NBT placements are recorded as builds and can be reverted with `build_flow.py undo` (and re-applied with `redo`).
-- Use preview output (`build_flow.py preview`, `terrain.py map`, `world_query.py heightmap-preview`, `starlark.py image`, `schematics.py image`) when spatial layout matters.
+- Use preview output (`build_flow.py preview`, `terrain.py map`, `starlark.py image`, `schematics.py image`) when spatial layout matters.
 - Dry-run `terrain.py smooth` and look at the change map before applying it; smoothing also clears vegetation.
 - Verify direct writes with `world_query.py chunk` or another relevant read call.
 

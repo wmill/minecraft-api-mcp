@@ -684,34 +684,6 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
-  /api/world/blocks/heightmap/preview:
-    post:
-      tags: [blocks]
-      summary: Render isometric heightmap preview as PNG
-      operationId: previewHeightmap
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/HeightmapPreviewRequest"
-      responses:
-        "200":
-          description: PNG image
-          content:
-            image/png:
-              schema:
-                type: string
-                format: binary
-        "400":
-          description: Invalid options, or the area produced no renderable terrain
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          $ref: "#/components/responses/ServerError"
-
   /api/world/blocks/heightmap/map:
     post:
       tags: [blocks]
@@ -2831,19 +2803,6 @@ components:
             type: array
             items:
               type: integer
-
-    HeightmapPreviewRequest:
-      allOf:
-        - $ref: "#/components/schemas/HeightmapRequest"
-        - type: object
-          properties:
-            iso_scale:
-              type: integer
-              minimum: 1
-              maximum: 32
-              default: 6
-            view_direction:
-              $ref: "#/components/schemas/ViewDirection"
 
     TerrainMapRequest:
       allOf:

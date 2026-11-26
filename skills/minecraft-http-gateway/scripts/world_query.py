@@ -57,12 +57,6 @@ def main() -> int:
     heightmap = subparsers.add_parser("heightmap", help="Read raw heightmap JSON")
     add_area(heightmap)
 
-    preview = subparsers.add_parser("heightmap-preview", help="Render a heightmap PNG preview")
-    add_area(preview)
-    preview.add_argument("--output", required=True, help="PNG output path")
-    preview.add_argument("--iso-scale", type=int, default=6)
-    preview.add_argument("--view-direction", choices=["south", "west", "north", "east"], default="south")
-
     survey = subparsers.add_parser("survey", help="Assess ground, slope, water and occupancy of a footprint")
     for field in ("x1", "z1", "x2", "z2"):
         survey.add_argument(f"--{field}", type=int, required=True)
@@ -98,25 +92,6 @@ def main() -> int:
             if args.world:
                 payload["world"] = args.world
             result = request_json("POST", f"{base_url}/api/world/blocks/heightmap", payload)
-        elif args.command == "heightmap-preview":
-            payload = {
-                "x1": args.x1,
-                "z1": args.z1,
-                "x2": args.x2,
-                "z2": args.z2,
-                "heightmap_type": args.heightmap_type,
-                "iso_scale": args.iso_scale,
-                "view_direction": args.view_direction,
-            }
-            if args.world:
-                payload["world"] = args.world
-            raw, content_type = request("POST", f"{base_url}/api/world/blocks/heightmap/preview", payload)
-            if content_type != "image/png":
-                raise ValueError(f"Expected image/png response, got {content_type}: {raw.decode('utf-8', errors='replace')}")
-            with open(args.output, "wb") as output:
-                output.write(raw)
-            print_json({"success": True, "output": args.output, "bytes": len(raw)})
-            return 0
         elif args.command == "survey":
             payload = {"x1": args.x1, "z1": args.z1, "x2": args.x2, "z2": args.z2}
             if args.world:

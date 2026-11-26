@@ -533,61 +533,6 @@ TOOL_SUMMARIZE_HEIGHTMAP = Tool(
     }
 )
 
-TOOL_PREVIEW_HEIGHTMAP = Tool(
-    name="preview_heightmap",
-    description=(
-        "Render a flat-shaded isometric PNG terrain preview from sampled "
-        "heightmap data. This is a surface-only preview derived from the "
-        "selected heightmap type, not a textured world render. For reading "
-        "heights, coordinates and materials, prefer map_terrain."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "x1": {
-                "type": "integer",
-                "description": "First corner X coordinate (east positive, west negative)"
-            },
-            "z1": {
-                "type": "integer",
-                "description": "First corner Z coordinate (south positive, north negative)"
-            },
-            "x2": {
-                "type": "integer",
-                "description": "Second corner X coordinate (east positive, west negative)"
-            },
-            "z2": {
-                "type": "integer",
-                "description": "Second corner Z coordinate (south positive, north negative)"
-            },
-            "world": {
-                "type": "string",
-                "description": "World name (optional, defaults to minecraft:overworld)",
-                "default": "minecraft:overworld"
-            },
-            "heightmap_type": {
-                "type": "string",
-                "description": "Type of heightmap to generate",
-                "enum": ["WORLD_SURFACE", "MOTION_BLOCKING", "MOTION_BLOCKING_NO_LEAVES", "OCEAN_FLOOR"],
-                "default": "WORLD_SURFACE"
-            },
-            "iso_scale": {
-                "type": "integer",
-                "description": "Pixels per voxel edge unit (1-32). Default 6.",
-                "minimum": 1,
-                "maximum": 32
-            },
-            "view_direction": {
-                "type": "string",
-                "description": "Optional preview direction. `south` preserves the default view.",
-                "enum": ["south", "west", "north", "east"]
-            }
-        },
-        "required": ["x1", "z1", "x2", "z2"]
-    }
-)
-
-
 TOOL_MAP_TERRAIN = Tool(
     name="map_terrain",
     description=(
@@ -2600,7 +2545,6 @@ TOOL_SCHEMAS = [
     TOOL_CHECK_ACCESS,
     TOOL_RENDER_REGION,
     TOOL_SUMMARIZE_HEIGHTMAP,
-    TOOL_PREVIEW_HEIGHTMAP,
     TOOL_MAP_TERRAIN,
     TOOL_SMOOTH_TERRAIN,
     # Message tools

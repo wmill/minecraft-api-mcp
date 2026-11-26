@@ -23,15 +23,7 @@ uv run --project mcp python skills/minecraft-http-gateway/scripts/world_query.py
 
 The response gives resolved ground heights, slope, water/lava/vegetation coverage, a `grading.suggested_walking_y` with `cut_blocks`/`fill_blocks` estimates, and up to five overlapping `reservations` and `builds`. It never declares an area free: unrecorded player builds are not covered. See `docs/site-survey.md`.
 
-Render a terrain preview:
-
-```bash
-uv run --project mcp python skills/minecraft-http-gateway/scripts/world_query.py heightmap-preview \
-  --x1 -32 --z1 -32 --x2 32 --z2 32 \
-  --output /tmp/heightmap.png
-```
-
-For reading a site's shape, prefer the top-down maps from `terrain.py map` (read-only). The relief map is north up with world-coordinate grid labels, contours and spot heights printed as text (read heights from the labels, not the grey levels); the surface map buckets top blocks into material colours, with built columns near ground level shown as paving:
+For reading a site's shape, use the top-down maps from `terrain.py map` (read-only). The relief map is north up with world-coordinate grid labels, contours and spot heights printed as text (read heights from the labels, not the grey levels); the surface map buckets top blocks into material colours, with built columns near ground level shown as paving:
 
 ```bash
 uv run --project mcp python skills/minecraft-http-gateway/scripts/terrain.py map \
