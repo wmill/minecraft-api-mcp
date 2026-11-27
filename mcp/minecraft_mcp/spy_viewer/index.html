@@ -68,6 +68,7 @@
     background: #000; image-rendering: auto;
   }
   .images.many img { max-height: 40vh; max-width: calc(50% - 5px); }
+  .note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; font-style: italic; }
   .code {
     display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
     overflow: auto; max-height: 70vh; font-family: var(--mono); font-size: 13px; line-height: 1.5;
@@ -174,6 +175,9 @@
       const lines = code.split("\n").length;
       const gutter = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
       body += `<div class="code"><div class="gutter">${gutter}</div><pre><code class="hljs language-python">${highlight(code)}</code></pre></div>`;
+    }
+    if (imgs.length && c.end && c.end.images_from) {
+      body = `<div class="note">Images from the matching dry run</div>` + body;
     }
     const text = c.end && c.end.text ? `<div class="result${s === "err" ? " err" : ""}">${esc(c.end.text)}</div>` : "";
     const when = new Date(c.ts * 1000).toLocaleTimeString();

@@ -33,6 +33,11 @@ MCP client ──stdio/SSE──> minecraft_mcp (call_tool) ──> handlers ─
   - `source` (`build_starlark_structure`, `revise_build`, `save_starlark_script`) is kept whole for highlighting.
   - `blocks` arrays become a shape note (`[32×8×20 blocks]`), so `set_blocks`, `get_blocks` and the block-set build tasks show only that the call was made.
   - Other lists longer than 20 items become `[list: N items]`, and strings longer than 2,000 characters are truncated.
+- **Applied `smooth_terrain`:** the tool returns images only for dry runs. When an applied run matches a dry run
+  from the last 30 minutes in the same MCP process (same arguments apart from `dry_run`, `px_per_block`,
+  `contour_interval` and `lock_id`), the dry run's before/after/change images are copied onto the applied call
+  (`images_from` in the end event). The page labels them as coming from the dry run. Each dry run is reused
+  once, and a failed applied run leaves it available for a retry.
 - **Results:**
   - `acquire_area_lock`, `update_area_lock` and `get_operation` text is recorded as `[redacted]` (it carries reservation tokens).
   - `structuredContent` is not recorded.

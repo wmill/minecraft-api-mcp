@@ -264,7 +264,7 @@ DB_PASSWORD=your_password
 - `MinecraftAPIClient.with_area_lock(lock_id)` returns a client that sends `X-Area-Lock-Id` on writes
 
 #### Spy Mode (demo viewer)
-- **`spy.py`**: when `SPY_DIR` is set, `call_tool` writes a start event (sanitized args: `lock_id`/tokens redacted, Starlark `source` kept whole, `blocks` arrays reduced to a shape note) and an end event (status, duration, text excerpt, images as files) per call into the spool directory; atomic writes, keeps the newest 200 calls, never raises into dispatch. Lock-tool and `get_operation` result text is redacted
+- **`spy.py`**: when `SPY_DIR` is set, `call_tool` writes a start event (sanitized args: `lock_id`/tokens redacted, Starlark `source` kept whole, `blocks` arrays reduced to a shape note) and an end event (status, duration, text excerpt, images as files) per call into the spool directory; atomic writes, keeps the newest 200 calls, never raises into dispatch. Lock-tool and `get_operation` result text is redacted; an applied `smooth_terrain` reuses the images of a matching recent dry run (`images_from`)
 - **`spy_viewer/`**: separate read-only Starlette viewer (`uv run minecraft-spy`, port 7095) that polls the spool and streams events to one page over SSE (highlight.js from cdnjs). See `docs/spy-mode.md`
 
 #### Tool System

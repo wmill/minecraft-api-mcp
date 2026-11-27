@@ -171,3 +171,53 @@ def test_reader_new_events_reports_each_file_once(tmp_path):
     spy.end(call_id, "get_players", image_result(), 0.0)
     assert [e["type"] for e in reader.new_events(seen)] == ["end"]
     assert reader.new_events(seen) == []
+
+
+def smooth(spy, dry_run, result, **extra):
+    args = {"x1": 0, "z1": 0, "x2": 9, "z2": 9, "method": "pad", "lock_id": "secret", **extra}
+    if dry_run is not None:
+        args["dry_run"] = dry_run
+    call_id = spy.start("smooth_terrain", args)
+    spy.end(call_id, "smooth_terrain", result, 0.1)
+    return call_id, json.loads((spy.dir / f"{call_id}-end.json").read_text())
+
+
+def text_result(text="smoothed", error=False):
+    return CallToolResult(content=[TextContent(type="text", text=text)], isError=error)
+
+
+def test_applied_smooth_reuses_matching_dry_run_images(tmp_path):
+    spy = SpoolSpy(tmp_path)
+    dry_id, dry = smooth(spy, True, image_result("dry run"), px_per_block=4)
+    applied_id, applied = smooth(spy, None, text_result(), lock_id="other")
+    assert applied["images"] == [f"{applied_id}-0.png"]
+    assert applied["images_from"] == dry_id
+    assert (tmp_path / f"{applied_id}-0.png").read_bytes() == PNG
+    # Used once: a second applied run has nothing to reuse.
+    _, again = smooth(spy, None, text_result())
+    assert again["images"] == [] and again["images_from"] is None
+
+
+@pytest.mark.parametrize("change", [{"x2": 10}, {"method": "gaussian"}])
+def test_applied_smooth_with_different_args_gets_no_images(tmp_path, change):
+    spy = SpoolSpy(tmp_path)
+    smooth(spy, True, image_result("dry run"))
+    _, applied = smooth(spy, None, text_result(), **change)
+    assert applied["images"] == [] and applied["images_from"] is None
+
+
+def test_failed_applied_smooth_keeps_dry_run_for_retry(tmp_path):
+    spy = SpoolSpy(tmp_path)
+    dry_id, _ = smooth(spy, True, image_result("dry run"))
+    _, failed = smooth(spy, None, text_result("area locked", error=True))
+    assert failed["images"] == []
+    _, retried = smooth(spy, None, text_result())
+    assert retried["images_from"] == dry_id
+
+
+def test_stale_dry_run_is_not_reused(tmp_path, monkeypatch):
+    spy = SpoolSpy(tmp_path)
+    smooth(spy, True, image_result("dry run"))
+    monkeypatch.setattr(spy_module, "DRY_RUN_MAX_AGE_S", -1)
+    _, applied = smooth(spy, None, text_result())
+    assert applied["images"] == []
